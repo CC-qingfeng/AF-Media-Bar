@@ -100,12 +100,12 @@ The app runs in its own process. Its WPF player can be hosted as a taskbar child
 | Window modes | Settings present Taskbar, Dynamic Island, Floating Orb, and Desktop Card; Taskbar and the existing island are available, with the latter two deferred |
 | Appearance | Global fonts, foreground, theme, and window material; the taskbar body is currently fixed transparent, while island surface style, opacity, and radius remain adjustable |
 | Light customization | Toggle Hover/Full, choose density, content layout, and interaction, and configure Full with Compact/Full presets or four visibility groups; arbitrary cross-layer component placement is deferred |
-| Information density | Minimal, Balanced, and Information presets consistently change buttons, seek width, and artwork-text-spectrum gaps; only the middle text region receives a Hover minimum |
+| Information density | Minimal, Balanced, and Information presets consistently change buttons, seek width, and artwork-text-spectrum gaps; only the middle text region receives a Hover minimum, and no empty middle region is reserved while disconnected |
 | Auto-hide | Hide when every media session is stopped; collapse containers use an anchor container and shared edge, while four-way collapse still requires real-Windows acceptance |
 | Tray audio controls | Choose the tray left-click action and optionally reuse global plain-wheel plus left/right-button wheel mappings |
 | Audio devices | Switch devices in a stable ordered list; wheel-preview and apply after scrolling stops |
 | App volume | Aggregate application icons and audio sessions across active output endpoints; adjust the selected media app in 2% tray-wheel steps |
-| Visualizer | Nine-band spectrum from WASAPI loopback capture |
+| Visualizer | Nine-band spectrum from WASAPI loopback capture, shown only while a connected media source is playing; disconnected state keeps only the music-note placeholder |
 | Metrics | The Full panel auto-sizes its height to visible content and can show system memory, CPU, GPU, and AF Media Bar process memory; hidden metrics stop sampling, and spectrum remains excluded by default |
 | Low-spec mode | Software rendering with transitions, marquees, and fades disabled |
 
@@ -149,7 +149,7 @@ AF Media Bar is not commercially code-signed, so Windows SmartScreen may show an
 
 | Action | Result |
 | --- | --- |
-| Hover over the bar | Artwork, text, and spectrum use independent legacy hover feedback; opening controls directly blurs/dims the original text while buttons remain crisp; when Hover is disabled, a text-region pull handle still opens Full |
+| Hover over the bar | With media connected, artwork, text, and the playing spectrum use independent legacy hover feedback; opening controls directly blurs/dims the original text while buttons remain crisp; when Hover is disabled, a text-region pull handle still opens Full |
 | Click artwork | Play/pause in Hybrid or Gestures; Buttons uses only visible controls |
 | Click title or lyric | Return to the media app |
 | Open the Lyrics page | Toggle live lyrics, secondary content, and alignment |

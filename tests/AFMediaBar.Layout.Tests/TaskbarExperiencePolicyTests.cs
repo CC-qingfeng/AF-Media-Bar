@@ -19,8 +19,8 @@ public sealed class TaskbarExperiencePolicyTests
         Assert.IsTrue(information.HoverLayerHeight > compact.HoverLayerHeight);
         Assert.IsTrue(information.SectionGap > compact.SectionGap);
         Assert.IsTrue(
-            TaskbarExperiencePolicy.CalculateWidth(120, 44, 38, 4, true, true, true, TaskbarInformationDensity.Information, 900) >
-            TaskbarExperiencePolicy.CalculateWidth(120, 44, 38, 4, true, true, true, TaskbarInformationDensity.Minimal, 900));
+            TaskbarExperiencePolicy.CalculateWidth(120, 44, 38, 4, true, true, true, true, true, TaskbarInformationDensity.Information, 900) >
+            TaskbarExperiencePolicy.CalculateWidth(120, 44, 38, 4, true, true, true, true, true, TaskbarInformationDensity.Minimal, 900));
     }
 
     [TestMethod]
@@ -36,6 +36,8 @@ public sealed class TaskbarExperiencePolicyTests
             44,
             38,
             4,
+            true,
+            true,
             true,
             true,
             true,
@@ -55,6 +57,8 @@ public sealed class TaskbarExperiencePolicyTests
             38,
             4,
             true,
+            true,
+            true,
             false,
             true,
             TaskbarInformationDensity.Balanced,
@@ -71,6 +75,61 @@ public sealed class TaskbarExperiencePolicyTests
         var withoutProgress = TaskbarExperiencePolicy.CalculateHoverLayerWidth(false, false, TaskbarInformationDensity.Balanced);
         Assert.IsTrue(full > gestures);
         Assert.IsTrue(gestures > withoutProgress);
+    }
+
+    [TestMethod]
+    public void SpectrumRequiresConnectedPlayingMedia()
+    {
+        Assert.IsFalse(TaskbarExperiencePolicy.ShouldShowSpectrum(MediaSnapshot.Disconnected));
+        Assert.IsFalse(TaskbarExperiencePolicy.ShouldShowSpectrum(MediaSnapshot.Disconnected with
+        {
+            IsConnected = true,
+            IsPlaying = false
+        }));
+        Assert.IsTrue(TaskbarExperiencePolicy.ShouldShowSpectrum(MediaSnapshot.Disconnected with
+        {
+            IsConnected = true,
+            IsPlaying = true
+        }));
+    }
+
+    [TestMethod]
+    public void DisconnectedWidthContainsOnlyArtworkAndTrailingMargin()
+    {
+        var width = TaskbarExperiencePolicy.CalculateWidth(
+            120,
+            44,
+            38,
+            4,
+            false,
+            false,
+            true,
+            true,
+            true,
+            TaskbarInformationDensity.Balanced,
+            double.PositiveInfinity);
+
+        Assert.AreEqual(48, width, 0.001);
+    }
+
+    [TestMethod]
+    public void PausedMediaWidthDoesNotReserveSpectrumSpace()
+    {
+        var metrics = TaskbarDensityMetrics.From(TaskbarInformationDensity.Balanced);
+        var width = TaskbarExperiencePolicy.CalculateWidth(
+            120,
+            44,
+            38,
+            4,
+            true,
+            false,
+            true,
+            false,
+            true,
+            TaskbarInformationDensity.Balanced,
+            double.PositiveInfinity);
+
+        Assert.AreEqual(44 + metrics.SectionGap + 120 + 4, width, 0.001);
     }
 
     [TestMethod]

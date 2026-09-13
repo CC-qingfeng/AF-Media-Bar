@@ -18,20 +18,38 @@ public readonly record struct TaskbarDensityMetrics(
     };
 }
 
-/// <summary>任务栏内容宽度和播放进度的纯策略。 / Pure taskbar content-width and playback-progress policies.</summary>
+/// <summary>任务栏媒体呈现、内容宽度和播放进度的纯策略。 / Pure policies for taskbar media presentation, content width, and playback progress.</summary>
 public static class TaskbarExperiencePolicy
 {
+    /// <summary>
+    /// 仅在媒体源已连接且正在播放时显示任务栏频谱。
+    /// Shows the taskbar spectrum only while a connected media source is playing.
+    /// </summary>
+    public static bool ShouldShowSpectrum(MediaSnapshot snapshot) =>
+        snapshot.IsConnected && snapshot.IsPlaying;
+
+    /// <summary>
+    /// 计算横向任务栏媒体条宽度；断开时只保留封面占位和尾部边距，暂停时不预留频谱空间。
+    /// Calculates horizontal taskbar media-bar width; disconnected state retains only the artwork
+    /// placeholder and trailing margin, while paused media does not reserve spectrum space.
+    /// </summary>
     public static double CalculateWidth(
         double measuredTextWidth,
         double artworkRight,
         double spectrumWidth,
         double trailingMargin,
+        bool mediaConnected,
+        bool spectrumVisible,
         bool transportVisible,
         bool hoverLayerEnabled,
         bool progressVisible,
         TaskbarInformationDensity density,
         double maximumWidth)
     {
+        var artworkOnlyWidth = Math.Max(0, artworkRight) + Math.Max(0, trailingMargin);
+        if (!mediaConnected)
+            return ClampWidth(artworkOnlyWidth, maximumWidth);
+
         var metrics = TaskbarDensityMetrics.From(density);
         var hoverWidth = hoverLayerEnabled
             ? CalculateHoverLayerWidth(transportVisible, progressVisible, density)
@@ -40,11 +58,13 @@ public static class TaskbarExperiencePolicy
         var desired = Math.Max(0, artworkRight) +
                       metrics.SectionGap +
                       middleWidth +
-                      metrics.SectionGap +
-                      Math.Max(0, spectrumWidth) +
+                      (spectrumVisible ? metrics.SectionGap + Math.Max(0, spectrumWidth) : 0) +
                       Math.Max(0, trailingMargin);
-        return double.IsFinite(maximumWidth) ? Math.Min(desired, Math.Max(0, maximumWidth)) : desired;
+        return ClampWidth(desired, maximumWidth);
     }
+
+    private static double ClampWidth(double desired, double maximumWidth) =>
+        double.IsFinite(maximumWidth) ? Math.Min(desired, Math.Max(0, maximumWidth)) : desired;
 
     /// <summary>计算中间文字区域容纳悬停控件所需的最小宽度。 / Calculates the middle text region's minimum width for hover controls.</summary>
     public static double CalculateHoverLayerWidth(

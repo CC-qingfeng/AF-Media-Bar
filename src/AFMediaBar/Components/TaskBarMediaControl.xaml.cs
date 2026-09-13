@@ -242,8 +242,15 @@ namespace AFMediaBar.Components
             var metrics = TaskbarDensityMetrics.From(experience.Density);
             var transportVisible = interaction.Mode != MediaInteractionMode.Gestures;
             var progressVisible = _snapshot.Duration > 0;
+            var spectrumVisible = isHorizontalTaskbar && TaskbarExperiencePolicy.ShouldShowSpectrum(_snapshot);
 
-            TaskbarSpectrumHoverSurface.Visibility = isHorizontalTaskbar ? Visibility.Visible : Visibility.Collapsed;
+            TaskbarSpectrumHoverSurface.Visibility = spectrumVisible ? Visibility.Visible : Visibility.Collapsed;
+            TaskbarSpectrumHoverSurface.IsHitTestVisible = spectrumVisible;
+            if (!spectrumVisible)
+            {
+                AnimateComponentHover(TaskbarSpectrumHoverSurface, false);
+                ApplySpectrum(ReadOnlySpan<float>.Empty);
+            }
             TaskbarRestProgress.Visibility = isHorizontalTaskbar && progressVisible
                 ? Visibility.Visible
                 : Visibility.Collapsed;
@@ -257,9 +264,7 @@ namespace AFMediaBar.Components
             TaskbarFullPanelHandle.Visibility = experience.FullLayerEnabled
                 ? Visibility.Visible
                 : Visibility.Collapsed;
-            var directFullPanelHandleVisible = isHorizontalTaskbar &&
-                                               !experience.HoverLayerEnabled &&
-                                               experience.FullLayerEnabled;
+            var directFullPanelHandleVisible = CanShowDirectFullPanelHandle();
             TaskbarDirectFullPanelHandle.Visibility = directFullPanelHandleVisible
                 ? Visibility.Visible
                 : Visibility.Collapsed;
@@ -343,9 +348,13 @@ namespace AFMediaBar.Components
 
             var metrics = TaskbarDensityMetrics.From(SettingsManager.Current.TaskbarExperience.Density);
             var artworkRight = GetTaskbarArtworkRight();
-            var textLeft = artworkRight + metrics.SectionGap;
-            var reservedRight = metrics.SectionGap + TaskbarSpectrumWidth + TaskbarTrailingMargin;
-            var textWidth = Math.Max(0, primaryLength - textLeft - reservedRight);
+            var spectrumVisible = TaskbarExperiencePolicy.ShouldShowSpectrum(_snapshot);
+            var textLeft = artworkRight + (_isConnected ? metrics.SectionGap : 0);
+            var reservedRight = (spectrumVisible ? metrics.SectionGap + TaskbarSpectrumWidth : 0) +
+                                TaskbarTrailingMargin;
+            var textWidth = _isConnected
+                ? Math.Max(0, primaryLength - textLeft - reservedRight)
+                : 0;
             var textTop = Canvas.GetTop(SongInfoStackPanel);
             if (!double.IsFinite(textTop))
                 textTop = 0;
@@ -417,7 +426,10 @@ namespace AFMediaBar.Components
 
             // 兼容性：更新可见性（布局系统已处理尺寸）
             // Compatibility: update visibility (layout system handles sizing)
-            SongInfoStackPanel.Visibility = isVertical ? Visibility.Collapsed : Visibility.Visible;
+            SongInfoStackPanel.Visibility = !isVertical && _isConnected
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+            SongInfoStackPanel.IsHitTestVisible = !isVertical && _isConnected;
             SongArtistContainer.Visibility = !_isSmallTaskbar && !isVertical && !string.IsNullOrEmpty(_actualArtist)
                 ? Visibility.Visible
                 : Visibility.Collapsed;
@@ -546,7 +558,8 @@ namespace AFMediaBar.Components
                     SongMetadataPanel.Visibility = Visibility.Visible;
                     SongLyricsPanel.Visibility = Visibility.Collapsed;
                     SongArtist.Text = _actualArtist;
-                    SongInfoStackPanel.Visibility = Visibility.Visible;
+                    SongInfoStackPanel.Visibility = Visibility.Collapsed;
+                    SongInfoStackPanel.IsHitTestVisible = false;
                     SongInfoStackPanel.ToolTip = string.Empty;
                     SongImagePlaceholder.Symbol = SymbolRegular.MusicNote220;
                     SongImagePlaceholder.Visibility = Visibility.Visible;
@@ -652,6 +665,7 @@ namespace AFMediaBar.Components
                     ? Visibility.Visible
                     : Visibility.Collapsed;
                 SongInfoStackPanel.Visibility = _isVertical ? Visibility.Collapsed : Visibility.Visible;
+                SongInfoStackPanel.IsHitTestVisible = !_isVertical;
                 // 任务栏主体保持透明；灵动岛继续沿用布局引擎已有背景行为。
                 // Keep the taskbar body transparent; the island retains its existing layout-engine background behavior.
                 BackgroundImage.Visibility = Visibility.Collapsed;
@@ -715,7 +729,7 @@ namespace AFMediaBar.Components
                 ? _secondaryLyric
                 : string.Empty;
             var artist = !lyricsVisible && SongArtistContainer.Visibility == Visibility.Visible ? _actualArtist : string.Empty;
-            var fingerprint = $"{orientation}|{visibleText}|{secondaryText}|{artist}|{SongTitle.FontSize:0.##}|{SongArtist.FontSize:0.##}|{SettingsManager.Current.LayoutLengthScalePercent:0.##}|{SettingsManager.Current.LayoutThicknessScalePercent:0.##}|{SettingsManager.Current.LyricsEnabled}|{SettingsManager.Current.TwoLineLyricsEnabled}|{SettingsManager.Current.LyricsSecondaryLineMode}|{SettingsManager.Current.TaskbarExperience}|{SettingsManager.Current.Interaction.Mode}|{_snapshot.Duration > 0}";
+            var fingerprint = $"{orientation}|{visibleText}|{secondaryText}|{artist}|{SongTitle.FontSize:0.##}|{SongArtist.FontSize:0.##}|{SettingsManager.Current.LayoutLengthScalePercent:0.##}|{SettingsManager.Current.LayoutThicknessScalePercent:0.##}|{SettingsManager.Current.LyricsEnabled}|{SettingsManager.Current.TwoLineLyricsEnabled}|{SettingsManager.Current.LyricsSecondaryLineMode}|{SettingsManager.Current.TaskbarExperience}|{SettingsManager.Current.Interaction.Mode}|{_snapshot.IsConnected}|{_snapshot.IsPlaying}|{_snapshot.Duration > 0}";
             if (!isResetToPreset && fingerprint == _lastSizeFingerprint)
                 return;
 
@@ -742,6 +756,8 @@ namespace AFMediaBar.Components
                         GetTaskbarArtworkRight(),
                         TaskbarSpectrumWidth,
                         TaskbarTrailingMargin,
+                        _snapshot.IsConnected,
+                        TaskbarExperiencePolicy.ShouldShowSpectrum(_snapshot),
                         SettingsManager.Current.Interaction.Mode != MediaInteractionMode.Gestures,
                         SettingsManager.Current.TaskbarExperience.HoverLayerEnabled,
                         _snapshot.Duration > 0,
