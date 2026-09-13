@@ -205,7 +205,7 @@ namespace AFMediaBar.Views.Windows
             _dynamicIslandWindow = null;
             dynamicIslandWindow?.Close();
             _audioControlFlyout.Close();
-            _fullPanelWindow?.Close();
+            _fullPanelWindow?.RequestClose();
             _fullPanelWindow = null;
             var notificationWindow = _trackChangeNotificationWindow;
             _trackChangeNotificationWindow = null;
@@ -621,7 +621,7 @@ namespace AFMediaBar.Views.Windows
             if (!hadPreviousTarget || SettingsManager.Current.WindowMode != WindowMode.Taskbar)
                 return;
 
-            _fullPanelWindow?.Close();
+            _fullPanelWindow?.RequestClose();
             RequestTaskbarEnvironmentRecovery();
         }
 

@@ -23,6 +23,7 @@ public partial class TaskbarFullPanelWindow : FluentWindow
     private bool _isSeeking;
     private bool _audioControlsVisible;
     private bool _performanceVisible;
+    private bool _isClosing;
     private Rect? _anchor;
 
     public TaskbarFullPanelWindow(
@@ -50,9 +51,12 @@ public partial class TaskbarFullPanelWindow : FluentWindow
 
     public void ToggleNear(Rect anchor)
     {
+        if (_isClosing)
+            return;
+
         if (IsVisible)
         {
-            Close();
+            RequestClose();
             return;
         }
 
@@ -61,6 +65,16 @@ public partial class TaskbarFullPanelWindow : FluentWindow
         UpdateLayout();
         PositionNear(anchor);
         Activate();
+    }
+
+    /// <summary>幂等关闭完整层，避免失活事件重入窗口关闭。 / Closes the full panel idempotently without deactivation reentrancy.</summary>
+    internal void RequestClose()
+    {
+        if (_isClosing)
+            return;
+
+        _isClosing = true;
+        Close();
     }
 
     private void PositionNear(Rect anchor)
@@ -227,13 +241,22 @@ public partial class TaskbarFullPanelWindow : FluentWindow
     private void Window_Deactivated(object sender, EventArgs e)
     {
         if (!DeviceCombo.IsDropDownOpen)
-            Close();
+            RequestClose();
     }
 
     private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key == Key.Escape)
-            Close();
+            RequestClose();
+    }
+
+    /// <summary>标记窗口已进入关闭流程，覆盖所有外部关闭入口。 / Marks the window as closing for every external close path.</summary>
+    protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+    {
+        _isClosing = true;
+        base.OnClosing(e);
+        if (e.Cancel)
+            _isClosing = false;
     }
 
     private void OnClosed(object? sender, EventArgs e)
