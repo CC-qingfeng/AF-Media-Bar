@@ -30,8 +30,8 @@ public sealed class MediaSourceProcessResolver
     private readonly Queue<string> _rememberedOrder = new();
 
     /// <summary>
-    /// 调用 ResolveProcessNames，提供 API。
-    /// Provides the public ResolveProcessNames entry point required by this component.
+    /// 返回来源标识对应的候选进程名，并优先包含运行期记忆的成功映射。
+    /// Returns candidate process names for a source identifier, preferring mappings learned successfully at runtime.
     /// </summary>
     public IReadOnlyList<string> ResolveProcessNames(string? sourceId)
     {
@@ -58,8 +58,8 @@ public sealed class MediaSourceProcessResolver
     }
 
     /// <summary>
-    /// 调用 Matches，提供 API。
-    /// Provides the public Matches entry point required by this component.
+    /// 使用规范化标识、显示名和已知别名判断音频会话是否属于指定媒体来源。
+    /// Determines whether an audio session belongs to a media source using normalized identifiers, display names, and known aliases.
     /// </summary>
     public bool Matches(string? sourceId, string? sourceName, string processName, string displayName)
     {
@@ -81,8 +81,8 @@ public sealed class MediaSourceProcessResolver
     }
 
     /// <summary>
-    /// 调用 Remember，提供 API。
-    /// Provides the public Remember entry point required by this component.
+    /// 记录一次已确认的来源到进程映射，供本次应用生命周期内后续解析复用。
+    /// Remembers a confirmed source-to-process mapping for reuse during the current application lifetime.
     /// </summary>
     public void Remember(string? sourceId, string? sourceName, string processName)
     {

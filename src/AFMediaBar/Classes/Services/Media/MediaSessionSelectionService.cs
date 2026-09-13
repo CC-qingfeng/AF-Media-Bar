@@ -27,8 +27,8 @@ public sealed class MediaSessionSelectionService : IDisposable
     public event Action? RefreshRequested;
 
     /// <summary>
-    /// 调用 MediaSessionSelectionService，提供 API。
-    /// Provides the public MediaSessionSelectionService entry point required by this component.
+    /// 创建会话选择状态机，并使用共享目录提供焦点会话与刷新信号。
+    /// Creates the session-selection state machine using the shared catalog for focused sessions and refresh signals.
     /// </summary>
     public MediaSessionSelectionService(MediaSessionCatalog catalog)
     {
@@ -41,8 +41,8 @@ public sealed class MediaSessionSelectionService : IDisposable
     }
 
     /// <summary>
-    /// 调用 Select，提供 API。
-    /// Provides the public Select entry point required by this component.
+    /// 在给定稳定会话集合中建立手动选择；键不存在时不改变当前状态。
+    /// Establishes a manual selection within the supplied stable session set without changing state for an unknown key.
     /// </summary>
     public bool Select(string key, IReadOnlyList<MediaSession> sessions)
     {
@@ -61,8 +61,8 @@ public sealed class MediaSessionSelectionService : IDisposable
     }
 
     /// <summary>
-    /// 调用 Resolve，提供 API。
-    /// Provides the public Resolve entry point required by this component.
+    /// 按手动选择、宽限期和系统焦点优先级解析当前会话。
+    /// Resolves the current session using manual selection, grace-period, and system-focus precedence.
     /// </summary>
     public MediaSession? Resolve(IReadOnlyList<MediaSession> sessions)
     {
@@ -116,8 +116,8 @@ public sealed class MediaSessionSelectionService : IDisposable
     }
 
     /// <summary>
-    /// 调用 TryAutoSwitchToPlaying，提供 API。
-    /// Provides the public TryAutoSwitchToPlaying entry point required by this component.
+    /// 在自动跟随模式下尝试切换到正在播放的会话，并报告选择是否变化。
+    /// Attempts to follow a playing session in automatic mode and reports whether the selection changed.
     /// </summary>
     public bool TryAutoSwitchToPlaying(IReadOnlyList<MediaSession> sessions)
     {
@@ -211,8 +211,8 @@ public sealed class MediaSessionSelectionService : IDisposable
     }
 
     /// <summary>
-    /// 调用 ClearSelection，提供 API。
-    /// Provides the public ClearSelection entry point required by this component.
+    /// 清除手动选择和相关宽限状态，使后续解析恢复自动跟随。
+    /// Clears manual selection and its grace state so subsequent resolution returns to automatic following.
     /// </summary>
     public void ClearSelection()
     {
@@ -223,8 +223,8 @@ public sealed class MediaSessionSelectionService : IDisposable
     }
 
     /// <summary>
-    /// 调用 Dispose，提供 API。
-    /// Provides the public Dispose entry point required by this component.
+    /// 停止选择计时器并阻止后续刷新请求。
+    /// Stops selection timers and prevents subsequent refresh requests.
     /// </summary>
     public void Dispose()
     {

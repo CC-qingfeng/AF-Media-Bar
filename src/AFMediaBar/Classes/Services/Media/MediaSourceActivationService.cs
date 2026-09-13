@@ -14,8 +14,8 @@ public sealed class MediaSourceActivationService
     private readonly MediaSourceProcessResolver _processResolver;
 
     /// <summary>
-    /// 调用 MediaSourceActivationService，提供 API。
-    /// Provides the public MediaSourceActivationService entry point required by this component.
+    /// 创建来源激活器，并复用音频来源解析规则定位候选进程。
+    /// Creates the source activator and reuses audio-source resolution rules to locate candidate processes.
     /// </summary>
     public MediaSourceActivationService(MediaSourceProcessResolver processResolver)
     {
@@ -23,8 +23,8 @@ public sealed class MediaSourceActivationService
     }
 
     /// <summary>
-    /// 调用 Activate，提供 API。
-    /// Provides the public Activate entry point required by this component.
+    /// 尝试恢复并前置来源进程的主窗口；找不到安全窗口时保持无操作。
+    /// Attempts to restore and foreground the source process main window, becoming a no-op when no safe window is found.
     /// </summary>
     public void Activate(string sourceId)
     {

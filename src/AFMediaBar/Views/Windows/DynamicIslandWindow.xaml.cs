@@ -153,8 +153,8 @@ public partial class DynamicIslandWindow : Window
     }
 
     /// <summary>
-    /// 调用 ApplySnapshot，提供 API。
-    /// Provides the public ApplySnapshot entry point required by this component.
+    /// 将不可变媒体快照转发到呈现控件，并在内容尺寸变化后保持当前边缘锚点。
+    /// Applies an immutable media snapshot to the presentation control while preserving the current edge anchor after size changes.
     /// </summary>
     public void ApplySnapshot(MediaSnapshot snapshot)
     {
@@ -200,8 +200,8 @@ public partial class DynamicIslandWindow : Window
     }
 
     /// <summary>
-    /// 调用 ApplyLayoutSettings，提供 API。
-    /// Provides the public ApplyLayoutSettings entry point required by this component.
+    /// 应用已规范化的布局方向，并重新测量窗口和输入区域。
+    /// Applies the normalized layout orientation and remeasures the window and its input region.
     /// </summary>
     public void ApplyLayoutSettings(LayoutOrientationMode mode)
     {
@@ -239,8 +239,8 @@ public partial class DynamicIslandWindow : Window
     }
 
     /// <summary>
-    /// 调用 ApplyAppearanceSettings，提供 API。
-    /// Provides the public ApplyAppearanceSettings entry point required by this component.
+    /// 在主题或外观设置变化后重新应用窗口材质及控件资源。
+    /// Reapplies window material and control resources after theme or appearance settings change.
     /// </summary>
     public void ApplyAppearanceSettings()
     {

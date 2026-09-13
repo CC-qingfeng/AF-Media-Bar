@@ -23,8 +23,8 @@ public sealed class ApplicationVolumeService
     private readonly AudioProcessInfoService _processInfo;
 
     /// <summary>
-    /// 调用 ApplicationVolumeService，提供 API。
-    /// Provides the public ApplicationVolumeService entry point required by this component.
+    /// 创建应用音量协调器，并使用共享来源解析器将媒体来源映射到音频会话。
+    /// Creates the application-volume coordinator and maps media sources to audio sessions through the shared resolver.
     /// </summary>
     public ApplicationVolumeService(
         MediaSourceProcessResolver processResolver,
@@ -37,15 +37,15 @@ public sealed class ApplicationVolumeService
     }
 
     /// <summary>
-    /// 调用 GetApplications，提供 API。
-    /// Provides the public GetApplications entry point required by this component.
+    /// 枚举当前渲染端点的应用音频会话，并标记与媒体来源匹配的项。
+    /// Enumerates application audio sessions on the current render endpoint and marks entries matching the media source.
     /// </summary>
     public IReadOnlyList<ApplicationVolumeSnapshot> GetApplications(string? sourceId, string? sourceName) =>
         GetApplicationsCore(sourceId, sourceName, includeIcons: true);
 
     /// <summary>
-    /// 调用 GetCurrentMediaVolume，提供 API。
-    /// Provides the public GetCurrentMediaVolume entry point required by this component.
+    /// 返回当前媒体来源对应的应用音量快照，无法匹配时返回空值。
+    /// Returns the application-volume snapshot matching the current media source, or null when no session matches.
     /// </summary>
     public ApplicationVolumeSnapshot? GetCurrentMediaVolume(string? sourceId, string? sourceName) =>
         GetApplicationsCore(sourceId, sourceName, includeIcons: false)
@@ -96,8 +96,8 @@ public sealed class ApplicationVolumeService
     }
 
     /// <summary>
-    /// 调用 SetApplicationVolume，提供 API。
-    /// Provides the public SetApplicationVolume entry point required by this component.
+    /// 将指定进程的所有匹配音频会话设置为限制后的百分比，并报告是否至少更新一项。
+    /// Applies the clamped percentage to all matching audio sessions for a process and reports whether any session changed.
     /// </summary>
     public bool SetApplicationVolume(string processName, int volumePercent)
     {

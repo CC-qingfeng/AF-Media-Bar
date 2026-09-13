@@ -51,8 +51,8 @@ namespace AFMediaBar.ViewModels.Windows
         public ICommand ActivateMediaSourceCommand { get; }
 
         /// <summary>
-        /// 调用 MainWindowViewModel，提供 API。
-        /// Provides the public MainWindowViewModel entry point required by this component.
+        /// 创建主窗口状态适配器，并订阅媒体服务在 UI 线程发布的快照与会话列表。
+        /// Creates the main-window state adapter and subscribes to snapshots and session lists published by the media service on the UI thread.
         /// </summary>
         public MainWindowViewModel(MediaSessionService mediaSessionService)
         {

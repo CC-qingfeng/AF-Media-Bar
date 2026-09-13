@@ -25,8 +25,8 @@ public static class MediaSourceNameFormatter
     ];
 
     /// <summary>
-    /// 调用 GetDisplayName，提供 API。
-    /// Provides the public GetDisplayName entry point required by this component.
+    /// 将来源标识规范化为稳定的用户可见名称，并为未知或空标识提供本地化回退。
+    /// Normalizes a source identifier into a stable display name with a localized fallback for unknown or empty identifiers.
     /// </summary>
     public static string GetDisplayName(string? sourceId, string unknownSourceName)
     {

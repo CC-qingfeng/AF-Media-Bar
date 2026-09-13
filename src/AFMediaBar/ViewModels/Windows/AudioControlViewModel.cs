@@ -68,8 +68,8 @@ public partial class AudioControlViewModel : ObservableObject, IDisposable
     public event EventHandler? SettingsOpenRequested;
 
     /// <summary>
-    /// 调用 AudioControlViewModel，提供 API。
-    /// Provides the public AudioControlViewModel entry point required by this component.
+    /// 创建音频面板状态协调器；设备、应用音量和提示状态均通过注入服务异步刷新。
+    /// Creates the audio-panel state coordinator; devices, application volume, and tooltip state are refreshed asynchronously through injected services.
     /// </summary>
     public AudioControlViewModel(
         AudioDeviceService deviceService,

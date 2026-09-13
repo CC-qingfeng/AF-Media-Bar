@@ -26,8 +26,8 @@ public sealed class MediaSessionCatalog : IDisposable
     public event Action<MediaSession, GlobalSystemMediaTransportControlsSessionTimelineProperties>? AnyTimelinePropertyChanged;
 
     /// <summary>
-    /// 调用 MediaSessionCatalog，提供 API。
-    /// Provides the public MediaSessionCatalog entry point required by this component.
+    /// 创建并启动唯一的 SMTC 会话目录，目录事件由本实例统一转发和释放。
+    /// Creates and starts the sole SMTC session catalog whose events are forwarded and released by this instance.
     /// </summary>
     public MediaSessionCatalog()
     {
@@ -41,8 +41,8 @@ public sealed class MediaSessionCatalog : IDisposable
     }
 
     /// <summary>
-    /// 调用 TryGetSnapshot，提供 API。
-    /// Provides the public TryGetSnapshot entry point required by this component.
+    /// 返回当前动态会话集合的稳定数组快照；目录尚未就绪时返回 <see langword="false"/>。
+    /// Returns a stable array snapshot of the dynamic session collection, or <see langword="false"/> while the catalog is unavailable.
     /// </summary>
     public bool TryGetSnapshot(out MediaSession[] sessions)
     {
@@ -68,8 +68,8 @@ public sealed class MediaSessionCatalog : IDisposable
     }
 
     /// <summary>
-    /// 调用 GetFocusedSession，提供 API。
-    /// Provides the public GetFocusedSession entry point required by this component.
+    /// 获取当前由 Windows 判定为焦点的媒体会话，底层目录异常时返回空值。
+    /// Gets the media session currently focused by Windows, returning null if the underlying catalog is unavailable.
     /// </summary>
     public MediaSession? GetFocusedSession()
     {
@@ -85,14 +85,14 @@ public sealed class MediaSessionCatalog : IDisposable
     }
 
     /// <summary>
-    /// 调用 ForceUpdate，提供 API。
-    /// Provides the public ForceUpdate entry point required by this component.
+    /// 请求底层媒体管理器立即重新枚举会话。
+    /// Requests an immediate session enumeration from the underlying media manager.
     /// </summary>
     public void ForceUpdate() => _mediaManager.ForceUpdate();
 
     /// <summary>
-    /// 调用 Dispose，提供 API。
-    /// Provides the public Dispose entry point required by this component.
+    /// 幂等解除底层媒体管理器事件并释放会话目录。
+    /// Idempotently detaches media-manager events and disposes the session catalog.
     /// </summary>
     public void Dispose()
     {

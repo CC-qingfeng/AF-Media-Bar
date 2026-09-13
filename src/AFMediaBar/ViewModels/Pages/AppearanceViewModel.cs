@@ -18,10 +18,6 @@ public partial class AppearanceViewModel : ObservableObject
     private ApplicationBackdropMode _backdropMode;
     private bool _isRefreshing;
 
-    /// <summary>
-    /// 调用 AppearanceViewModel，提供 API。
-    /// Provides the public AppearanceViewModel entry point required by this component.
-    /// </summary>
     public AppearanceViewModel()
     {
         var appearance = SettingsManager.Current.Appearance.Normalize();

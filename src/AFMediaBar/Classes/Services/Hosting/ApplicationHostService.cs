@@ -27,8 +27,8 @@ namespace AFMediaBar.Classes.Services
         private INavigationWindow _navigationWindow;
 
         /// <summary>
-        /// 调用 ApplicationHostService，提供 API。
-        /// Provides the public ApplicationHostService entry point required by this component.
+        /// 创建由通用宿主管理的窗口激活服务；窗口及导航依赖在启动阶段从组合根解析。
+        /// Creates the Generic Host activation service; window and navigation dependencies are resolved from the composition root during startup.
         /// </summary>
         public ApplicationHostService(IServiceProvider serviceProvider)
         {

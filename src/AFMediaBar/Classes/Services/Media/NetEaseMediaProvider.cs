@@ -36,8 +36,8 @@ public sealed class NetEaseMediaProvider : IMediaSourceProvider
     public event Action<IMediaSourceProvider, MediaSnapshot?>? SnapshotChanged;
 
     /// <summary>
-    /// 调用 NetEaseMediaProvider，提供 API。
-    /// Provides the public NetEaseMediaProvider entry point required by this component.
+    /// 创建网易云来源提供器；实际进程读取在显式启动后进行，并由本实例负责释放。
+    /// Creates the NetEase source provider; process reading begins only after explicit start and is owned by this instance.
     /// </summary>
     public NetEaseMediaProvider(LyricsService lyricsService)
     {
@@ -55,8 +55,8 @@ public sealed class NetEaseMediaProvider : IMediaSourceProvider
         sourceId.Contains("163music", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// 调用 UpdateSessionSnapshot，提供 API。
-    /// Provides the public UpdateSessionSnapshot entry point required by this component.
+    /// 更新 SMTC 基线快照，供来源专用数据合并时保持媒体身份一致。
+    /// Updates the SMTC baseline snapshot used to preserve media identity during source-specific enrichment.
     /// </summary>
     public void UpdateSessionSnapshot(MediaSnapshot snapshot)
     {
@@ -64,8 +64,8 @@ public sealed class NetEaseMediaProvider : IMediaSourceProvider
     }
 
     /// <summary>
-    /// 调用 Start，提供 API。
-    /// Provides the public Start entry point required by this component.
+    /// 幂等启动来源轮询；重复调用不会创建额外计时器。
+    /// Idempotently starts source polling without creating additional timers on repeated calls.
     /// </summary>
     public void Start()
     {
@@ -80,8 +80,8 @@ public sealed class NetEaseMediaProvider : IMediaSourceProvider
     }
 
     /// <summary>
-    /// 调用 Dispose，提供 API。
-    /// Provides the public Dispose entry point required by this component.
+    /// 停止轮询并释放当前播放器读取器，阻止释放后继续发布快照。
+    /// Stops polling and disposes the active player reader so no snapshots are published after disposal.
     /// </summary>
     public void Dispose()
     {

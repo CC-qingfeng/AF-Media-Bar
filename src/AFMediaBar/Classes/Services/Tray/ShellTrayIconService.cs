@@ -22,8 +22,8 @@ public sealed class ShellTrayIconService : IDisposable
     private bool _disposed;
 
     /// <summary>
-    /// 调用 ShellTrayIconService，提供 API。
-    /// Provides the public ShellTrayIconService entry point required by this component.
+    /// 创建隐藏消息窗口、注册 Explorer 重建消息并立即安装通知区域图标。
+    /// Creates the hidden message window, registers for Explorer recreation, and installs the notification icon immediately.
     /// </summary>
     public ShellTrayIconService()
     {
@@ -48,8 +48,8 @@ public sealed class ShellTrayIconService : IDisposable
     public event EventHandler? ShellRestarted;
 
     /// <summary>
-    /// 调用 TryGetBounds，提供 API。
-    /// Provides the public TryGetBounds entry point required by this component.
+    /// 查询通知图标的物理屏幕边界，图标尚未安装或 Shell 查询失败时返回 <see langword="false"/>。
+    /// Queries the notification icon bounds in physical screen coordinates; returns <see langword="false"/> when unavailable.
     /// </summary>
     public bool TryGetBounds(out TrayIconBounds bounds)
     {
@@ -75,8 +75,8 @@ public sealed class ShellTrayIconService : IDisposable
     }
 
     /// <summary>
-    /// 调用 UpdateTooltip，提供 API。
-    /// Provides the public UpdateTooltip entry point required by this component.
+    /// 规范化并截断提示文本，然后在图标存在时同步更新 Shell 状态。
+    /// Normalizes and truncates tooltip text, then updates Shell state when the icon is installed.
     /// </summary>
     public void UpdateTooltip(string? text)
     {
@@ -173,8 +173,8 @@ public sealed class ShellTrayIconService : IDisposable
     };
 
     /// <summary>
-    /// 调用 Dispose，提供 API。
-    /// Provides the public Dispose entry point required by this component.
+    /// 幂等移除通知图标、消息钩子和本服务拥有的原生图标句柄。
+    /// Idempotently removes the notification icon, message hook, and native icon handle owned by this service.
     /// </summary>
     public void Dispose()
     {

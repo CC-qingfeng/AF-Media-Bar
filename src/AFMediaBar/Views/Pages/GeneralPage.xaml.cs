@@ -25,10 +25,6 @@ namespace AFMediaBar.Views.Pages
         public GeneralViewModel ViewModel { get; }
         private readonly SettingsPersistenceService _persistence;
 
-        /// <summary>
-        /// 调用 GeneralPage，提供 API。
-        /// Provides the public GeneralPage entry point required by this component.
-        /// </summary>
         public GeneralPage(GeneralViewModel viewModel, SettingsPersistenceService persistence)
         {
             ViewModel = viewModel;

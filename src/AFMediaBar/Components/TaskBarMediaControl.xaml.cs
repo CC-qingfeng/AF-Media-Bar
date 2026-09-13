@@ -60,8 +60,8 @@ namespace AFMediaBar.Components
         private WindowMode _currentMode = WindowMode.Taskbar;  // 当前窗口模式 Current window mode
 
         /// <summary>
-        /// 调用 TaskBarMediaControl，提供 API。
-        /// Provides the public TaskBarMediaControl entry point required by this component.
+        /// 初始化共享媒体控件及其组件级悬停、文本覆盖层和尺寸测量状态。
+        /// Initializes the shared media control and its component hover, text-overlay, and size-measurement state.
         /// </summary>
         public TaskBarMediaControl()
         {

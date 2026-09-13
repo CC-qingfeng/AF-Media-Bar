@@ -18,8 +18,8 @@ public partial class AudioControlFlyoutWindow : FluentWindow
     public AudioControlViewModel ViewModel { get; }
 
     /// <summary>
-    /// 调用 AudioControlFlyoutWindow，提供 API。
-    /// Provides the public AudioControlFlyoutWindow entry point required by this component.
+    /// 创建由注入 ViewModel 驱动的短生命周期音频浮窗，并注册统一窗口外观管理。
+    /// Creates the transient audio flyout backed by the injected ViewModel and registers it with shared appearance management.
     /// </summary>
     public AudioControlFlyoutWindow(AudioControlViewModel viewModel, WindowAppearanceService appearanceService)
     {
@@ -30,8 +30,8 @@ public partial class AudioControlFlyoutWindow : FluentWindow
     }
 
     /// <summary>
-    /// 调用 ToggleAsync，提供 API。
-    /// Provides the public ToggleAsync entry point required by this component.
+    /// 在托盘锚点附近切换浮窗；显示前完成一次异步音频状态刷新。
+    /// Toggles the flyout near the tray anchor and refreshes audio state asynchronously before showing it.
     /// </summary>
     public async Task ToggleAsync(TrayIconBounds? bounds)
     {

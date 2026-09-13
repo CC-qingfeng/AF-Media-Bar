@@ -11,8 +11,8 @@ public sealed class AudioDeviceService
     private static readonly Guid PolicyConfigClientClassId = new("870AF99C-171D-4F9E-AF0D-E63DF40C2BC9");
 
     /// <summary>
-    /// 调用 GetRenderDevicesAsync，提供 API。
-    /// Provides the public GetRenderDevicesAsync entry point required by this component.
+    /// 异步枚举活动渲染设备，并返回可安全绑定到 UI 的不可变选项列表。
+    /// Asynchronously enumerates active render devices and returns an immutable option list safe for UI binding.
     /// </summary>
     public async Task<IReadOnlyList<AudioDeviceOption>> GetRenderDevicesAsync()
     {
@@ -43,8 +43,8 @@ public sealed class AudioDeviceService
             StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// 调用 SetDefaultRenderDevice，提供 API。
-    /// Provides the public SetDefaultRenderDevice entry point required by this component.
+    /// 通过 Windows 策略配置接口切换默认渲染设备；空标识不会触发原生调用。
+    /// Changes the default render device through the Windows policy configuration interface; empty identifiers do not invoke native code.
     /// </summary>
     public void SetDefaultRenderDevice(string policyDeviceId)
     {

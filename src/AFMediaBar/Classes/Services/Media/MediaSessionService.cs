@@ -46,8 +46,8 @@ public sealed class MediaSessionService : IDisposable
     public IReadOnlyList<MediaSessionOption> CurrentSessionOptions => _lastSessionOptions;
 
     /// <summary>
-    /// 调用 MediaSessionService，提供 API。
-    /// Provides the public MediaSessionService entry point required by this component.
+    /// 创建媒体协调器并接管目录、选择器和来源提供器的事件订阅；释放本服务时会按相反顺序解除订阅。
+    /// Creates the media coordinator and owns subscriptions to the catalog, selector, and source providers; disposal removes them in reverse ownership order.
     /// </summary>
     public MediaSessionService(
         MediaSessionCatalog catalog,
@@ -81,14 +81,14 @@ public sealed class MediaSessionService : IDisposable
     }
 
     /// <summary>
-    /// 调用 RefreshNow，提供 API。
-    /// Provides the public RefreshNow entry point required by this component.
+    /// 使用当前稳定会话目录立即重建并发布快照。
+    /// Immediately rebuilds and publishes a snapshot from the current stable session catalog.
     /// </summary>
     public void RefreshNow() => RefreshSnapshot();
 
     /// <summary>
-    /// 调用 ReconnectAsync，提供 API。
-    /// Provides the public ReconnectAsync entry point required by this component.
+    /// 强制底层 SMTC 目录刷新，然后同步重建会话列表和当前快照。
+    /// Forces the underlying SMTC catalog to refresh, then rebuilds the session list and current snapshot.
     /// </summary>
     public Task ReconnectAsync()
     {
@@ -99,8 +99,8 @@ public sealed class MediaSessionService : IDisposable
     }
 
     /// <summary>
-    /// 调用 SelectSession，提供 API。
-    /// Provides the public SelectSession entry point required by this component.
+    /// 将有效会话键设为手动选择，并基于同一目录快照重新发布列表和媒体状态。
+    /// Selects a valid session key manually and republishes the list and media state from the same catalog snapshot.
     /// </summary>
     public void SelectSession(string key)
     {
@@ -119,8 +119,8 @@ public sealed class MediaSessionService : IDisposable
     }
 
     /// <summary>
-    /// 调用 TogglePlayPauseAsync，提供 API。
-    /// Provides the public TogglePlayPauseAsync entry point required by this component.
+    /// 将播放/暂停请求转发给当前选中的 SMTC 会话；会话已消失时安全忽略。
+    /// Forwards play/pause to the selected SMTC session and safely ignores the request if that session has disappeared.
     /// </summary>
     public Task TogglePlayPauseAsync() => ExecuteOnSelectedAsync(async session =>
     {
@@ -128,8 +128,8 @@ public sealed class MediaSessionService : IDisposable
     });
 
     /// <summary>
-    /// 调用 SkipPreviousAsync，提供 API。
-    /// Provides the public SkipPreviousAsync entry point required by this component.
+    /// 将上一首请求转发给当前仍有效的选中会话。
+    /// Forwards the previous-track request to the selected session while it remains valid.
     /// </summary>
     public Task SkipPreviousAsync() => ExecuteOnSelectedAsync(async session =>
     {
@@ -137,8 +137,8 @@ public sealed class MediaSessionService : IDisposable
     });
 
     /// <summary>
-    /// 调用 SkipNextAsync，提供 API。
-    /// Provides the public SkipNextAsync entry point required by this component.
+    /// 将下一首请求转发给当前仍有效的选中会话。
+    /// Forwards the next-track request to the selected session while it remains valid.
     /// </summary>
     public Task SkipNextAsync() => ExecuteOnSelectedAsync(async session =>
     {
@@ -179,14 +179,14 @@ public sealed class MediaSessionService : IDisposable
     });
 
     /// <summary>
-    /// 调用 ActivateSelectedSource，提供 API。
-    /// Provides the public ActivateSelectedSource entry point required by this component.
+    /// 尝试激活当前媒体来源对应的前台窗口，不存在可用进程时保持无操作。
+    /// Attempts to activate the foreground window for the selected media source and becomes a no-op when no process is available.
     /// </summary>
     public void ActivateSelectedSource() => _sourceActivator.Activate(SelectedSourceId);
 
     /// <summary>
-    /// 调用 Dispose，提供 API。
-    /// Provides the public Dispose entry point required by this component.
+    /// 幂等停止来源提供器并解除所有目录、选择和补全事件，阻止释放后继续发布状态。
+    /// Idempotently stops source providers and removes catalog, selection, and enrichment subscriptions so no state is published after disposal.
     /// </summary>
     public void Dispose()
     {

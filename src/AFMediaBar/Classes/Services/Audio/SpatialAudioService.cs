@@ -22,8 +22,8 @@ public sealed class SpatialAudioService
         };
 
     /// <summary>
-    /// 调用 GetState，提供 API。
-    /// Provides the public GetState entry point required by this component.
+    /// 查询指定输出设备的空间音效状态；平台不支持或查询失败时返回不可用快照。
+    /// Queries spatial-audio state for an output device and returns an unavailable snapshot when unsupported or failed.
     /// </summary>
     public SpatialAudioSnapshot GetState(string deviceId)
     {
@@ -52,8 +52,8 @@ public sealed class SpatialAudioService
     }
 
     /// <summary>
-    /// 调用 OpenSystemSettings，提供 API。
-    /// Provides the public OpenSystemSettings entry point required by this component.
+    /// 打开 Windows 声音设置，由系统界面负责后续空间音效配置。
+    /// Opens Windows sound settings and delegates further spatial-audio configuration to the system UI.
     /// </summary>
     public void OpenSystemSettings()
     {

@@ -63,8 +63,8 @@ namespace AFMediaBar.Views.Windows
         }
 
         /// <summary>
-        /// 调用 SetServiceProvider，提供 API。
-        /// Provides the public SetServiceProvider entry point required by this component.
+        /// 为导航页提供应用组合根；该兼容入口只在设置窗口初始化期间调用。
+        /// Supplies the application composition root to navigation pages; this compatibility entry point is used only during settings-window initialization.
         /// </summary>
         public void SetServiceProvider(IServiceProvider serviceProvider)
         {

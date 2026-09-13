@@ -23,8 +23,8 @@ public sealed class MediaSnapshotBuilder
     public event Action? EnrichmentCompleted;
 
     /// <summary>
-    /// 调用 MediaSnapshotBuilder，提供 API。
-    /// Provides the public MediaSnapshotBuilder entry point required by this component.
+    /// 创建快照构建器，并使用歌词服务执行与当前曲目版本绑定的异步补全。
+    /// Creates the snapshot builder and uses the lyrics service for asynchronous enrichment tied to the current track version.
     /// </summary>
     public MediaSnapshotBuilder(LyricsService lyricsService)
     {
@@ -32,8 +32,8 @@ public sealed class MediaSnapshotBuilder
     }
 
     /// <summary>
-    /// 调用 Build，提供 API。
-    /// Provides the public Build entry point required by this component.
+    /// 从一个稳定会话读取不可变媒体快照；异步封面或歌词结果通过补全事件另行发布。
+    /// Builds an immutable media snapshot from a stable session; asynchronous artwork or lyrics results are published separately.
     /// </summary>
     public MediaSnapshot? Build(MediaSession? session, bool isStarted)
     {

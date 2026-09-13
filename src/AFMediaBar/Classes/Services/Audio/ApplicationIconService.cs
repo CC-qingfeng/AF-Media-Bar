@@ -14,8 +14,8 @@ public sealed class ApplicationIconService
     private readonly AudioProcessInfoService _processInfo;
 
     /// <summary>
-    /// 调用 ApplicationIconService，提供 API。
-    /// Provides the public ApplicationIconService entry point required by this component.
+    /// 创建应用图标加载器，并复用进程信息服务解析可执行文件路径。
+    /// Creates the application-icon loader and reuses process information to resolve executable paths.
     /// </summary>
     public ApplicationIconService(AudioProcessInfoService processInfo)
     {

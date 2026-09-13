@@ -160,8 +160,8 @@ public class TaskbarDockService : ITaskbarDockService
     }
 
     /// <summary>
-    /// 调用 TryGetTaskbarRect，提供 API。
-    /// Provides the public TryGetTaskbarRect entry point required by this component.
+    /// 读取任务栏的物理像素矩形；句柄无效或 Win32 查询失败时返回 <see langword="false"/>。
+    /// Reads the taskbar rectangle in physical pixels; returns <see langword="false"/> for an invalid handle or failed Win32 query.
     /// </summary>
     public bool TryGetTaskbarRect(IntPtr taskbarHandle, out RECT rect)
     {
@@ -170,8 +170,8 @@ public class TaskbarDockService : ITaskbarDockService
     }
 
     /// <summary>
-    /// 调用 IsTaskbarVertical，提供 API。
-    /// Provides the public IsTaskbarVertical entry point required by this component.
+    /// 根据任务栏物理矩形判断其是否为左右侧竖向任务栏。
+    /// Determines whether the taskbar is docked vertically from its physical rectangle.
     /// </summary>
     public bool IsTaskbarVertical(IntPtr taskbarHandle)
     {
@@ -186,8 +186,8 @@ public class TaskbarDockService : ITaskbarDockService
     }
 
     /// <summary>
-    /// 调用 DockWindow，提供 API。
-    /// Provides the public DockWindow entry point required by this component.
+    /// 将顶层媒体窗口转换为 Explorer 任务栏子窗口；调用方仍负责关闭前执行解挂。
+    /// Converts the top-level media window into an Explorer taskbar child; the caller remains responsible for undocking before close.
     /// </summary>
     public void DockWindow(IntPtr windowHandle, IntPtr taskbarHandle)
     {
@@ -203,8 +203,8 @@ public class TaskbarDockService : ITaskbarDockService
     }
 
     /// <summary>
-    /// 调用 UndockWindow，提供 API。
-    /// Provides the public UndockWindow entry point required by this component.
+    /// 隐藏并解除任务栏父子关系，再恢复顶层窗口样式，供安全销毁或重新停靠。
+    /// Hides and detaches the taskbar child, then restores top-level styles for safe destruction or redocking.
     /// </summary>
     public void UndockWindow(IntPtr windowHandle)
     {
@@ -221,8 +221,8 @@ public class TaskbarDockService : ITaskbarDockService
     }
 
     /// <summary>
-    /// 调用 SetWindowPosition，提供 API。
-    /// Provides the public SetWindowPosition entry point required by this component.
+    /// 将屏幕物理坐标转换为任务栏客户区坐标，并异步定位已停靠窗口。
+    /// Converts physical screen coordinates into taskbar client coordinates and positions the docked window asynchronously.
     /// </summary>
     public void SetWindowPosition(IntPtr windowHandle, IntPtr taskbarHandle, RECT taskbarRect, int width, int height)
     {
@@ -241,8 +241,8 @@ public class TaskbarDockService : ITaskbarDockService
     }
 
     /// <summary>
-    /// 调用 ApplyInputRegion，提供 API。
-    /// Provides the public ApplyInputRegion entry point required by this component.
+    /// 合并给定物理矩形并转移 GDI 区域所有权给窗口，以限制任务栏子窗口的可交互范围。
+    /// Combines the physical rectangles and transfers the resulting GDI region to the window to constrain its interactive area.
     /// </summary>
     public void ApplyInputRegion(IntPtr windowHandle, IReadOnlyList<RECT> rects)
     {
