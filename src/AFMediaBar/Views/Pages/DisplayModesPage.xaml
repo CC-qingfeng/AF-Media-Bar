@@ -61,6 +61,38 @@
                 <ui:CardControl Margin="0,0,0,8" Icon="{ui:SymbolIcon Layer24}"><ui:CardControl.Header><StackPanel><TextBlock Text="可选层级" FontWeight="SemiBold"/><TextBlock Text="静置层始终存在；关闭悬停层后，完整层仍可从文字区顶部细杠打开" Opacity="0.62" FontSize="12"/></StackPanel></ui:CardControl.Header>
                     <StackPanel Orientation="Horizontal"><ui:ToggleSwitch Content="悬停层" IsChecked="{Binding ViewModel.HoverLayerEnabled, Mode=TwoWay}" Margin="0,0,20,0"/><ui:ToggleSwitch Content="完整层" IsChecked="{Binding ViewModel.FullLayerEnabled, Mode=TwoWay}"/></StackPanel>
                 </ui:CardControl>
+                <ui:CardControl Margin="0,0,0,8" Icon="{ui:SymbolIcon WindowConsole20}"
+                                IsEnabled="{Binding ViewModel.FullLayerEnabled}">
+                    <ui:CardControl.Header>
+                        <StackPanel>
+                            <TextBlock Text="完整层布局" FontWeight="SemiBold"/>
+                            <TextBlock Text="固定 520 DIP 宽度，高度随可见内容自动调整" Opacity="0.62" FontSize="12"/>
+                        </StackPanel>
+                    </ui:CardControl.Header>
+                    <StackPanel MinWidth="470">
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                            <ui:Button Content="紧凑" Command="{Binding ViewModel.ApplyCompactFullPanelPresetCommand}" Margin="0,0,8,0"/>
+                            <ui:Button Content="完整" Command="{Binding ViewModel.ApplyFullFullPanelPresetCommand}" Margin="0,0,12,0"/>
+                            <TextBlock VerticalAlignment="Center" Opacity="0.7"
+                                       Text="{Binding ViewModel.FullPanelLayoutStatus, StringFormat=当前：{0}}"/>
+                        </StackPanel>
+                        <WrapPanel>
+                            <ui:ToggleSwitch Content="媒体信息" Margin="0,0,20,8"
+                                             IsChecked="{Binding ViewModel.FullPanelMediaInfoVisible, Mode=TwoWay}"
+                                             IsEnabled="{Binding ViewModel.CanToggleFullPanelMediaInfo}"/>
+                            <ui:ToggleSwitch Content="媒体控制" Margin="0,0,20,8"
+                                             IsChecked="{Binding ViewModel.FullPanelMediaControlsVisible, Mode=TwoWay}"
+                                             IsEnabled="{Binding ViewModel.CanToggleFullPanelMediaControls}"/>
+                            <ui:ToggleSwitch Content="音频控制" Margin="0,0,20,8"
+                                             IsChecked="{Binding ViewModel.FullPanelAudioControlsVisible, Mode=TwoWay}"
+                                             IsEnabled="{Binding ViewModel.CanToggleFullPanelAudioControls}"/>
+                            <ui:ToggleSwitch Content="性能" Margin="0,0,0,8"
+                                             IsChecked="{Binding ViewModel.FullPanelPerformanceVisible, Mode=TwoWay}"
+                                             IsEnabled="{Binding ViewModel.CanToggleFullPanelPerformance}"/>
+                        </WrapPanel>
+                        <TextBlock Text="至少保留一个分组；来源始终跟随媒体信息显示。" FontSize="12" Opacity="0.62"/>
+                    </StackPanel>
+                </ui:CardControl>
                 <ui:CardControl Margin="0,0,0,8" Icon="{ui:SymbolIcon Gauge24}"><ui:CardControl.Header><StackPanel><TextBlock Text="信息密度" FontWeight="SemiBold"/><TextBlock Text="统一改变按钮、进度和封面—文字—频谱间隔；最小宽度只施加到中间文字区" Opacity="0.62" FontSize="12"/></StackPanel></ui:CardControl.Header>
                     <ComboBox MinWidth="190" SelectedValuePath="Tag" SelectedValue="{Binding ViewModel.Density, Mode=TwoWay}"><ComboBoxItem Content="极简" Tag="{x:Static settings:TaskbarInformationDensity.Minimal}"/><ComboBoxItem Content="均衡" Tag="{x:Static settings:TaskbarInformationDensity.Balanced}"/><ComboBoxItem Content="信息优先" Tag="{x:Static settings:TaskbarInformationDensity.Information}"/></ComboBox>
                 </ui:CardControl>

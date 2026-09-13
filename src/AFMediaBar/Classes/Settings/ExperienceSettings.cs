@@ -63,18 +63,43 @@ public enum LyricsTextAlignment
     Right = 2
 }
 
+/// <summary>任务栏完整层的功能组显隐设置。 / Visibility settings for taskbar full-panel feature groups.</summary>
+public readonly record struct TaskbarFullPanelSettings(
+    bool MediaInfoVisible,
+    bool MediaControlsVisible,
+    bool AudioControlsVisible,
+    bool PerformanceVisible)
+{
+    /// <summary>仅显示媒体信息和媒体控制。 / Shows only media information and media controls.</summary>
+    public static TaskbarFullPanelSettings Compact { get; } = new(true, true, false, false);
+
+    /// <summary>显示所有功能组。 / Shows every feature group.</summary>
+    public static TaskbarFullPanelSettings Full { get; } = new(true, true, true, true);
+
+    /// <summary>完整层的默认设置。 / Default settings for the full panel.</summary>
+    public static TaskbarFullPanelSettings Default => Full;
+
+    /// <summary>确保至少保留一个功能组。 / Ensures at least one feature group remains visible.</summary>
+    public TaskbarFullPanelSettings Normalize() =>
+        MediaInfoVisible || MediaControlsVisible || AudioControlsVisible || PerformanceVisible
+            ? this
+            : Compact;
+}
+
 /// <summary>任务栏三层体验设置。 / Settings for the three-layer taskbar experience.</summary>
 public readonly record struct TaskbarExperienceSettings(
     bool HoverLayerEnabled,
     bool FullLayerEnabled,
     TaskbarInformationDensity Density,
-    TaskbarContentLayout ContentLayout)
+    TaskbarContentLayout ContentLayout,
+    TaskbarFullPanelSettings FullPanel)
 {
     public static TaskbarExperienceSettings Default { get; } = new(
         true,
         true,
         TaskbarInformationDensity.Balanced,
-        TaskbarContentLayout.AdaptiveStack);
+        TaskbarContentLayout.AdaptiveStack,
+        TaskbarFullPanelSettings.Default);
 
     public TaskbarExperienceSettings Normalize()
     {
@@ -82,7 +107,8 @@ public readonly record struct TaskbarExperienceSettings(
         return this with
         {
             Density = Enum.IsDefined(Density) ? Density : defaults.Density,
-            ContentLayout = Enum.IsDefined(ContentLayout) ? ContentLayout : defaults.ContentLayout
+            ContentLayout = Enum.IsDefined(ContentLayout) ? ContentLayout : defaults.ContentLayout,
+            FullPanel = FullPanel.Normalize()
         };
     }
 }

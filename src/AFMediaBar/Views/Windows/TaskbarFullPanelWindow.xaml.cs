@@ -4,7 +4,6 @@ using AFMediaBar.Classes.Services.Audio;
 using AFMediaBar.Classes.Settings;
 using AFMediaBar.Classes.Utils;
 using System.Windows.Controls;
-using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Threading;
 using Wpf.Ui.Controls;
@@ -17,36 +16,34 @@ public partial class TaskbarFullPanelWindow : FluentWindow
     private readonly MediaSessionService _mediaSessionService;
     private readonly AudioInteractionService _audioInteractionService;
     private readonly SystemMetricsService _metricsService;
-    private readonly GlobalInteractionRouter _interactionRouter;
     private readonly DispatcherTimer _timer;
     private MediaSnapshot _snapshot = MediaSnapshot.Disconnected;
     private ApplicationVolumeSnapshot? _currentVolume;
     private bool _isLoadingDevices;
     private bool _isSeeking;
-    private DateTime _suppressArtworkClickUntilUtc;
+    private bool _audioControlsVisible;
+    private bool _performanceVisible;
+    private Rect? _anchor;
 
     public TaskbarFullPanelWindow(
         MediaSessionService mediaSessionService,
         AudioInteractionService audioInteractionService,
         SystemMetricsService metricsService,
-        WindowAppearanceService appearanceService,
-        GlobalInteractionRouter interactionRouter)
+        WindowAppearanceService appearanceService)
     {
         InitializeComponent();
         _mediaSessionService = mediaSessionService;
         _audioInteractionService = audioInteractionService;
         _metricsService = metricsService;
-        _interactionRouter = interactionRouter;
         appearanceService.Attach(this);
         _mediaSessionService.SnapshotChanged += OnSnapshotChanged;
-        SettingsManager.InteractionSettingsChanged += OnInteractionSettingsChanged;
+        SettingsManager.TaskbarExperienceSettingsChanged += OnTaskbarExperienceSettingsChanged;
         Closed += OnClosed;
         _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
         _timer.Tick += Timer_Tick;
         _timer.Start();
         ApplySnapshot(_mediaSessionService.CurrentSnapshot ?? MediaSnapshot.Disconnected);
-        _ = RefreshAudioAsync();
-        ApplyInteractionSettings();
+        ApplyFullPanelSettings();
     }
 
     public void ToggleNear(Rect anchor)
@@ -57,8 +54,15 @@ public partial class TaskbarFullPanelWindow : FluentWindow
             return;
         }
 
+        _anchor = anchor;
         Show();
         UpdateLayout();
+        PositionNear(anchor);
+        Activate();
+    }
+
+    private void PositionNear(Rect anchor)
+    {
         var monitor = MonitorUtil.GetSelectedMonitor(SettingsManager.Current.TaskbarBarSelectedMonitor);
         var scale = Math.Max(1d / 96d, monitor.dpiX / 96d);
         var work = monitor.workArea.IsEmpty
@@ -71,8 +75,8 @@ public partial class TaskbarFullPanelWindow : FluentWindow
         Left = Math.Clamp(anchor.Left + (anchor.Width - ActualWidth) / 2, work.Left, Math.Max(work.Left, work.Right - ActualWidth));
         var above = anchor.Top - ActualHeight - 8;
         var below = anchor.Bottom + 8;
-        Top = above >= work.Top ? above : Math.Min(below, work.Bottom - ActualHeight);
-        Activate();
+        var desiredTop = above >= work.Top ? above : below;
+        Top = Math.Clamp(desiredTop, work.Top, Math.Max(work.Top, work.Bottom - ActualHeight));
     }
 
     private void OnSnapshotChanged(object? sender, MediaSnapshot snapshot) => Dispatcher.BeginInvoke(() => ApplySnapshot(snapshot));
@@ -101,18 +105,33 @@ public partial class TaskbarFullPanelWindow : FluentWindow
         ProgressSlider.Maximum = Math.Max(1, snapshot.Duration);
         DurationText.Text = FormatTime(snapshot.Duration);
         UpdateProgress();
-        ApplyInteractionSettings();
     }
 
-    private void ApplyInteractionSettings()
+    private void OnTaskbarExperienceSettingsChanged(object? sender, EventArgs e) =>
+        Dispatcher.BeginInvoke(ApplyFullPanelSettings);
+
+    private void ApplyFullPanelSettings()
     {
-        var visible = SettingsManager.Current.Interaction.Mode == MediaInteractionMode.Gestures
-            ? Visibility.Collapsed
-            : Visibility.Visible;
-        PreviousButton.Visibility = PlayButton.Visibility = NextButton.Visibility = visible;
-    }
+        var settings = SettingsManager.Current.TaskbarExperience.FullPanel.Normalize();
+        var audioBecameVisible = !_audioControlsVisible && settings.AudioControlsVisible;
+        _audioControlsVisible = settings.AudioControlsVisible;
+        _performanceVisible = settings.PerformanceVisible;
 
-    private void OnInteractionSettingsChanged(object? sender, EventArgs e) => Dispatcher.BeginInvoke(ApplyInteractionSettings);
+        MediaInfoSection.Visibility = settings.MediaInfoVisible ? Visibility.Visible : Visibility.Collapsed;
+        MediaControlsSection.Visibility = settings.MediaControlsVisible ? Visibility.Visible : Visibility.Collapsed;
+        AudioControlsSection.Visibility = settings.AudioControlsVisible ? Visibility.Visible : Visibility.Collapsed;
+        PerformanceSection.Visibility = settings.PerformanceVisible ? Visibility.Visible : Visibility.Collapsed;
+
+        if (audioBecameVisible)
+            _ = RefreshAudioAsync();
+
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
+        {
+            UpdateLayout();
+            if (IsVisible && _anchor is Rect anchor)
+                PositionNear(anchor);
+        }));
+    }
 
     private async Task RefreshAudioAsync()
     {
@@ -135,12 +154,16 @@ public partial class TaskbarFullPanelWindow : FluentWindow
 
     private void Timer_Tick(object? sender, EventArgs e)
     {
-        UpdateProgress();
-        var metrics = _metricsService.Sample();
-        RamMetric.Text = $"{metrics.SystemMemoryPercent}%";
-        CpuMetric.Text = metrics.SystemCpuPercent is int cpu ? $"{cpu}%" : "—";
-        GpuMetric.Text = metrics.SystemGpuPercent is int gpu ? $"{gpu}%" : "—";
-        ProcessMetric.Text = $"{metrics.ProcessMemoryMegabytes} MB";
+        if (MediaControlsSection.Visibility == Visibility.Visible)
+            UpdateProgress();
+        if (_performanceVisible)
+        {
+            var metrics = _metricsService.Sample();
+            RamMetric.Text = $"{metrics.SystemMemoryPercent}%";
+            CpuMetric.Text = metrics.SystemCpuPercent is int cpu ? $"{cpu}%" : "—";
+            GpuMetric.Text = metrics.SystemGpuPercent is int gpu ? $"{gpu}%" : "—";
+            ProcessMetric.Text = $"{metrics.ProcessMemoryMegabytes} MB";
+        }
     }
 
     private void UpdateProgress()
@@ -166,37 +189,12 @@ public partial class TaskbarFullPanelWindow : FluentWindow
 
     private async void ArtworkBorder_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
-        if (e.ChangedButton == MouseButton.Left && DateTime.UtcNow >= _suppressArtworkClickUntilUtc &&
+        if (e.ChangedButton == MouseButton.Left &&
             SettingsManager.Current.Interaction.Mode is MediaInteractionMode.Hybrid or MediaInteractionMode.Gestures)
         {
             await _mediaSessionService.TogglePlayPauseAsync();
             e.Handled = true;
         }
-    }
-
-    private async void Window_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
-    {
-        if (e.OriginalSource is DependencyObject source && IsInteractiveControl(source))
-            return;
-        if (Mouse.LeftButton == MouseButtonState.Pressed)
-            _suppressArtworkClickUntilUtc = DateTime.UtcNow.AddMilliseconds(350);
-        var feedback = await _interactionRouter.ExecuteWheelAsync(
-            e.Delta,
-            Mouse.LeftButton == MouseButtonState.Pressed,
-            Mouse.RightButton == MouseButtonState.Pressed);
-        if (feedback is not null)
-            e.Handled = true;
-    }
-
-    private static bool IsInteractiveControl(DependencyObject source)
-    {
-        while (source is not null)
-        {
-            if (source is Slider or ComboBox or ButtonBase)
-                return true;
-            source = System.Windows.Media.VisualTreeHelper.GetParent(source);
-        }
-        return false;
     }
 
     private void ProgressSlider_MouseLeftButtonDown(object sender, MouseButtonEventArgs e) => _isSeeking = true;
@@ -239,7 +237,7 @@ public partial class TaskbarFullPanelWindow : FluentWindow
     {
         _timer.Stop();
         _mediaSessionService.SnapshotChanged -= OnSnapshotChanged;
-        SettingsManager.InteractionSettingsChanged -= OnInteractionSettingsChanged;
+        SettingsManager.TaskbarExperienceSettingsChanged -= OnTaskbarExperienceSettingsChanged;
         Closed -= OnClosed;
     }
 }

@@ -92,20 +92,20 @@ The app runs in its own process. Its WPF player can be hosted as a taskbar child
 
 | Category | Capabilities |
 | --- | --- |
-| Media | Previous, play/pause, next, repeat, and seekable progress, with shared Buttons, Hybrid, and Gestures presets |
+| Media | Previous, play/pause, next, repeat, and seekable progress; Buttons, Hybrid, and Gestures apply to the taskbar body and Hover, while Full always retains explicit buttons |
 | Source interaction | Click the title or lyric to return to the media app; right-click the bar to switch sources |
 | Live lyrics | Lyrics exist only in taskbar rest and replace title plus artist/source when available; configure secondary content and alignment on the Lyrics page |
 | Taskbar behavior | Horizontal taskbars retain the original Rest appearance; Hover directly blurs/dims the original text while controls stay crisp, and Full stays outside the taskbar |
 | Window modes | Settings present Taskbar, Dynamic Island, Floating Orb, and Desktop Card; Taskbar and the existing island are available, with the latter two deferred |
 | Appearance | Global fonts, foreground, theme, and window material; the taskbar body is currently fixed transparent, while island surface style, opacity, and radius remain adjustable |
-| Light customization | Toggle Hover/Full, then choose density, content layout, and interaction; arbitrary cross-layer component placement is deferred |
+| Light customization | Toggle Hover/Full, choose density, content layout, and interaction, and configure Full with Compact/Full presets or four visibility groups; arbitrary cross-layer component placement is deferred |
 | Information density | Minimal, Balanced, and Information presets consistently change buttons, seek width, and artwork-text-spectrum gaps; only the middle text region receives a Hover minimum |
 | Auto-hide | Hide when every media session is stopped; collapse containers use an anchor container and shared edge, while four-way collapse still requires real-Windows acceptance |
 | Tray audio controls | Choose the tray left-click action and optionally reuse global plain-wheel plus left/right-button wheel mappings |
 | Audio devices | Switch devices in a stable ordered list; wheel-preview and apply after scrolling stops |
 | App volume | Aggregate application icons and audio sessions across active output endpoints; adjust the selected media app in 2% tray-wheel steps |
 | Visualizer | Nine-band spectrum from WASAPI loopback capture |
-| Metrics | The Full panel shows system memory, CPU, GPU, and AF Media Bar process memory; spectrum is hidden there by default |
+| Metrics | The Full panel auto-sizes its height to visible content and can show system memory, CPU, GPU, and AF Media Bar process memory; hidden metrics stop sampling, and spectrum remains excluded by default |
 | Low-spec mode | Software rendering with transitions, marquees, and fades disabled |
 
 </div>

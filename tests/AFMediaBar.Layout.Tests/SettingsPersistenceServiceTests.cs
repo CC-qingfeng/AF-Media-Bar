@@ -51,7 +51,12 @@ public sealed class SettingsPersistenceServiceTests
             DynamicIslandTop = 240,
             DynamicIslandEdge = DynamicIslandEdge.Right,
             DynamicIslandEdgeDocked = false,
-            TaskbarExperience = new TaskbarExperienceSettings(false, true, TaskbarInformationDensity.Information, TaskbarContentLayout.CenteredStack),
+            TaskbarExperience = new TaskbarExperienceSettings(
+                false,
+                true,
+                TaskbarInformationDensity.Information,
+                TaskbarContentLayout.CenteredStack,
+                new TaskbarFullPanelSettings(true, false, true, false)),
             Interaction = new GlobalInteractionSettings(MediaInteractionMode.Gestures, WheelAction.OutputDevice, true, MouseChordButton.Right, WheelAction.CurrentApplicationVolume, TrayClickAction.OpenSettings, false),
             TaskbarSurface = new ModeSurfaceSettings(PlayerSurfaceStyle.ThemeTint, 72, 12),
             LyricsTextAlignment = LyricsTextAlignment.Right
@@ -70,9 +75,12 @@ public sealed class SettingsPersistenceServiceTests
         Assert.AreEqual(MediaInteractionMode.Gestures, SettingsManager.Current.Interaction.Mode);
         Assert.AreEqual(MouseChordButton.Right, SettingsManager.Current.Interaction.ChordButton);
         Assert.AreEqual(TaskbarInformationDensity.Information, SettingsManager.Current.TaskbarExperience.Density);
+        Assert.AreEqual(new TaskbarFullPanelSettings(true, false, true, false), SettingsManager.Current.TaskbarExperience.FullPanel);
         Assert.AreEqual(72, SettingsManager.Current.TaskbarSurface.BackgroundOpacityPercent);
         Assert.AreEqual(LyricsTextAlignment.Right, SettingsManager.Current.LyricsTextAlignment);
-        StringAssert.Contains(File.ReadAllText(reader.SettingsPath), "\"Disabled\"");
+        var persisted = File.ReadAllText(reader.SettingsPath);
+        StringAssert.Contains(persisted, "\"schemaVersion\": 3");
+        StringAssert.Contains(persisted, "\"Disabled\"");
     }
 
     [TestMethod]
@@ -91,6 +99,7 @@ public sealed class SettingsPersistenceServiceTests
         Assert.AreEqual(TrayWheelBehavior.SwitchOutputDevice, SettingsManager.Current.TrayWheelBehavior);
         Assert.IsTrue(SettingsManager.Current.LyricsEnabled);
         Assert.AreEqual(GlobalInteractionSettings.Default, SettingsManager.Current.Interaction);
+        Assert.AreEqual(TaskbarFullPanelSettings.Full, SettingsManager.Current.TaskbarExperience.FullPanel);
     }
 
     [TestMethod]
@@ -119,7 +128,80 @@ public sealed class SettingsPersistenceServiceTests
 
         Assert.IsTrue(SettingsManager.Current.LyricsEnabled);
         Assert.IsTrue(Directory.GetFiles(_directory, "settings.json.unsupported-*").Length == 1);
-        StringAssert.Contains(File.ReadAllText(main), "\"schemaVersion\": 2");
+        StringAssert.Contains(File.ReadAllText(main), "\"schemaVersion\": 3");
+    }
+
+    [TestMethod]
+    public void Schema2MigratesFullPanelVisibilityToFullPreset()
+    {
+        Directory.CreateDirectory(_directory);
+        File.WriteAllText(
+            Path.Combine(_directory, "settings.json"),
+            "{\"schemaVersion\":2,\"settings\":{\"taskbarExperience\":{\"hoverLayerEnabled\":false,\"fullLayerEnabled\":true,\"density\":\"Information\",\"contentLayout\":\"CenteredStack\"}}}");
+
+        using var service = new SettingsPersistenceService(_directory);
+        service.Initialize();
+
+        Assert.IsFalse(SettingsManager.Current.TaskbarExperience.HoverLayerEnabled);
+        Assert.AreEqual(TaskbarInformationDensity.Information, SettingsManager.Current.TaskbarExperience.Density);
+        Assert.AreEqual(TaskbarFullPanelSettings.Full, SettingsManager.Current.TaskbarExperience.FullPanel);
+    }
+
+    [TestMethod]
+    public void FullPanelPresetsAndInvalidAllHiddenValueNormalizePredictably()
+    {
+        Assert.AreEqual(new TaskbarFullPanelSettings(true, true, false, false), TaskbarFullPanelSettings.Compact);
+        Assert.AreEqual(new TaskbarFullPanelSettings(true, true, true, true), TaskbarFullPanelSettings.Full);
+        Assert.AreEqual(
+            TaskbarFullPanelSettings.Compact,
+            new TaskbarFullPanelSettings(false, false, false, false).Normalize());
+    }
+
+    [TestMethod]
+    public void Schema3AllHiddenFullPanelValueFallsBackToCompactPreset()
+    {
+        Directory.CreateDirectory(_directory);
+        File.WriteAllText(
+            Path.Combine(_directory, "settings.json"),
+            "{\"schemaVersion\":3,\"settings\":{\"taskbarExperience\":{\"hoverLayerEnabled\":true,\"fullLayerEnabled\":true,\"density\":\"Balanced\",\"contentLayout\":\"AdaptiveStack\",\"fullPanel\":{\"mediaInfoVisible\":false,\"mediaControlsVisible\":false,\"audioControlsVisible\":false,\"performanceVisible\":false}}}}");
+
+        using var service = new SettingsPersistenceService(_directory);
+        service.Initialize();
+
+        Assert.AreEqual(TaskbarFullPanelSettings.Compact, SettingsManager.Current.TaskbarExperience.FullPanel);
+    }
+
+    [TestMethod]
+    public void DisplayModesProtectsLastFullPanelGroupAndRecognizesPresets()
+    {
+        SettingsManager.Replace(new AppSettings
+        {
+            TaskbarExperience = TaskbarExperienceSettings.Default with
+            {
+                FullPanel = new TaskbarFullPanelSettings(true, false, false, false)
+            }
+        });
+        var viewModel = new DisplayModesViewModel();
+
+        viewModel.FullPanelMediaInfoVisible = false;
+        Assert.IsTrue(viewModel.FullPanelMediaInfoVisible);
+        Assert.IsFalse(viewModel.CanToggleFullPanelMediaInfo);
+
+        viewModel.FullPanelMediaControlsVisible = true;
+        viewModel.FullPanelMediaInfoVisible = false;
+        Assert.IsFalse(viewModel.FullPanelMediaInfoVisible);
+        Assert.AreEqual("自定义", viewModel.FullPanelLayoutStatus);
+
+        viewModel.FullPanelMediaInfoVisible = true;
+        Assert.AreEqual("紧凑", viewModel.FullPanelLayoutStatus);
+        viewModel.FullPanelAudioControlsVisible = true;
+        viewModel.FullPanelPerformanceVisible = true;
+        Assert.AreEqual("完整", viewModel.FullPanelLayoutStatus);
+
+        viewModel.ApplyCompactFullPanelPresetCommand.Execute(null);
+        Assert.AreEqual("紧凑", viewModel.FullPanelLayoutStatus);
+        viewModel.ApplyFullFullPanelPresetCommand.Execute(null);
+        Assert.AreEqual("完整", viewModel.FullPanelLayoutStatus);
     }
 
     [TestMethod]
@@ -141,6 +223,13 @@ public sealed class SettingsPersistenceServiceTests
         Assert.AreEqual(700, SettingsManager.Current.Appearance.FontWeight);
         SettingsManager.ResetAppearance();
         Assert.AreEqual(AppearanceSettings.Default, SettingsManager.Current.Appearance);
+
+        SettingsManager.Current.TaskbarExperience = TaskbarExperienceSettings.Default with
+        {
+            FullPanel = TaskbarFullPanelSettings.Compact
+        };
+        SettingsManager.ResetDisplayModes();
+        Assert.AreEqual(TaskbarFullPanelSettings.Full, SettingsManager.Current.TaskbarExperience.FullPanel);
     }
 
     [TestMethod]

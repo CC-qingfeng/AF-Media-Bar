@@ -35,6 +35,41 @@ public partial class DisplayModesViewModel : ObservableObject
         set => UpdateExperience(SettingsManager.Current.TaskbarExperience with { ContentLayout = value });
     }
 
+    public bool FullPanelMediaInfoVisible
+    {
+        get => FullPanelSettings.MediaInfoVisible;
+        set => UpdateFullPanelGroup(FullPanelGroup.MediaInfo, value);
+    }
+
+    public bool FullPanelMediaControlsVisible
+    {
+        get => FullPanelSettings.MediaControlsVisible;
+        set => UpdateFullPanelGroup(FullPanelGroup.MediaControls, value);
+    }
+
+    public bool FullPanelAudioControlsVisible
+    {
+        get => FullPanelSettings.AudioControlsVisible;
+        set => UpdateFullPanelGroup(FullPanelGroup.AudioControls, value);
+    }
+
+    public bool FullPanelPerformanceVisible
+    {
+        get => FullPanelSettings.PerformanceVisible;
+        set => UpdateFullPanelGroup(FullPanelGroup.Performance, value);
+    }
+
+    public bool CanToggleFullPanelMediaInfo => CanToggleFullPanelGroup(FullPanelSettings.MediaInfoVisible);
+    public bool CanToggleFullPanelMediaControls => CanToggleFullPanelGroup(FullPanelSettings.MediaControlsVisible);
+    public bool CanToggleFullPanelAudioControls => CanToggleFullPanelGroup(FullPanelSettings.AudioControlsVisible);
+    public bool CanToggleFullPanelPerformance => CanToggleFullPanelGroup(FullPanelSettings.PerformanceVisible);
+
+    public string FullPanelLayoutStatus => FullPanelSettings == TaskbarFullPanelSettings.Compact
+        ? "紧凑"
+        : FullPanelSettings == TaskbarFullPanelSettings.Full ? "完整" : "自定义";
+
+    private TaskbarFullPanelSettings FullPanelSettings => SettingsManager.Current.TaskbarExperience.FullPanel.Normalize();
+
     public LayoutOrientationMode Orientation
     {
         get => SettingsManager.Current.LayoutOrientationMode;
@@ -79,6 +114,8 @@ public partial class DisplayModesViewModel : ObservableObject
 
     [RelayCommand] private void SwitchToTaskbarMode() => SwitchMode(WindowMode.Taskbar);
     [RelayCommand] private void SwitchToDynamicIslandMode() => SwitchMode(WindowMode.DynamicIsland);
+    [RelayCommand] private void ApplyCompactFullPanelPreset() => UpdateFullPanel(TaskbarFullPanelSettings.Compact);
+    [RelayCommand] private void ApplyFullFullPanelPreset() => UpdateFullPanel(TaskbarFullPanelSettings.Full);
 
     [RelayCommand]
     private void ResetTaskbarPosition()
@@ -102,6 +139,41 @@ public partial class DisplayModesViewModel : ObservableObject
         if (_isRefreshing) return;
         SettingsManager.SetTaskbarExperienceSettings(value.Normalize());
         RaiseExperience();
+    }
+
+    private void UpdateFullPanelGroup(FullPanelGroup group, bool visible)
+    {
+        if (_isRefreshing) return;
+        var current = FullPanelSettings;
+        var updated = group switch
+        {
+            FullPanelGroup.MediaInfo => current with { MediaInfoVisible = visible },
+            FullPanelGroup.MediaControls => current with { MediaControlsVisible = visible },
+            FullPanelGroup.AudioControls => current with { AudioControlsVisible = visible },
+            FullPanelGroup.Performance => current with { PerformanceVisible = visible },
+            _ => current
+        };
+        if (!updated.MediaInfoVisible && !updated.MediaControlsVisible &&
+            !updated.AudioControlsVisible && !updated.PerformanceVisible)
+        {
+            RaiseFullPanel();
+            return;
+        }
+        UpdateFullPanel(updated);
+    }
+
+    private void UpdateFullPanel(TaskbarFullPanelSettings settings) =>
+        UpdateExperience(SettingsManager.Current.TaskbarExperience with { FullPanel = settings.Normalize() });
+
+    private bool CanToggleFullPanelGroup(bool visible) => !visible || VisibleFullPanelGroupCount() > 1;
+
+    private int VisibleFullPanelGroupCount()
+    {
+        var settings = FullPanelSettings;
+        return (settings.MediaInfoVisible ? 1 : 0) +
+               (settings.MediaControlsVisible ? 1 : 0) +
+               (settings.AudioControlsVisible ? 1 : 0) +
+               (settings.PerformanceVisible ? 1 : 0);
     }
 
     public void ResetDisplayModes() => SettingsManager.ResetDisplayModes();
@@ -128,5 +200,27 @@ public partial class DisplayModesViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(HoverLayerEnabled)); OnPropertyChanged(nameof(FullLayerEnabled));
         OnPropertyChanged(nameof(Density)); OnPropertyChanged(nameof(ContentLayout));
+        RaiseFullPanel();
+    }
+
+    private void RaiseFullPanel()
+    {
+        OnPropertyChanged(nameof(FullPanelMediaInfoVisible));
+        OnPropertyChanged(nameof(FullPanelMediaControlsVisible));
+        OnPropertyChanged(nameof(FullPanelAudioControlsVisible));
+        OnPropertyChanged(nameof(FullPanelPerformanceVisible));
+        OnPropertyChanged(nameof(CanToggleFullPanelMediaInfo));
+        OnPropertyChanged(nameof(CanToggleFullPanelMediaControls));
+        OnPropertyChanged(nameof(CanToggleFullPanelAudioControls));
+        OnPropertyChanged(nameof(CanToggleFullPanelPerformance));
+        OnPropertyChanged(nameof(FullPanelLayoutStatus));
+    }
+
+    private enum FullPanelGroup
+    {
+        MediaInfo,
+        MediaControls,
+        AudioControls,
+        Performance
     }
 }

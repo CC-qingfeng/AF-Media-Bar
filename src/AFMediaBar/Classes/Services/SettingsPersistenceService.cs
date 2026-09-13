@@ -11,7 +11,7 @@ namespace AFMediaBar.Classes.Services;
 /// <summary>负责用户设置 JSON 的加载、恢复、原子保存和防抖。 / Owns loading, recovery, atomic saving and debouncing of user settings JSON.</summary>
 public sealed class SettingsPersistenceService : IDisposable
 {
-    public const int CurrentSchemaVersion = 2;
+    public const int CurrentSchemaVersion = 3;
     private readonly string _directoryPath;
     private readonly string _settingsPath;
     private readonly string _backupPath;
@@ -155,6 +155,14 @@ public sealed class SettingsPersistenceService : IDisposable
             result.TaskbarSurface = ModeSurfaceSettings.Default;
             result.DynamicIslandSurface = ModeSurfaceSettings.Default;
             result.LyricsTextAlignment = LyricsTextAlignment.Center;
+        }
+        else if (envelope.SchemaVersion == 2)
+        {
+            // Schema 2 had no full-panel group visibility. Preserve its all-visible experience.
+            result.TaskbarExperience = result.TaskbarExperience with
+            {
+                FullPanel = TaskbarFullPanelSettings.Default
+            };
         }
         return result.Normalize();
     }
