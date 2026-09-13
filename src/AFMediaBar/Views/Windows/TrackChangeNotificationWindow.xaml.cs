@@ -18,6 +18,7 @@ public partial class TrackChangeNotificationWindow : FluentWindow
     private readonly DispatcherTimer _hideTimer;
     private DisplayMonitorInfo? _currentMonitor;
     private TrackChangeNotificationPosition _currentPosition;
+    private bool _hasCompletedInitialLayout;
     private int _presentationVersion;
 
     /// <summary>创建通知窗口并接入统一窗口外观。 / Creates the notification window and attaches unified window appearance.</summary>
@@ -32,7 +33,11 @@ public partial class TrackChangeNotificationWindow : FluentWindow
         _hideTimer.Tick += HideTimer_Tick;
     }
 
-    /// <summary>更新并显示通知；重复调用会复用 HWND 并重置停留时间。 / Updates and shows the notification, reusing its HWND and resetting dwell time.</summary>
+    /// <summary>
+    /// 更新并显示通知；首次显示会等待布局稳定，重复调用会复用 HWND 并重置停留时间。
+    /// Updates and shows the notification; the first presentation waits for stable layout,
+    /// while subsequent calls reuse its HWND and reset dwell time.
+    /// </summary>
     public void ShowNotification(TrackChangeNotificationRequest request)
     {
         if (!Dispatcher.CheckAccess())
@@ -41,7 +46,7 @@ public partial class TrackChangeNotificationWindow : FluentWindow
             return;
         }
 
-        _presentationVersion++;
+        var presentationVersion = ++_presentationVersion;
         _hideTimer.Stop();
         StopAnimations();
         _currentMonitor = request.Monitor;
@@ -54,8 +59,28 @@ public partial class TrackChangeNotificationWindow : FluentWindow
             Show();
         }
 
+        if (!_hasCompletedInitialLayout)
+        {
+            // FluentWindow 在第一次 Show 后才完成模板和窗口框架测量；首帧保持透明且位于屏外，
+            // 等 SizeToContent 稳定后再定位。FluentWindow completes template/chrome measurement after
+            // the first Show call; keep that frame transparent and off-screen until SizeToContent settles.
+            Dispatcher.BeginInvoke(
+                () => CompletePresentation(request, presentationVersion),
+                DispatcherPriority.ContextIdle);
+            return;
+        }
+
+        CompletePresentation(request, presentationVersion);
+    }
+
+    private void CompletePresentation(TrackChangeNotificationRequest request, int presentationVersion)
+    {
+        if (presentationVersion != _presentationVersion || !IsVisible)
+            return;
+
         UpdateLayout();
         PositionOnMonitor(request.Monitor, request.Settings.Position);
+        _hasCompletedInitialLayout = true;
         Opacity = 1;
         BeginEntryAnimation(request.Settings.Position);
 
@@ -76,6 +101,9 @@ public partial class TrackChangeNotificationWindow : FluentWindow
             return;
 
         ApplySnapshot(snapshot);
+        if (!_hasCompletedInitialLayout)
+            return;
+
         UpdateLayout();
         PositionOnMonitor(_currentMonitor, _currentPosition);
     }
@@ -128,9 +156,9 @@ public partial class TrackChangeNotificationWindow : FluentWindow
             -1,
             (int)Math.Round(point.X),
             (int)Math.Round(point.Y),
-            (int)Math.Ceiling(pixelSize.Width),
-            (int)Math.Ceiling(pixelSize.Height),
-            NativeMethods.SWP_NOACTIVATE | NativeMethods.SWP_SHOWWINDOW);
+            0,
+            0,
+            NativeMethods.SWP_NOSIZE | NativeMethods.SWP_NOACTIVATE | NativeMethods.SWP_SHOWWINDOW);
     }
 
     private void BeginEntryAnimation(TrackChangeNotificationPosition position)
@@ -177,6 +205,7 @@ public partial class TrackChangeNotificationWindow : FluentWindow
     /// <summary>停止通知计时并释放窗口。 / Stops notification timing and releases the window.</summary>
     protected override void OnClosed(EventArgs e)
     {
+        _presentationVersion++;
         _hideTimer.Stop();
         _hideTimer.Tick -= HideTimer_Tick;
         StopAnimations();
