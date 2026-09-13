@@ -77,6 +77,7 @@ public static partial class NativeMethods
     public const int MONITOR_DEFAULTTONEAREST = 2;
     public const int MONITORINFOF_PRIMARY = 1;
     public const int S_OK = 0;
+    public const int DWMWA_EXTENDED_FRAME_BOUNDS = 9;
 
     // GDI region
     public const int RGN_OR = 2;
@@ -340,6 +341,20 @@ public static partial class NativeMethods
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool SetForegroundWindow(IntPtr hWnd);
 
+    /// <summary>获取当前前台窗口。 / Gets the current foreground window.</summary>
+    [LibraryImport("user32.dll")]
+    public static partial IntPtr GetForegroundWindow();
+
+    /// <summary>判断窗口是否可见。 / Determines whether a window is visible.</summary>
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool IsWindowVisible(IntPtr hWnd);
+
+    /// <summary>判断窗口是否最小化。 / Determines whether a window is minimized.</summary>
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool IsIconic(IntPtr hWnd);
+
     /// <summary>
     /// 调用 GetWindowLong，提供 API。
     /// Provides the public GetWindowLong entry point required by this component.
@@ -562,6 +577,10 @@ public static partial class NativeMethods
     /// </summary>
     [LibraryImport("shcore.dll")]
     public static partial int GetDpiForMonitor(IntPtr hMonitor, MonitorDpiType dpiType, out uint dpiX, out uint dpiY);
+
+    /// <summary>读取 DWM 窗口属性。 / Reads a DWM window attribute.</summary>
+    [DllImport("dwmapi.dll")]
+    public static extern int DwmGetWindowAttribute(IntPtr hwnd, int attribute, out RECT value, int valueSize);
 
     /// <summary>
     /// 调用 CreateRectRgn，提供 API。

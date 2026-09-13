@@ -63,6 +63,58 @@ public enum LyricsTextAlignment
     Right = 2
 }
 
+/// <summary>曲目切换通知在目标工作区中的位置。 / Position of the track-change notification in the target work area.</summary>
+public enum TrackChangeNotificationPosition
+{
+    BottomLeft = 0,
+    TopLeft = 1,
+    TopCenter = 2,
+    TopRight = 3,
+    BottomCenter = 4,
+    BottomRight = 5
+}
+
+/// <summary>曲目切换通知选择显示器的方式。 / Method used to select the display for track-change notifications.</summary>
+public enum NotificationTargetMode
+{
+    Fixed = 0,
+    ForegroundWindow = 1
+}
+
+/// <summary>曲目切换通知的用户设置。 / User settings for track-change notifications.</summary>
+public readonly record struct TrackChangeNotificationSettings(
+    bool Enabled,
+    bool ShowWhenFullscreen,
+    int DurationMilliseconds,
+    TrackChangeNotificationPosition Position,
+    NotificationTargetMode TargetMode,
+    string? FixedMonitorDeviceId)
+{
+    /// <summary>通知的默认设置。 / Default notification settings.</summary>
+    public static TrackChangeNotificationSettings Default { get; } = new(
+        false,
+        false,
+        1000,
+        TrackChangeNotificationPosition.BottomLeft,
+        NotificationTargetMode.Fixed,
+        null);
+
+    /// <summary>归一化枚举、时长和设备标识。 / Normalizes enums, duration, and the device identifier.</summary>
+    public TrackChangeNotificationSettings Normalize()
+    {
+        var defaults = Default;
+        return this with
+        {
+            DurationMilliseconds = Math.Clamp(DurationMilliseconds, 1000, 10000),
+            Position = Enum.IsDefined(Position) ? Position : defaults.Position,
+            TargetMode = Enum.IsDefined(TargetMode) ? TargetMode : defaults.TargetMode,
+            FixedMonitorDeviceId = string.IsNullOrWhiteSpace(FixedMonitorDeviceId)
+                ? null
+                : FixedMonitorDeviceId.Trim()
+        };
+    }
+}
+
 /// <summary>任务栏完整层的功能组显隐设置。 / Visibility settings for taskbar full-panel feature groups.</summary>
 public readonly record struct TaskbarFullPanelSettings(
     bool MediaInfoVisible,

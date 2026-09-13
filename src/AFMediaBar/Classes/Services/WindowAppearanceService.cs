@@ -27,6 +27,7 @@ public sealed class WindowAppearanceService : IDisposable
     private const int WmDpiChangedAfterParent = 0x02E3;
     private readonly NativeWindowBackdropAdapter _nativeBackdropAdapter;
     private readonly HashSet<FluentWindow> _windows = [];
+    private readonly HashSet<FluentWindow> _nonActivatingTransientWindows = [];
     private readonly Dictionary<FluentWindow, HwndSource> _windowSources = [];
     private readonly HashSet<ContextMenu> _menus = [];
     private readonly Dictionary<ContextMenu, Window> _menuOwners = [];
@@ -65,6 +66,15 @@ public sealed class WindowAppearanceService : IDisposable
         {
             RegisterWindowSource(window);
         }
+    }
+
+    internal void AttachNonActivatingTransient(FluentWindow window)
+    {
+        if (_disposed)
+            return;
+
+        _nonActivatingTransientWindows.Add(window);
+        Attach(window);
     }
 
     /// <summary>
@@ -133,6 +143,7 @@ public sealed class WindowAppearanceService : IDisposable
         window.IsVisibleChanged -= OnWindowIsVisibleChanged;
         window.Closed -= OnWindowClosed;
         _windows.Remove(window);
+        _nonActivatingTransientWindows.Remove(window);
         if (_windowSources.Remove(window, out var source))
         {
             source.RemoveHook(WindowProc);
@@ -252,7 +263,10 @@ public sealed class WindowAppearanceService : IDisposable
         {
             window.Background = Brushes.Transparent;
             source.CompositionTarget.BackgroundColor = Colors.Transparent;
-            _nativeBackdropAdapter.ApplyBackdrop(source.Handle, mode, dark);
+            if (_nonActivatingTransientWindows.Contains(window))
+                _nativeBackdropAdapter.ApplyNonActivatingBackdrop(source.Handle, mode, dark);
+            else
+                _nativeBackdropAdapter.ApplyBackdrop(source.Handle, mode, dark);
             _nativeBackdropAdapter.SetNonClientColors(source.Handle, transparent: true);
         }
 
@@ -405,6 +419,7 @@ public sealed class WindowAppearanceService : IDisposable
 
         _menus.Clear();
         _menuOwners.Clear();
+        _nonActivatingTransientWindows.Clear();
     }
 
 }

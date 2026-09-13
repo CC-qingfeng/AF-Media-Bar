@@ -24,7 +24,7 @@ public sealed class AppSettings : INotifyPropertyChanged
     private bool _twoLineLyricsEnabled;
     private LyricsSecondaryLineMode _lyricsSecondaryLineMode = LyricsSecondaryLineMode.NextLine;
     private bool _taskbarBarEnabled = true;
-    private int _taskbarBarSelectedMonitor;
+    private string? _taskbarTargetMonitorDeviceId;
     private TaskbarBarPosition _position = TaskbarBarPosition.Start;
     private bool _taskbarBarBackgroundBlur;
     private int _taskbarBarManualPadding;
@@ -45,6 +45,7 @@ public sealed class AppSettings : INotifyPropertyChanged
     private ModeSurfaceSettings _taskbarSurface = ModeSurfaceSettings.Default;
     private ModeSurfaceSettings _dynamicIslandSurface = ModeSurfaceSettings.Default;
     private LyricsTextAlignment _lyricsTextAlignment = LyricsTextAlignment.Center;
+    private TrackChangeNotificationSettings _trackChangeNotification = TrackChangeNotificationSettings.Default;
 
     public AppearanceSettings Appearance { get => _appearance; set => Set(ref _appearance, value.Normalize()); }
     public TrayWheelBehavior TrayWheelBehavior { get => _trayWheelBehavior; set => Set(ref _trayWheelBehavior, value); }
@@ -52,7 +53,11 @@ public sealed class AppSettings : INotifyPropertyChanged
     public bool TwoLineLyricsEnabled { get => _twoLineLyricsEnabled; set => Set(ref _twoLineLyricsEnabled, value); }
     public LyricsSecondaryLineMode LyricsSecondaryLineMode { get => _lyricsSecondaryLineMode; set => Set(ref _lyricsSecondaryLineMode, value); }
     public bool TaskbarBarEnabled { get => _taskbarBarEnabled; set => Set(ref _taskbarBarEnabled, value); }
-    public int TaskbarBarSelectedMonitor { get => _taskbarBarSelectedMonitor; set => Set(ref _taskbarBarSelectedMonitor, value); }
+    public string? TaskbarTargetMonitorDeviceId
+    {
+        get => _taskbarTargetMonitorDeviceId;
+        set => Set(ref _taskbarTargetMonitorDeviceId, string.IsNullOrWhiteSpace(value) ? null : value.Trim());
+    }
     public TaskbarBarPosition Position { get => _position; set => Set(ref _position, value); }
     public bool TaskbarBarBackgroundBlur { get => _taskbarBarBackgroundBlur; set => Set(ref _taskbarBarBackgroundBlur, value); }
     public int TaskbarBarManualPadding { get => _taskbarBarManualPadding; set => Set(ref _taskbarBarManualPadding, value); }
@@ -73,6 +78,11 @@ public sealed class AppSettings : INotifyPropertyChanged
     public ModeSurfaceSettings TaskbarSurface { get => _taskbarSurface; set => Set(ref _taskbarSurface, value.Normalize()); }
     public ModeSurfaceSettings DynamicIslandSurface { get => _dynamicIslandSurface; set => Set(ref _dynamicIslandSurface, value.Normalize()); }
     public LyricsTextAlignment LyricsTextAlignment { get => _lyricsTextAlignment; set => Set(ref _lyricsTextAlignment, value); }
+    public TrackChangeNotificationSettings TrackChangeNotification
+    {
+        get => _trackChangeNotification;
+        set => Set(ref _trackChangeNotification, value.Normalize());
+    }
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -93,7 +103,10 @@ public sealed class AppSettings : INotifyPropertyChanged
         result.Interaction = result.Interaction.Normalize();
         result.TaskbarSurface = result.TaskbarSurface.Normalize();
         result.DynamicIslandSurface = result.DynamicIslandSurface.Normalize();
-        if (result.TaskbarBarSelectedMonitor < 0) result.TaskbarBarSelectedMonitor = defaults.TaskbarBarSelectedMonitor;
+        result.TrackChangeNotification = result.TrackChangeNotification.Normalize();
+        result.TaskbarTargetMonitorDeviceId = string.IsNullOrWhiteSpace(result.TaskbarTargetMonitorDeviceId)
+            ? null
+            : result.TaskbarTargetMonitorDeviceId.Trim();
         if (!double.IsFinite(result.LayoutLengthScalePercent)) result.LayoutLengthScalePercent = defaults.LayoutLengthScalePercent;
         if (!double.IsFinite(result.LayoutThicknessScalePercent)) result.LayoutThicknessScalePercent = defaults.LayoutThicknessScalePercent;
         if (!double.IsFinite(result.TaskbarBarCrossAxisOffsetDip)) result.TaskbarBarCrossAxisOffsetDip = defaults.TaskbarBarCrossAxisOffsetDip;
@@ -113,7 +126,7 @@ public sealed class AppSettings : INotifyPropertyChanged
         TwoLineLyricsEnabled = TwoLineLyricsEnabled,
         LyricsSecondaryLineMode = LyricsSecondaryLineMode,
         TaskbarBarEnabled = TaskbarBarEnabled,
-        TaskbarBarSelectedMonitor = TaskbarBarSelectedMonitor,
+        TaskbarTargetMonitorDeviceId = TaskbarTargetMonitorDeviceId,
         Position = Position,
         TaskbarBarBackgroundBlur = TaskbarBarBackgroundBlur,
         TaskbarBarManualPadding = TaskbarBarManualPadding,
@@ -133,7 +146,8 @@ public sealed class AppSettings : INotifyPropertyChanged
         Interaction = Interaction,
         TaskbarSurface = TaskbarSurface,
         DynamicIslandSurface = DynamicIslandSurface,
-        LyricsTextAlignment = LyricsTextAlignment
+        LyricsTextAlignment = LyricsTextAlignment,
+        TrackChangeNotification = TrackChangeNotification
     };
 
     private void Set<T>(ref T field, T value, [CallerMemberName] string? name = null)
@@ -167,6 +181,8 @@ public static class SettingsManager
     public static event EventHandler<LayoutSettingsChangedEventArgs>? LayoutSettingsChanged;
     public static event EventHandler? TaskbarExperienceSettingsChanged;
     public static event EventHandler? InteractionSettingsChanged;
+    public static event EventHandler? TrackChangeNotificationSettingsChanged;
+    public static event EventHandler? TaskbarTargetMonitorChanged;
 
     public static void Replace(AppSettings settings, SettingsResetScope? scope = null)
     {
@@ -184,6 +200,7 @@ public static class SettingsManager
     public static void SetAppearanceSettings(AppearanceSettings appearance) => Current.Appearance = appearance;
     public static void SetTaskbarExperienceSettings(TaskbarExperienceSettings settings) => Current.TaskbarExperience = settings;
     public static void SetInteractionSettings(GlobalInteractionSettings settings) => Current.Interaction = settings;
+    public static void SetTrackChangeNotificationSettings(TrackChangeNotificationSettings settings) => Current.TrackChangeNotification = settings;
     public static void RaiseLayoutSettingsChanged(WindowMode windowMode, LayoutOrientationMode orientationMode) => LayoutSettingsChanged?.Invoke(null, new LayoutSettingsChangedEventArgs(windowMode, orientationMode));
 
     public static void ResetGeneral()
@@ -204,8 +221,10 @@ public static class SettingsManager
     {
         var next = Current.Clone(); var defaults = new AppSettings();
         next.TaskbarExperience = defaults.TaskbarExperience;
+        next.TrackChangeNotification = defaults.TrackChangeNotification;
         next.WindowMode = defaults.WindowMode; next.LayoutOrientationMode = defaults.LayoutOrientationMode;
-        next.TaskbarBarEnabled = defaults.TaskbarBarEnabled; next.TaskbarBarSelectedMonitor = defaults.TaskbarBarSelectedMonitor;
+        next.TaskbarBarEnabled = defaults.TaskbarBarEnabled;
+        next.TaskbarTargetMonitorDeviceId = defaults.TaskbarTargetMonitorDeviceId;
         next.Position = defaults.Position; next.TaskbarBarCrossAxisOffsetDip = defaults.TaskbarBarCrossAxisOffsetDip;
         next.TaskbarBarAvoidIcons = defaults.TaskbarBarAvoidIcons; next.TaskbarBarPositionLocked = defaults.TaskbarBarPositionLocked;
         Replace(next, SettingsResetScope.DisplayModes);
@@ -225,7 +244,8 @@ public static class SettingsManager
     public static void ResetLayout()
     {
         var next = Current.Clone(); var defaults = new AppSettings();
-        next.TaskbarBarEnabled = defaults.TaskbarBarEnabled; next.TaskbarBarSelectedMonitor = defaults.TaskbarBarSelectedMonitor;
+        next.TaskbarBarEnabled = defaults.TaskbarBarEnabled;
+        next.TaskbarTargetMonitorDeviceId = defaults.TaskbarTargetMonitorDeviceId;
         next.Position = defaults.Position; next.TaskbarBarBackgroundBlur = defaults.TaskbarBarBackgroundBlur; next.TaskbarBarManualPadding = defaults.TaskbarBarManualPadding;
         next.WindowMode = defaults.WindowMode; next.LayoutOrientationMode = defaults.LayoutOrientationMode; next.LayoutLengthScalePercent = defaults.LayoutLengthScalePercent;
         next.LayoutThicknessScalePercent = defaults.LayoutThicknessScalePercent; next.DynamicIslandBackgroundMode = defaults.DynamicIslandBackgroundMode;
@@ -251,6 +271,8 @@ public static class SettingsManager
             case nameof(AppSettings.LyricsTextAlignment): LyricsSettingsChanged?.Invoke(null, EventArgs.Empty); break;
             case nameof(AppSettings.TaskbarExperience): TaskbarExperienceSettingsChanged?.Invoke(null, EventArgs.Empty); break;
             case nameof(AppSettings.Interaction): InteractionSettingsChanged?.Invoke(null, EventArgs.Empty); break;
+            case nameof(AppSettings.TrackChangeNotification): TrackChangeNotificationSettingsChanged?.Invoke(null, EventArgs.Empty); break;
+            case nameof(AppSettings.TaskbarTargetMonitorDeviceId): TaskbarTargetMonitorChanged?.Invoke(null, EventArgs.Empty); break;
             case nameof(AppSettings.TaskbarSurface):
             case nameof(AppSettings.DynamicIslandSurface): AppearanceSettingsChanged?.Invoke(null, new AppearanceSettingsChangedEventArgs(Current.Appearance)); break;
         }
@@ -261,6 +283,7 @@ public static class SettingsManager
         AppearanceSettingsChanged?.Invoke(null, new AppearanceSettingsChangedEventArgs(Current.Appearance));
         TrayWheelBehaviorChanged?.Invoke(null, EventArgs.Empty); LyricsSettingsChanged?.Invoke(null, EventArgs.Empty);
         TaskbarExperienceSettingsChanged?.Invoke(null, EventArgs.Empty); InteractionSettingsChanged?.Invoke(null, EventArgs.Empty);
+        TrackChangeNotificationSettingsChanged?.Invoke(null, EventArgs.Empty); TaskbarTargetMonitorChanged?.Invoke(null, EventArgs.Empty);
         RaiseLayoutSettingsChanged(Current.WindowMode, Current.LayoutOrientationMode);
     }
 }

@@ -94,8 +94,9 @@ The app runs in its own process. Its WPF player can be hosted as a taskbar child
 | --- | --- |
 | Media | Previous, play/pause, next, repeat, and seekable progress; Buttons, Hybrid, and Gestures apply to the taskbar body and Hover, while Full always retains explicit buttons |
 | Source interaction | Click the title or lyric to return to the media app; right-click the bar to switch sources |
+| Track-change notification | Optionally show the current track after it changes and starts playing, with six placements, 1–10 second duration, fullscreen suppression, and fixed- or foreground-display targeting |
 | Live lyrics | Lyrics exist only in taskbar rest and replace title plus artist/source when available; configure secondary content and alignment on the Lyrics page |
-| Taskbar behavior | Horizontal taskbars retain the original Rest appearance; Hover directly blurs/dims the original text while controls stay crisp, and Full stays outside the taskbar |
+| Taskbar behavior | Horizontal taskbars retain the original Rest appearance; Hover directly blurs/dims the original text while controls stay crisp, Full stays outside the taskbar, and a fixed target display can be selected independently |
 | Window modes | Settings present Taskbar, Dynamic Island, Floating Orb, and Desktop Card; Taskbar and the existing island are available, with the latter two deferred |
 | Appearance | Global fonts, foreground, theme, and window material; the taskbar body is currently fixed transparent, while island surface style, opacity, and radius remain adjustable |
 | Light customization | Toggle Hover/Full, choose density, content layout, and interaction, and configure Full with Compact/Full presets or four visibility groups; arbitrary cross-layer component placement is deferred |
@@ -154,6 +155,8 @@ AF Media Bar is not commercially code-signed, so Windows SmartScreen may show an
 | Open the Lyrics page | Toggle live lyrics, secondary content, and alignment |
 | Scroll up/down over the media area | Previous/next by default, configurable to current-app volume or output device |
 | Right-click the bar and choose “Switch media source” | Switch between available media sessions |
+| Enable Track-change notification under Display Modes | Show the current track only after an observable track change begins playing; configure placement, duration, fullscreen policy, and fixed/foreground display targeting |
+| Choose the taskbar target display under Display Modes | Close an open Full panel and rebuild the taskbar host through its safe reload path; a disconnected target temporarily falls back to the primary display without discarding the preference |
 | Click the AF Media Bar tray icon | Open output-device, spatial-audio status, and application-volume controls |
 | Scroll over the flyout's output-device row | Preview a device and switch about 1.2 seconds after scrolling stops |
 | Hover over the AF Media Bar tray icon | Show the default wheel action and its current value in the native Windows tooltip |
@@ -167,6 +170,8 @@ AF Media Bar is not commercially code-signed, so Windows SmartScreen may show an
 </div>
 
 Some players require “system media controls,” “media keys,” or “SMTC” to be enabled in their own settings.
+
+Track-change notification does not read the playback queue and is not a “next up” preview; Windows SMTC does not expose a queue. It identifies observable changes by source identifier plus normalized title, so consecutive same-title tracks from one source cannot be distinguished reliably. A real upcoming queue requires a player-specific API or plugin.
 
 ## Updating and Uninstalling
 

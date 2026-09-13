@@ -21,8 +21,8 @@ namespace AFMediaBar.Classes.Services;
 ///    Apply input region (click-through) so rest of taskbar remains interactive
 ///
 /// 算法 Algorithm:
-/// 1. GetSelectedTaskbarHandle: 根据监视器索引查找对应的任务栏 HWND
-///    Find taskbar HWND for specified monitor index
+/// 1. GetSelectedTaskbarHandle: 根据显示器设备标识查找对应的任务栏 HWND
+///    Find taskbar HWND for the specified monitor device identifier
 /// 2. DockWindow: 修改窗口样式为 WS_CHILD，并设置父窗口为任务栏
 ///    Change window style to WS_CHILD and set parent to taskbar
 /// 3. SetWindowPosition: 计算物理像素位置并调用 SetWindowPos
@@ -36,13 +36,21 @@ namespace AFMediaBar.Classes.Services;
 /// </summary>
 public class TaskbarDockService : ITaskbarDockService
 {
+    private readonly IDisplayMonitorService _displayMonitorService;
+
+    /// <summary>创建使用共享显示器目录的任务栏停靠服务。 / Creates a taskbar docking service using the shared display catalog.</summary>
+    public TaskbarDockService(IDisplayMonitorService displayMonitorService)
+    {
+        _displayMonitorService = displayMonitorService;
+    }
+
     /// <summary>
     /// 获取选定监视器上的任务栏句柄（主任务栏或副任务栏）。
     /// Get taskbar handle on selected monitor (main or secondary taskbar).
     ///
     /// 算法 Algorithm:
-    /// 1. 获取监视器列表，限定索引范围
-    ///    Get monitor list, clamp index to valid range
+    /// 1. 获取监视器列表，按设备标识匹配并应用回退
+    ///    Get the monitor list, match by device identifier, and apply fallback
     /// 2. 检查主任务栏是否在目标监视器上
     ///    Check if main taskbar is on target monitor
     /// 3. 单监视器：直接返回主任务栏
@@ -52,16 +60,22 @@ public class TaskbarDockService : ITaskbarDockService
     /// 5. 多监视器：枚举所有窗口查找匹配的副任务栏
     ///    Multi-monitor: enumerate all windows to find matching secondary taskbar
     /// </summary>
-    public IntPtr GetSelectedTaskbarHandle(int selectedMonitorIndex, out bool isMainTaskbarSelected)
+    public IntPtr GetSelectedTaskbarHandle(string? selectedMonitorDeviceId, out bool isMainTaskbarSelected)
     {
-        var monitors = MonitorUtil.GetMonitors();
-        var selectedMonitor = monitors[Math.Clamp(selectedMonitorIndex, 0, monitors.Count - 1)];
+        var monitors = _displayMonitorService.GetMonitors();
+        var selectedMonitor = DisplayTargetPolicy.ResolveFixed(monitors, selectedMonitorDeviceId);
         isMainTaskbarSelected = true;
 
         // 获取主任务栏并检查是否在选定的监视器上
         // Get the main taskbar and check if it is on the selected monitor.
         var mainHwnd = FindWindow("Shell_TrayWnd", null);
-        if (mainHwnd != IntPtr.Zero && MonitorUtil.GetMonitor(mainHwnd).deviceId == selectedMonitor.deviceId)
+        if (selectedMonitor is null)
+            return mainHwnd;
+
+        if (mainHwnd != IntPtr.Zero && string.Equals(
+                MonitorUtil.GetMonitor(mainHwnd).deviceId,
+                selectedMonitor.DeviceId,
+                StringComparison.OrdinalIgnoreCase))
             return mainHwnd;
 
         if (monitors.Count == 1)
@@ -71,7 +85,10 @@ public class TaskbarDockService : ITaskbarDockService
         if (monitors.Count == 2)
         {
             var hwnd = FindWindow("Shell_SecondaryTrayWnd", null);
-            if (hwnd != IntPtr.Zero && MonitorUtil.GetMonitor(hwnd).deviceId == selectedMonitor.deviceId)
+            if (hwnd != IntPtr.Zero && string.Equals(
+                    MonitorUtil.GetMonitor(hwnd).deviceId,
+                    selectedMonitor.DeviceId,
+                    StringComparison.OrdinalIgnoreCase))
                 return hwnd;
 
             isMainTaskbarSelected = true;
@@ -88,7 +105,10 @@ public class TaskbarDockService : ITaskbarDockService
         {
             GetClassName(wnd, className, className.Capacity);
             if (className.ToString() == "Shell_SecondaryTrayWnd" &&
-                MonitorUtil.GetMonitor(wnd).deviceId == selectedMonitor.deviceId)
+                string.Equals(
+                    MonitorUtil.GetMonitor(wnd).deviceId,
+                    selectedMonitor.DeviceId,
+                    StringComparison.OrdinalIgnoreCase))
             {
                 return wnd;
             }

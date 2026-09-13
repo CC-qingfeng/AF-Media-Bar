@@ -11,7 +11,7 @@ namespace AFMediaBar.Classes.Services;
 /// <summary>负责用户设置 JSON 的加载、恢复、原子保存和防抖。 / Owns loading, recovery, atomic saving and debouncing of user settings JSON.</summary>
 public sealed class SettingsPersistenceService : IDisposable
 {
-    public const int CurrentSchemaVersion = 3;
+    public const int CurrentSchemaVersion = 4;
     private readonly string _directoryPath;
     private readonly string _settingsPath;
     private readonly string _backupPath;
@@ -29,6 +29,9 @@ public sealed class SettingsPersistenceService : IDisposable
     private Timer? _timer;
     private bool _initialized;
     private bool _disposed;
+
+    /// <summary>schema 1–3 中等待启动阶段映射的旧任务栏显示器索引。 / Legacy taskbar-display index from schema 1–3 awaiting startup-time mapping.</summary>
+    public int? LegacyTaskbarMonitorIndex { get; private set; }
 
     /// <summary>创建设置存储服务；目录和防抖间隔可覆盖以便测试。 / Creates the settings store; directory and debounce can be overridden for tests.</summary>
     public SettingsPersistenceService(string? directoryPath = null, TimeSpan? debounce = null)
@@ -104,6 +107,7 @@ public sealed class SettingsPersistenceService : IDisposable
 
     private void LoadCore()
     {
+        LegacyTaskbarMonitorIndex = null;
         AppSettings? loaded = null;
         if (File.Exists(_settingsPath))
         {
@@ -163,6 +167,17 @@ public sealed class SettingsPersistenceService : IDisposable
             {
                 FullPanel = TaskbarFullPanelSettings.Default
             };
+        }
+        if (envelope.SchemaVersion <= 3)
+        {
+            // Schema 4 introduces an opt-in notification and stable display identifiers.
+            // The legacy taskbar index is retained in memory until startup can map it against
+            // the live monitor topology without moving Win32 discovery into the I/O service.
+            result.TrackChangeNotification = TrackChangeNotificationSettings.Default;
+            LegacyTaskbarMonitorIndex = node["settings"]?["taskbarBarSelectedMonitor"] is JsonValue legacyIndexNode &&
+                                        legacyIndexNode.TryGetValue<int>(out var legacyIndex)
+                ? Math.Max(0, legacyIndex)
+                : 0;
         }
         return result.Normalize();
     }
@@ -240,6 +255,8 @@ public sealed class SettingsPersistenceService : IDisposable
                 typeof(TEnum) == typeof(TaskbarBarPosition) ? TaskbarBarPosition.Start :
                 typeof(TEnum) == typeof(LayoutOrientationMode) ? LayoutOrientationMode.Auto :
                 typeof(TEnum) == typeof(DynamicIslandBackgroundMode) ? DynamicIslandBackgroundMode.SystemTheme :
+                typeof(TEnum) == typeof(TrackChangeNotificationPosition) ? TrackChangeNotificationPosition.BottomLeft :
+                typeof(TEnum) == typeof(NotificationTargetMode) ? NotificationTargetMode.Fixed :
                 typeof(TEnum) == typeof(WindowMode) ? WindowMode.Taskbar :
                 typeof(TEnum) == typeof(DynamicIslandEdge) ? DynamicIslandEdge.Top :
                 typeof(TEnum) == typeof(LatinFontPreset) ? LatinFontPreset.SegoeUi :

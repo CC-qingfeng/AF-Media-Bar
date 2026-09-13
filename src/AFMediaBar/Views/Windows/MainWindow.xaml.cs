@@ -39,10 +39,15 @@ namespace AFMediaBar.Views.Windows
         private readonly AudioInteractionService _audioInteractionService;
         private readonly AudioMonitorService _audioMonitorService;
         private readonly Func<TaskbarFullPanelWindow> _fullPanelFactory;
+        private readonly IDisplayMonitorService _displayMonitorService;
+        private readonly TrackChangeNotificationCoordinator _trackChangeNotificationCoordinator;
+        private readonly Func<TrackChangeNotificationWindow> _trackChangeNotificationFactory;
         private TaskbarWindow? _taskbarWindow;
         private DynamicIslandWindow? _dynamicIslandWindow;
         private SettingsWindow? _settingsWindow;
         private TaskbarFullPanelWindow? _fullPanelWindow;
+        private TrackChangeNotificationWindow? _trackChangeNotificationWindow;
+        private string? _effectiveTaskbarMonitorDeviceId;
         private DateTime _fullPanelClosedAtUtc;
         private int _taskbarCreatedMessage;
         private bool _isSystemThemeWatcherActive;
@@ -74,7 +79,10 @@ namespace AFMediaBar.Views.Windows
             GlobalInteractionRouter interactionRouter,
             AudioInteractionService audioInteractionService,
             AudioMonitorService audioMonitorService,
-            Func<TaskbarFullPanelWindow> fullPanelFactory)
+            Func<TaskbarFullPanelWindow> fullPanelFactory,
+            IDisplayMonitorService displayMonitorService,
+            TrackChangeNotificationCoordinator trackChangeNotificationCoordinator,
+            Func<TrackChangeNotificationWindow> trackChangeNotificationFactory)
         {
             ViewModel = viewModel;
             DataContext = this;
@@ -91,6 +99,9 @@ namespace AFMediaBar.Views.Windows
             _audioInteractionService = audioInteractionService;
             _audioMonitorService = audioMonitorService;
             _fullPanelFactory = fullPanelFactory;
+            _displayMonitorService = displayMonitorService;
+            _trackChangeNotificationCoordinator = trackChangeNotificationCoordinator;
+            _trackChangeNotificationFactory = trackChangeNotificationFactory;
 
             InitializeComponent();
             UpdateSystemThemeWatcher(SettingsManager.Current.Appearance);
@@ -114,6 +125,11 @@ namespace AFMediaBar.Views.Windows
             SettingsManager.LyricsSettingsChanged += SettingsManager_OnLyricsSettingsChanged;
             SettingsManager.TaskbarExperienceSettingsChanged += SettingsManager_OnTaskbarExperienceSettingsChanged;
             SettingsManager.InteractionSettingsChanged += SettingsManager_OnTaskbarExperienceSettingsChanged;
+            SettingsManager.TaskbarTargetMonitorChanged += SettingsManager_OnTaskbarTargetMonitorChanged;
+            _displayMonitorService.MonitorsChanged += DisplayMonitorService_OnMonitorsChanged;
+            _trackChangeNotificationCoordinator.NotificationRequested += TrackChangeNotificationCoordinator_OnNotificationRequested;
+            _trackChangeNotificationCoordinator.NotificationContentUpdated += TrackChangeNotificationCoordinator_OnNotificationContentUpdated;
+            _trackChangeNotificationCoordinator.DismissRequested += TrackChangeNotificationCoordinator_OnDismissRequested;
             _audioControlViewModel.FlyoutToggleRequested += AudioControl_OnFlyoutToggleRequested;
             _audioControlViewModel.TrayContextMenuRequested += AudioControl_OnTrayContextMenuRequested;
             _audioControlViewModel.SettingsOpenRequested += ViewModel_OpenSettingsRequested;
@@ -191,6 +207,10 @@ namespace AFMediaBar.Views.Windows
             _audioControlFlyout.Close();
             _fullPanelWindow?.Close();
             _fullPanelWindow = null;
+            var notificationWindow = _trackChangeNotificationWindow;
+            _trackChangeNotificationWindow = null;
+            notificationWindow?.HideImmediately();
+            notificationWindow?.Close();
         }
 
         /// <summary>
@@ -207,6 +227,11 @@ namespace AFMediaBar.Views.Windows
             SettingsManager.LyricsSettingsChanged -= SettingsManager_OnLyricsSettingsChanged;
             SettingsManager.TaskbarExperienceSettingsChanged -= SettingsManager_OnTaskbarExperienceSettingsChanged;
             SettingsManager.InteractionSettingsChanged -= SettingsManager_OnTaskbarExperienceSettingsChanged;
+            SettingsManager.TaskbarTargetMonitorChanged -= SettingsManager_OnTaskbarTargetMonitorChanged;
+            _displayMonitorService.MonitorsChanged -= DisplayMonitorService_OnMonitorsChanged;
+            _trackChangeNotificationCoordinator.NotificationRequested -= TrackChangeNotificationCoordinator_OnNotificationRequested;
+            _trackChangeNotificationCoordinator.NotificationContentUpdated -= TrackChangeNotificationCoordinator_OnNotificationContentUpdated;
+            _trackChangeNotificationCoordinator.DismissRequested -= TrackChangeNotificationCoordinator_OnDismissRequested;
             _audioControlViewModel.FlyoutToggleRequested -= AudioControl_OnFlyoutToggleRequested;
             _audioControlViewModel.TrayContextMenuRequested -= AudioControl_OnTrayContextMenuRequested;
             _audioControlViewModel.SettingsOpenRequested -= ViewModel_OpenSettingsRequested;
@@ -229,8 +254,13 @@ namespace AFMediaBar.Views.Windows
         {
             if (msg == _taskbarCreatedMessage)
             {
+                _displayMonitorService.Refresh();
                 RequestTaskbarEnvironmentRecovery();
                 handled = true;
+            }
+            else if (msg == WM_DISPLAYCHANGE)
+            {
+                _displayMonitorService.Refresh();
             }
             return IntPtr.Zero;
         }
@@ -287,7 +317,7 @@ namespace AFMediaBar.Views.Windows
                         return;
 
                     var taskbarHandle = _taskBarService.GetSelectedTaskbarHandle(
-                        SettingsManager.Current.TaskbarBarSelectedMonitor, out _);
+                        SettingsManager.Current.TaskbarTargetMonitorDeviceId, out _);
                     if (taskbarHandle == IntPtr.Zero ||
                         !_taskBarService.TryGetTaskbarRect(taskbarHandle, out var rect) ||
                         rect.Right <= rect.Left || rect.Bottom <= rect.Top)
@@ -532,8 +562,71 @@ namespace AFMediaBar.Views.Windows
             // The media bar lives in the docked TaskbarWindow; keep this window as an invisible host.
             Visibility = Visibility.Collapsed;
 
+            _displayMonitorService.Refresh();
+            _effectiveTaskbarMonitorDeviceId = ResolveEffectiveTaskbarMonitorDeviceId();
             ActivateWindowMode(SettingsManager.Current.WindowMode);
         }
+
+        private void TrackChangeNotificationCoordinator_OnNotificationRequested(
+            object? sender,
+            TrackChangeNotificationRequest request)
+        {
+            Dispatcher.BeginInvoke(() =>
+            {
+                if (_isClosing)
+                    return;
+
+                _trackChangeNotificationWindow ??= _trackChangeNotificationFactory();
+                _trackChangeNotificationWindow.Closed -= TrackChangeNotificationWindow_Closed;
+                _trackChangeNotificationWindow.Closed += TrackChangeNotificationWindow_Closed;
+                _trackChangeNotificationWindow.ShowNotification(request);
+            });
+        }
+
+        private void TrackChangeNotificationCoordinator_OnDismissRequested(object? sender, EventArgs e) =>
+            Dispatcher.BeginInvoke(() => _trackChangeNotificationWindow?.HideImmediately());
+
+        private void TrackChangeNotificationCoordinator_OnNotificationContentUpdated(
+            object? sender,
+            MediaSnapshot snapshot) =>
+            Dispatcher.BeginInvoke(() => _trackChangeNotificationWindow?.UpdateSnapshot(snapshot));
+
+        private void TrackChangeNotificationWindow_Closed(object? sender, EventArgs e)
+        {
+            if (sender is not TrackChangeNotificationWindow window)
+                return;
+
+            window.Closed -= TrackChangeNotificationWindow_Closed;
+            if (ReferenceEquals(window, _trackChangeNotificationWindow))
+                _trackChangeNotificationWindow = null;
+        }
+
+        private void SettingsManager_OnTaskbarTargetMonitorChanged(object? sender, EventArgs e) =>
+            Dispatcher.BeginInvoke(() => ApplyEffectiveTaskbarMonitorChange());
+
+        private void DisplayMonitorService_OnMonitorsChanged(object? sender, EventArgs e) =>
+            Dispatcher.BeginInvoke(() => ApplyEffectiveTaskbarMonitorChange());
+
+        private void ApplyEffectiveTaskbarMonitorChange()
+        {
+            if (_isClosing)
+                return;
+
+            var nextDeviceId = ResolveEffectiveTaskbarMonitorDeviceId();
+            if (string.Equals(_effectiveTaskbarMonitorDeviceId, nextDeviceId, StringComparison.OrdinalIgnoreCase))
+                return;
+
+            var hadPreviousTarget = !string.IsNullOrWhiteSpace(_effectiveTaskbarMonitorDeviceId);
+            _effectiveTaskbarMonitorDeviceId = nextDeviceId;
+            if (!hadPreviousTarget || SettingsManager.Current.WindowMode != WindowMode.Taskbar)
+                return;
+
+            _fullPanelWindow?.Close();
+            RequestTaskbarEnvironmentRecovery();
+        }
+
+        private string? ResolveEffectiveTaskbarMonitorDeviceId() =>
+            _displayMonitorService.ResolveFixedMonitor(SettingsManager.Current.TaskbarTargetMonitorDeviceId)?.DeviceId;
 
         private async void AudioControl_OnFlyoutToggleRequested(TrayIconBounds? bounds)
         {

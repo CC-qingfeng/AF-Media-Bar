@@ -29,7 +29,7 @@ public interface ITaskbarDockService
 {
     /// <summary>
     /// 查找指定监视器上的任务栏窗口（Shell_TrayWnd / Shell_SecondaryTrayWnd）。
-    /// Finds the taskbar window (Shell_TrayWnd / Shell_SecondaryTrayWnd) on the monitor with the given index.
+    /// Finds the taskbar window (Shell_TrayWnd / Shell_SecondaryTrayWnd) on the monitor with the given device identifier.
     ///
     /// 算法 Algorithm:
     /// 1. 单监视器：返回主任务栏 Single monitor: return main taskbar
@@ -40,10 +40,10 @@ public interface ITaskbarDockService
     /// Explorer 重启期间可能返回 IntPtr.Zero。
     /// May return IntPtr.Zero while Explorer is (re)starting.
     /// </summary>
-    /// <param name="selectedMonitorIndex">监视器索引（见 MonitorUtil.GetMonitors 顺序）Monitor index (see MonitorUtil.GetMonitors order)</param>
+    /// <param name="selectedMonitorDeviceId">监视器设备标识；缺失时回退主屏。 Monitor device identifier; falls back to the primary display when unavailable.</param>
     /// <param name="isMainTaskbarSelected">输出参数：是否选中主任务栏 Output: whether main taskbar is selected</param>
     /// <returns>任务栏窗口句柄 Taskbar window handle</returns>
-    IntPtr GetSelectedTaskbarHandle(int selectedMonitorIndex, out bool isMainTaskbarSelected);
+    IntPtr GetSelectedTaskbarHandle(string? selectedMonitorDeviceId, out bool isMainTaskbarSelected);
 
     /// <summary>
     /// 获取任务栏的 DPI 缩放比例（GetDpiForWindow / 96）。

@@ -2,7 +2,6 @@ using AFMediaBar.Classes.Models;
 using AFMediaBar.Classes.Services;
 using AFMediaBar.Classes.Services.Audio;
 using AFMediaBar.Classes.Settings;
-using AFMediaBar.Classes.Utils;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Threading;
@@ -16,6 +15,7 @@ public partial class TaskbarFullPanelWindow : FluentWindow
     private readonly MediaSessionService _mediaSessionService;
     private readonly AudioInteractionService _audioInteractionService;
     private readonly SystemMetricsService _metricsService;
+    private readonly IDisplayMonitorService _displayMonitorService;
     private readonly DispatcherTimer _timer;
     private MediaSnapshot _snapshot = MediaSnapshot.Disconnected;
     private ApplicationVolumeSnapshot? _currentVolume;
@@ -29,12 +29,14 @@ public partial class TaskbarFullPanelWindow : FluentWindow
         MediaSessionService mediaSessionService,
         AudioInteractionService audioInteractionService,
         SystemMetricsService metricsService,
-        WindowAppearanceService appearanceService)
+        WindowAppearanceService appearanceService,
+        IDisplayMonitorService displayMonitorService)
     {
         InitializeComponent();
         _mediaSessionService = mediaSessionService;
         _audioInteractionService = audioInteractionService;
         _metricsService = metricsService;
+        _displayMonitorService = displayMonitorService;
         appearanceService.Attach(this);
         _mediaSessionService.SnapshotChanged += OnSnapshotChanged;
         SettingsManager.TaskbarExperienceSettingsChanged += OnTaskbarExperienceSettingsChanged;
@@ -63,15 +65,16 @@ public partial class TaskbarFullPanelWindow : FluentWindow
 
     private void PositionNear(Rect anchor)
     {
-        var monitor = MonitorUtil.GetSelectedMonitor(SettingsManager.Current.TaskbarBarSelectedMonitor);
-        var scale = Math.Max(1d / 96d, monitor.dpiX / 96d);
-        var work = monitor.workArea.IsEmpty
+        var monitor = _displayMonitorService.ResolveFixedMonitor(SettingsManager.Current.TaskbarTargetMonitorDeviceId);
+        var scaleX = Math.Max(1d / 96d, (monitor?.DpiX ?? 96) / 96d);
+        var scaleY = Math.Max(1d / 96d, (monitor?.DpiY ?? 96) / 96d);
+        var work = monitor is null || monitor.WorkArea.IsEmpty
             ? SystemParameters.WorkArea
             : new Rect(
-                monitor.workArea.Left / scale,
-                monitor.workArea.Top / scale,
-                monitor.workArea.Width / scale,
-                monitor.workArea.Height / scale);
+                monitor.WorkArea.Left / scaleX,
+                monitor.WorkArea.Top / scaleY,
+                monitor.WorkArea.Width / scaleX,
+                monitor.WorkArea.Height / scaleY);
         Left = Math.Clamp(anchor.Left + (anchor.Width - ActualWidth) / 2, work.Left, Math.Max(work.Left, work.Right - ActualWidth));
         var above = anchor.Top - ActualHeight - 8;
         var below = anchor.Bottom + 8;

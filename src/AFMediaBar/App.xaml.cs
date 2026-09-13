@@ -62,6 +62,11 @@ namespace AFMediaBar
                 // WPF-UI taskbar-state service (does not create a Shell notification icon)
                 services.AddSingleton<ITaskBarService, TaskBarService>();
 
+                // 显示器目录为通知、设置和任务栏停靠提供统一的设备标识解析。
+                // The display catalog provides shared device-identity resolution for notifications,
+                // settings, and taskbar docking.
+                services.AddSingleton<IDisplayMonitorService, DisplayMonitorService>();
+
                 // 任务栏停靠引擎（将媒体栏嵌入到资源管理器任务栏）
                 // Taskbar docking engine (embeds the media bar into the Explorer taskbar)
                 services.AddSingleton<ITaskbarDockService, TaskbarDockService>();
@@ -79,6 +84,7 @@ namespace AFMediaBar
                 services.AddSingleton<IMediaSourceProvider, NetEaseMediaProvider>();
                 services.AddSingleton<MediaSourceActivationService>();
                 services.AddSingleton<MediaSessionService>();
+                services.AddSingleton<TrackChangeNotificationCoordinator>();
                 services.AddSingleton<MediaSourceProcessResolver>();
                 services.AddSingleton<AudioProcessInfoService>();
                 services.AddSingleton<ApplicationIconService>();
@@ -115,6 +121,9 @@ namespace AFMediaBar
                 services.AddTransient<TaskbarFullPanelWindow>();
                 services.AddSingleton<Func<TaskbarFullPanelWindow>>(sp =>
                     () => sp.GetRequiredService<TaskbarFullPanelWindow>());
+                services.AddTransient<TrackChangeNotificationWindow>();
+                services.AddSingleton<Func<TrackChangeNotificationWindow>>(sp =>
+                    () => sp.GetRequiredService<TrackChangeNotificationWindow>());
 
                 // === 设置页面及其 ViewModel Settings Pages and ViewModels ===
                 services.AddSingleton<GeneralPage>();
@@ -164,7 +173,28 @@ namespace AFMediaBar
         /// </summary>
         private async void OnStartup(object sender, StartupEventArgs e)
         {
-            Services.GetRequiredService<SettingsPersistenceService>().Initialize();
+            var settingsPersistenceService = Services.GetRequiredService<SettingsPersistenceService>();
+            settingsPersistenceService.Initialize();
+            var displayMonitorService = Services.GetRequiredService<IDisplayMonitorService>();
+            EventHandler? legacyMigrationHandler = null;
+            if (settingsPersistenceService.LegacyTaskbarMonitorIndex is { } legacyMonitorIndex)
+            {
+                legacyMigrationHandler = (_, _) =>
+                {
+                    if (TryMigrateLegacyTaskbarMonitor(displayMonitorService, legacyMonitorIndex))
+                        displayMonitorService.MonitorsChanged -= legacyMigrationHandler;
+                };
+                displayMonitorService.MonitorsChanged += legacyMigrationHandler;
+            }
+
+            displayMonitorService.Refresh();
+            if (legacyMigrationHandler is not null &&
+                TryMigrateLegacyTaskbarMonitor(
+                    displayMonitorService,
+                    settingsPersistenceService.LegacyTaskbarMonitorIndex!.Value))
+            {
+                displayMonitorService.MonitorsChanged -= legacyMigrationHandler;
+            }
             _themeCoordinator = new ApplicationThemeCoordinator(Dispatcher, UpdateAppearanceResources);
             _themeCoordinator.Start();
             _themeCoordinator.Apply(SettingsManager.Current.Appearance);
@@ -174,6 +204,23 @@ namespace AFMediaBar
             _debugLyricsDiagnostics = new DebugLyricsDiagnostics();
             Services.GetRequiredService<MediaSessionService>().SnapshotChanged += _debugLyricsDiagnostics.OnSnapshotChanged;
 #endif
+        }
+
+        private static bool TryMigrateLegacyTaskbarMonitor(
+            IDisplayMonitorService displayMonitorService,
+            int legacyMonitorIndex)
+        {
+            if (!string.IsNullOrWhiteSpace(SettingsManager.Current.TaskbarTargetMonitorDeviceId))
+                return true;
+
+            var monitors = displayMonitorService.GetMonitors();
+            if (monitors.Count == 0)
+                return false;
+
+            var migratedDeviceId = DisplayTargetPolicy.ResolveLegacyDeviceId(monitors, legacyMonitorIndex);
+            if (!string.IsNullOrWhiteSpace(migratedDeviceId))
+                SettingsManager.Current.TaskbarTargetMonitorDeviceId = migratedDeviceId;
+            return true;
         }
 
         /// <summary>

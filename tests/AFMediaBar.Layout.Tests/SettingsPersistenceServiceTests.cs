@@ -1,8 +1,10 @@
+using AFMediaBar.Classes.Models;
 using AFMediaBar.Classes.Models.Layout;
 using AFMediaBar.Classes.Services;
 using AFMediaBar.Classes.Settings;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using AFMediaBar.ViewModels.Pages;
+using System.Windows;
 
 namespace AFMediaBar.Layout.Tests;
 
@@ -35,7 +37,7 @@ public sealed class SettingsPersistenceServiceTests
             TwoLineLyricsEnabled = true,
             LyricsSecondaryLineMode = LyricsSecondaryLineMode.Translation,
             TaskbarBarEnabled = false,
-            TaskbarBarSelectedMonitor = 2,
+            TaskbarTargetMonitorDeviceId = @"\\.\DISPLAY2",
             Position = TaskbarBarPosition.End,
             TaskbarBarBackgroundBlur = true,
             TaskbarBarManualPadding = 14,
@@ -59,7 +61,14 @@ public sealed class SettingsPersistenceServiceTests
                 new TaskbarFullPanelSettings(true, false, true, false)),
             Interaction = new GlobalInteractionSettings(MediaInteractionMode.Gestures, WheelAction.OutputDevice, true, MouseChordButton.Right, WheelAction.CurrentApplicationVolume, TrayClickAction.OpenSettings, false),
             TaskbarSurface = new ModeSurfaceSettings(PlayerSurfaceStyle.ThemeTint, 72, 12),
-            LyricsTextAlignment = LyricsTextAlignment.Right
+            LyricsTextAlignment = LyricsTextAlignment.Right,
+            TrackChangeNotification = new TrackChangeNotificationSettings(
+                true,
+                true,
+                7000,
+                TrackChangeNotificationPosition.TopRight,
+                NotificationTargetMode.ForegroundWindow,
+                @"\\.\DISPLAY3")
         };
         using (var writer = new SettingsPersistenceService(_directory)) { writer.Initialize(); SettingsManager.Replace(settings); writer.Flush(); }
         SettingsManager.ResetAll();
@@ -78,8 +87,13 @@ public sealed class SettingsPersistenceServiceTests
         Assert.AreEqual(new TaskbarFullPanelSettings(true, false, true, false), SettingsManager.Current.TaskbarExperience.FullPanel);
         Assert.AreEqual(72, SettingsManager.Current.TaskbarSurface.BackgroundOpacityPercent);
         Assert.AreEqual(LyricsTextAlignment.Right, SettingsManager.Current.LyricsTextAlignment);
+        Assert.AreEqual(@"\\.\DISPLAY2", SettingsManager.Current.TaskbarTargetMonitorDeviceId);
+        Assert.AreEqual(7000, SettingsManager.Current.TrackChangeNotification.DurationMilliseconds);
+        Assert.AreEqual(TrackChangeNotificationPosition.TopRight, SettingsManager.Current.TrackChangeNotification.Position);
+        Assert.AreEqual(NotificationTargetMode.ForegroundWindow, SettingsManager.Current.TrackChangeNotification.TargetMode);
+        Assert.AreEqual(@"\\.\DISPLAY3", SettingsManager.Current.TrackChangeNotification.FixedMonitorDeviceId);
         var persisted = File.ReadAllText(reader.SettingsPath);
-        StringAssert.Contains(persisted, "\"schemaVersion\": 3");
+        StringAssert.Contains(persisted, "\"schemaVersion\": 4");
         StringAssert.Contains(persisted, "\"Disabled\"");
     }
 
@@ -128,7 +142,7 @@ public sealed class SettingsPersistenceServiceTests
 
         Assert.IsTrue(SettingsManager.Current.LyricsEnabled);
         Assert.IsTrue(Directory.GetFiles(_directory, "settings.json.unsupported-*").Length == 1);
-        StringAssert.Contains(File.ReadAllText(main), "\"schemaVersion\": 3");
+        StringAssert.Contains(File.ReadAllText(main), "\"schemaVersion\": 4");
     }
 
     [TestMethod]
@@ -163,12 +177,55 @@ public sealed class SettingsPersistenceServiceTests
         Directory.CreateDirectory(_directory);
         File.WriteAllText(
             Path.Combine(_directory, "settings.json"),
-            "{\"schemaVersion\":3,\"settings\":{\"taskbarExperience\":{\"hoverLayerEnabled\":true,\"fullLayerEnabled\":true,\"density\":\"Balanced\",\"contentLayout\":\"AdaptiveStack\",\"fullPanel\":{\"mediaInfoVisible\":false,\"mediaControlsVisible\":false,\"audioControlsVisible\":false,\"performanceVisible\":false}}}}");
+            "{\"schemaVersion\":3,\"settings\":{\"taskbarBarSelectedMonitor\":1,\"taskbarExperience\":{\"hoverLayerEnabled\":true,\"fullLayerEnabled\":true,\"density\":\"Balanced\",\"contentLayout\":\"AdaptiveStack\",\"fullPanel\":{\"mediaInfoVisible\":false,\"mediaControlsVisible\":false,\"audioControlsVisible\":false,\"performanceVisible\":false}}}}");
 
         using var service = new SettingsPersistenceService(_directory);
         service.Initialize();
 
         Assert.AreEqual(TaskbarFullPanelSettings.Compact, SettingsManager.Current.TaskbarExperience.FullPanel);
+        Assert.AreEqual(TrackChangeNotificationSettings.Default, SettingsManager.Current.TrackChangeNotification);
+        Assert.AreEqual(1, service.LegacyTaskbarMonitorIndex);
+        Assert.AreEqual(
+            "DISPLAY2",
+            DisplayTargetPolicy.ResolveLegacyDeviceId(
+                [Monitor("DISPLAY1", true), Monitor("DISPLAY2", false)],
+                service.LegacyTaskbarMonitorIndex!.Value));
+    }
+
+    [TestMethod]
+    public void Schema4InvalidNotificationValuesNormalizeToSafeDefaults()
+    {
+        Directory.CreateDirectory(_directory);
+        File.WriteAllText(
+            Path.Combine(_directory, "settings.json"),
+            "{\"schemaVersion\":4,\"settings\":{\"trackChangeNotification\":{\"enabled\":true,\"showWhenFullscreen\":false,\"durationMilliseconds\":60000,\"position\":\"bad\",\"targetMode\":99,\"fixedMonitorDeviceId\":\"  DISPLAY2  \"}}}");
+
+        using var service = new SettingsPersistenceService(_directory);
+        service.Initialize();
+
+        Assert.IsTrue(SettingsManager.Current.TrackChangeNotification.Enabled);
+        Assert.AreEqual(10000, SettingsManager.Current.TrackChangeNotification.DurationMilliseconds);
+        Assert.AreEqual(TrackChangeNotificationPosition.BottomLeft, SettingsManager.Current.TrackChangeNotification.Position);
+        Assert.AreEqual(NotificationTargetMode.Fixed, SettingsManager.Current.TrackChangeNotification.TargetMode);
+        Assert.AreEqual("DISPLAY2", SettingsManager.Current.TrackChangeNotification.FixedMonitorDeviceId);
+    }
+
+    [TestMethod]
+    public void Schema4PartialNotificationUsesDocumentedDefaults()
+    {
+        Directory.CreateDirectory(_directory);
+        File.WriteAllText(
+            Path.Combine(_directory, "settings.json"),
+            "{\"schemaVersion\":4,\"settings\":{\"trackChangeNotification\":{\"enabled\":true}}}");
+
+        using var service = new SettingsPersistenceService(_directory);
+        service.Initialize();
+
+        Assert.IsTrue(SettingsManager.Current.TrackChangeNotification.Enabled);
+        Assert.IsFalse(SettingsManager.Current.TrackChangeNotification.ShowWhenFullscreen);
+        Assert.AreEqual(1000, SettingsManager.Current.TrackChangeNotification.DurationMilliseconds);
+        Assert.AreEqual(TrackChangeNotificationPosition.BottomLeft, SettingsManager.Current.TrackChangeNotification.Position);
+        Assert.AreEqual(NotificationTargetMode.Fixed, SettingsManager.Current.TrackChangeNotification.TargetMode);
     }
 
     [TestMethod]
@@ -181,7 +238,7 @@ public sealed class SettingsPersistenceServiceTests
                 FullPanel = new TaskbarFullPanelSettings(true, false, false, false)
             }
         });
-        var viewModel = new DisplayModesViewModel();
+        var viewModel = new DisplayModesViewModel(new FakeDisplayMonitorService());
 
         viewModel.FullPanelMediaInfoVisible = false;
         Assert.IsTrue(viewModel.FullPanelMediaInfoVisible);
@@ -202,6 +259,28 @@ public sealed class SettingsPersistenceServiceTests
         Assert.AreEqual("紧凑", viewModel.FullPanelLayoutStatus);
         viewModel.ApplyFullFullPanelPresetCommand.Execute(null);
         Assert.AreEqual("完整", viewModel.FullPanelLayoutStatus);
+    }
+
+    [TestMethod]
+    public void DisplayModesUpdatesIndependentNotificationAndTaskbarTargets()
+    {
+        SettingsManager.Replace(new AppSettings());
+        var viewModel = new DisplayModesViewModel(new FakeDisplayMonitorService());
+
+        viewModel.TrackChangeNotificationEnabled = true;
+        viewModel.ShowTrackChangeNotificationWhenFullscreen = true;
+        viewModel.TrackChangeNotificationDurationSeconds = 6;
+        viewModel.TrackChangeNotificationPosition = TrackChangeNotificationPosition.TopCenter;
+        viewModel.TrackChangeNotificationTargetMode = NotificationTargetMode.Fixed;
+        viewModel.TrackChangeNotificationFixedMonitorDeviceId = "DISPLAY2";
+        viewModel.TaskbarTargetMonitorDeviceId = "DISPLAY1";
+
+        Assert.AreEqual("DISPLAY2", SettingsManager.Current.TrackChangeNotification.FixedMonitorDeviceId);
+        Assert.AreEqual("DISPLAY1", SettingsManager.Current.TaskbarTargetMonitorDeviceId);
+        Assert.AreEqual(6000, SettingsManager.Current.TrackChangeNotification.DurationMilliseconds);
+        Assert.AreEqual(TrackChangeNotificationPosition.TopCenter, SettingsManager.Current.TrackChangeNotification.Position);
+        Assert.IsTrue(SettingsManager.Current.TrackChangeNotification.ShowWhenFullscreen);
+        Assert.IsTrue(viewModel.CanSelectTrackChangeNotificationMonitor);
     }
 
     [TestMethod]
@@ -228,8 +307,12 @@ public sealed class SettingsPersistenceServiceTests
         {
             FullPanel = TaskbarFullPanelSettings.Compact
         };
+        SettingsManager.Current.TrackChangeNotification = TrackChangeNotificationSettings.Default with { Enabled = true };
+        SettingsManager.Current.TaskbarTargetMonitorDeviceId = "DISPLAY2";
         SettingsManager.ResetDisplayModes();
         Assert.AreEqual(TaskbarFullPanelSettings.Full, SettingsManager.Current.TaskbarExperience.FullPanel);
+        Assert.AreEqual(TrackChangeNotificationSettings.Default, SettingsManager.Current.TrackChangeNotification);
+        Assert.IsNull(SettingsManager.Current.TaskbarTargetMonitorDeviceId);
     }
 
     [TestMethod]
@@ -272,5 +355,28 @@ public sealed class SettingsPersistenceServiceTests
             Assert.AreEqual(1, layoutEvents);
         }
         finally { SettingsManager.LayoutSettingsChanged -= handler; }
+    }
+
+    private static DisplayMonitorInfo Monitor(string id, bool primary) =>
+        new(id, id, primary, new Rect(0, 0, 1920, 1080), new Rect(0, 0, 1920, 1040), 96, 96);
+
+    private sealed class FakeDisplayMonitorService : IDisplayMonitorService
+    {
+        private readonly IReadOnlyList<DisplayMonitorInfo> _monitors =
+            [Monitor("DISPLAY1", true), Monitor("DISPLAY2", false)];
+
+        public event EventHandler? MonitorsChanged;
+
+        public IReadOnlyList<DisplayMonitorInfo> GetMonitors() => _monitors;
+
+        public void Refresh() => MonitorsChanged?.Invoke(this, EventArgs.Empty);
+
+        public DisplayMonitorInfo? ResolveFixedMonitor(string? deviceId) =>
+            DisplayTargetPolicy.ResolveFixed(_monitors, deviceId);
+
+        public DisplayMonitorInfo? ResolveNotificationMonitor(NotificationTargetMode mode, string? fixedDeviceId) =>
+            ResolveFixedMonitor(fixedDeviceId);
+
+        public bool IsForegroundWindowFullscreen() => false;
     }
 }

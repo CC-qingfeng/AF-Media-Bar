@@ -1,4 +1,6 @@
+using AFMediaBar.Classes.Models;
 using AFMediaBar.Classes.Models.Layout;
+using AFMediaBar.Classes.Services;
 using AFMediaBar.Classes.Settings;
 
 namespace AFMediaBar.ViewModels.Pages;
@@ -6,10 +8,71 @@ namespace AFMediaBar.ViewModels.Pages;
 /// <summary>四种显示模式及任务栏轻度自定义。 / Four display modes and light taskbar customization.</summary>
 public partial class DisplayModesViewModel : ObservableObject
 {
+    private readonly IDisplayMonitorService _displayMonitorService;
     private bool _isRefreshing;
+    private IReadOnlyList<DisplayMonitorOption> _monitorOptions = Array.Empty<DisplayMonitorOption>();
+
+    public IReadOnlyList<DisplayMonitorOption> MonitorOptions => _monitorOptions;
     public WindowMode CurrentWindowMode => SettingsManager.Current.WindowMode;
     public bool IsTaskbarMode => CurrentWindowMode == WindowMode.Taskbar;
     public bool IsDynamicIslandMode => CurrentWindowMode == WindowMode.DynamicIsland;
+
+    public bool TrackChangeNotificationEnabled
+    {
+        get => NotificationSettings.Enabled;
+        set => UpdateNotification(NotificationSettings with { Enabled = value });
+    }
+
+    public bool ShowTrackChangeNotificationWhenFullscreen
+    {
+        get => NotificationSettings.ShowWhenFullscreen;
+        set => UpdateNotification(NotificationSettings with { ShowWhenFullscreen = value });
+    }
+
+    public int TrackChangeNotificationDurationSeconds
+    {
+        get => NotificationSettings.DurationMilliseconds / 1000;
+        set => UpdateNotification(NotificationSettings with { DurationMilliseconds = value * 1000 });
+    }
+
+    public TrackChangeNotificationPosition TrackChangeNotificationPosition
+    {
+        get => NotificationSettings.Position;
+        set => UpdateNotification(NotificationSettings with { Position = value });
+    }
+
+    public NotificationTargetMode TrackChangeNotificationTargetMode
+    {
+        get => NotificationSettings.TargetMode;
+        set => UpdateNotification(NotificationSettings with { TargetMode = value });
+    }
+
+    public string? TrackChangeNotificationFixedMonitorDeviceId
+    {
+        get => NotificationSettings.FixedMonitorDeviceId ?? _displayMonitorService.ResolveFixedMonitor(null)?.DeviceId;
+        set => UpdateNotification(NotificationSettings with { FixedMonitorDeviceId = value });
+    }
+
+    public bool CanSelectTrackChangeNotificationMonitor =>
+        TrackChangeNotificationEnabled && TrackChangeNotificationTargetMode == NotificationTargetMode.Fixed;
+
+    public string? TaskbarTargetMonitorDeviceId
+    {
+        get => SettingsManager.Current.TaskbarTargetMonitorDeviceId ?? _displayMonitorService.ResolveFixedMonitor(null)?.DeviceId;
+        set
+        {
+            if (_isRefreshing || string.Equals(
+                    SettingsManager.Current.TaskbarTargetMonitorDeviceId,
+                    value,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            SettingsManager.Current.TaskbarTargetMonitorDeviceId = value;
+            OnPropertyChanged();
+        }
+    }
 
     public bool HoverLayerEnabled
     {
@@ -110,7 +173,14 @@ public partial class DisplayModesViewModel : ObservableObject
         }
     }
 
-    public DisplayModesViewModel() => SettingsManager.SettingsChanged += OnSettingsChanged;
+    public DisplayModesViewModel(IDisplayMonitorService displayMonitorService)
+    {
+        _displayMonitorService = displayMonitorService;
+        SettingsManager.SettingsChanged += OnSettingsChanged;
+        _displayMonitorService.MonitorsChanged += OnMonitorsChanged;
+        _displayMonitorService.Refresh();
+        RefreshMonitorOptions();
+    }
 
     [RelayCommand] private void SwitchToTaskbarMode() => SwitchMode(WindowMode.Taskbar);
     [RelayCommand] private void SwitchToDynamicIslandMode() => SwitchMode(WindowMode.DynamicIsland);
@@ -139,6 +209,15 @@ public partial class DisplayModesViewModel : ObservableObject
         if (_isRefreshing) return;
         SettingsManager.SetTaskbarExperienceSettings(value.Normalize());
         RaiseExperience();
+    }
+
+    private void UpdateNotification(TrackChangeNotificationSettings value)
+    {
+        if (_isRefreshing)
+            return;
+
+        SettingsManager.SetTrackChangeNotificationSettings(value.Normalize());
+        RaiseNotification();
     }
 
     private void UpdateFullPanelGroup(FullPanelGroup group, bool visible)
@@ -184,6 +263,41 @@ public partial class DisplayModesViewModel : ObservableObject
             RaiseAll();
     }
 
+    private void OnMonitorsChanged(object? sender, EventArgs e) => RefreshMonitorOptions();
+
+    private void RefreshMonitorOptions()
+    {
+        var monitors = _displayMonitorService.GetMonitors();
+        var options = monitors
+            .Select((monitor, index) => new DisplayMonitorOption(
+                monitor.DeviceId,
+                $"{index + 1}. {monitor.DeviceName}{(monitor.IsPrimary ? "（主显示器）" : string.Empty)}",
+                monitor.IsPrimary))
+            .ToList();
+
+        var preferredIds = new[]
+        {
+            SettingsManager.Current.TaskbarTargetMonitorDeviceId,
+            NotificationSettings.FixedMonitorDeviceId
+        };
+        foreach (var preferredId in preferredIds.Where(id => !string.IsNullOrWhiteSpace(id)).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            if (options.All(option => !string.Equals(option.DeviceId, preferredId, StringComparison.OrdinalIgnoreCase)))
+            {
+                options.Insert(0, new DisplayMonitorOption(
+                    preferredId!,
+                    $"{preferredId}（当前未连接）",
+                    false,
+                    false));
+            }
+        }
+
+        _monitorOptions = options;
+        OnPropertyChanged(nameof(MonitorOptions));
+        OnPropertyChanged(nameof(TaskbarTargetMonitorDeviceId));
+        OnPropertyChanged(nameof(TrackChangeNotificationFixedMonitorDeviceId));
+    }
+
     private void RaiseAll()
     {
         _isRefreshing = true;
@@ -192,6 +306,8 @@ public partial class DisplayModesViewModel : ObservableObject
             OnPropertyChanged(nameof(CurrentWindowMode)); OnPropertyChanged(nameof(IsTaskbarMode)); OnPropertyChanged(nameof(IsDynamicIslandMode));
             RaiseExperience(); OnPropertyChanged(nameof(Orientation)); OnPropertyChanged(nameof(IsTaskbarPositionLocked));
             OnPropertyChanged(nameof(IsTaskbarAvoidingIcons)); OnPropertyChanged(nameof(TaskbarCrossAxisOffsetDip));
+            OnPropertyChanged(nameof(TaskbarTargetMonitorDeviceId));
+            RaiseNotification();
         }
         finally { _isRefreshing = false; }
     }
@@ -202,6 +318,20 @@ public partial class DisplayModesViewModel : ObservableObject
         OnPropertyChanged(nameof(Density)); OnPropertyChanged(nameof(ContentLayout));
         RaiseFullPanel();
     }
+
+    private void RaiseNotification()
+    {
+        OnPropertyChanged(nameof(TrackChangeNotificationEnabled));
+        OnPropertyChanged(nameof(ShowTrackChangeNotificationWhenFullscreen));
+        OnPropertyChanged(nameof(TrackChangeNotificationDurationSeconds));
+        OnPropertyChanged(nameof(TrackChangeNotificationPosition));
+        OnPropertyChanged(nameof(TrackChangeNotificationTargetMode));
+        OnPropertyChanged(nameof(TrackChangeNotificationFixedMonitorDeviceId));
+        OnPropertyChanged(nameof(CanSelectTrackChangeNotificationMonitor));
+    }
+
+    private TrackChangeNotificationSettings NotificationSettings =>
+        SettingsManager.Current.TrackChangeNotification.Normalize();
 
     private void RaiseFullPanel()
     {

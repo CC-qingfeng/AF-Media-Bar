@@ -234,7 +234,7 @@ public partial class TaskbarWindow : Window
             IntPtr taskbarWindowHandle = interop.Handle;
 
             IntPtr taskbarHandle = _taskBarService.GetSelectedTaskbarHandle(
-                SettingsManager.Current.TaskbarBarSelectedMonitor, out _);
+                SettingsManager.Current.TaskbarTargetMonitorDeviceId, out _);
             _lastTaskbarHandle = taskbarHandle;
 
             ApplyLayoutSettings(SettingsManager.Current.WindowMode, SettingsManager.Current.LayoutOrientationMode, taskbarHandle);
@@ -267,7 +267,7 @@ public partial class TaskbarWindow : Window
         {
             var interop = new WindowInteropHelper(this);
             IntPtr taskbarHandle = _taskBarService.GetSelectedTaskbarHandle(
-                SettingsManager.Current.TaskbarBarSelectedMonitor, out _);
+                SettingsManager.Current.TaskbarTargetMonitorDeviceId, out _);
             _lastTaskbarHandle = taskbarHandle;
 
             ApplyLayoutSettings(SettingsManager.Current.WindowMode, SettingsManager.Current.LayoutOrientationMode, taskbarHandle);
@@ -285,9 +285,16 @@ public partial class TaskbarWindow : Window
                 return;
             }
 
-            // If the taskbar was not found during initialization or another taskbar was
-            // selected, re-attach here.
-            if (GetParent(interop.Handle) != taskbarHandle)
+            // A live target change must use the host's stability-checked recreation path.
+            // Direct reparenting remains valid only for an initially unattached HWND.
+            var currentParent = GetParent(interop.Handle);
+            if (currentParent != IntPtr.Zero && currentParent != taskbarHandle)
+            {
+                Dispatcher.BeginInvoke(_hostActions.RequestTaskbarHostReload, DispatcherPriority.Background);
+                return;
+            }
+
+            if (currentParent != taskbarHandle)
             {
                 _taskBarService.DockWindow(interop.Handle, taskbarHandle);
             }
@@ -455,7 +462,7 @@ public partial class TaskbarWindow : Window
         if (taskbarHandle == IntPtr.Zero)
         {
             taskbarHandle = _taskBarService.GetSelectedTaskbarHandle(
-                SettingsManager.Current.TaskbarBarSelectedMonitor, out _);
+                SettingsManager.Current.TaskbarTargetMonitorDeviceId, out _);
         }
 
         ApplyLayoutSettings(windowMode, orientationMode, taskbarHandle);

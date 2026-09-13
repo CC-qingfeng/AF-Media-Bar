@@ -81,6 +81,28 @@ public sealed class NativeWindowBackdropAdapter
     }
 
     /// <summary>
+    /// 为不获取焦点的短暂窗口应用材质；Acrylic 使用兼容 Accent 路径，避免失活时退化为纯色。
+    /// Applies a backdrop to a non-activating transient window; Acrylic uses the compatible Accent path
+    /// so deactivation does not replace it with a solid color.
+    /// </summary>
+    public void ApplyNonActivatingBackdrop(nint handle, ApplicationBackdropMode mode, bool dark)
+    {
+        if (handle == nint.Zero)
+            return;
+
+        if (mode != ApplicationBackdropMode.Acrylic)
+        {
+            ApplyBackdrop(handle, mode, dark);
+            return;
+        }
+
+        ResetBackdrop(handle);
+        SetFrame(handle, extended: false);
+        var tint = dark ? unchecked((int)0xCC202020) : unchecked((int)0xCCF9F9F9);
+        ApplyAccentPolicy(handle, AccentState.EnableAcrylicBlurBehind, tint);
+    }
+
+    /// <summary>
     /// 设置 DWM 客户区扩展边距。
     /// Sets the DWM client-area frame extension margins.
     /// </summary>
