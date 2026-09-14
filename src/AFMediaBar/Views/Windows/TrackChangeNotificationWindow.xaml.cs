@@ -1,5 +1,6 @@
 using System.Windows.Interop;
 using System.Windows.Input;
+using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
@@ -26,6 +27,7 @@ public partial class TrackChangeNotificationWindow : FluentWindow
     {
         WindowHelper.SetNoActivate(this);
         InitializeComponent();
+        ApplyMotionEffects();
         Left = -10000;
         Top = -10000;
         appearanceService.AttachNonActivatingTransient(this);
@@ -49,6 +51,7 @@ public partial class TrackChangeNotificationWindow : FluentWindow
         var presentationVersion = ++_presentationVersion;
         _hideTimer.Stop();
         StopAnimations();
+        ApplyMotionEffects();
         _currentMonitor = request.Monitor;
         _currentPosition = request.Settings.Position;
         ApplySnapshot(request.Snapshot);
@@ -234,6 +237,14 @@ public partial class TrackChangeNotificationWindow : FluentWindow
         EntryScaleTransform.ScaleX = 1;
         EntryScaleTransform.ScaleY = 1;
         EntryTransform.Y = 0;
+    }
+
+    private void ApplyMotionEffects()
+    {
+        if (MotionPolicy.ResolveCurrent().UseDecorativeEffects)
+            AnimatedRoot.SetResourceReference(Border.EffectProperty, "AfNotificationShadowEffect");
+        else
+            AnimatedRoot.Effect = null;
     }
 
     /// <summary>停止通知计时并释放窗口。 / Stops notification timing and releases the window.</summary>

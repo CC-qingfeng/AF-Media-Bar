@@ -29,14 +29,12 @@
             CornerRadius="8"
             Background="Transparent"
             BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
-            BorderThickness="1">
+            BorderThickness="1"
+            Effect="{DynamicResource AfFlyoutShadowEffect}">
         <Border.RenderTransformOrigin>0.85,1</Border.RenderTransformOrigin>
         <Border.RenderTransform>
             <ScaleTransform x:Name="FlyoutScale" ScaleX="1" ScaleY="1" />
         </Border.RenderTransform>
-        <Border.Effect>
-            <DropShadowEffect BlurRadius="16" ShadowDepth="3" Opacity="0.24" />
-        </Border.Effect>
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />

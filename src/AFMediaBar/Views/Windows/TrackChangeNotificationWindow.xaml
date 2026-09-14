@@ -16,6 +16,7 @@
     <Border x:Name="AnimatedRoot" Margin="6" Padding="10" CornerRadius="10"
             Background="Transparent"
             BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}" BorderThickness="1"
+            Effect="{DynamicResource AfNotificationShadowEffect}"
             Opacity="0">
         <Border.RenderTransform>
             <TransformGroup>
@@ -23,9 +24,6 @@
                 <TranslateTransform x:Name="EntryTransform" />
             </TransformGroup>
         </Border.RenderTransform>
-        <Border.Effect>
-            <DropShadowEffect BlurRadius="12" ShadowDepth="2" Opacity="0.24" />
-        </Border.Effect>
         <Grid>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="44" />

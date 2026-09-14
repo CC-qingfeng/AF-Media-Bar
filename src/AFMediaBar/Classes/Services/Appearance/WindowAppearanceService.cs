@@ -250,6 +250,8 @@ public sealed class WindowAppearanceService : IDisposable
             SettingsManager.Current.Appearance.BackdropMode,
             SystemParameters.HighContrast,
             OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000));
+        if (!MotionPolicy.ResolveCurrent().UseDecorativeEffects)
+            mode = ApplicationBackdropMode.FluentSolid;
         var dark = ApplicationThemeManager.GetAppTheme() == ApplicationTheme.Dark;
         if (mode == ApplicationBackdropMode.FluentSolid)
         {

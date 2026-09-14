@@ -29,6 +29,7 @@ public partial class AudioControlFlyoutWindow : FluentWindow
         ViewModel = viewModel;
         DataContext = viewModel;
         InitializeComponent();
+        ApplyMotionEffects();
         appearanceService.Attach(this);
     }
 
@@ -46,6 +47,7 @@ public partial class AudioControlFlyoutWindow : FluentWindow
 
         _isHiding = false;
         await ViewModel.RefreshAsync();
+        ApplyMotionEffects();
         FlyoutRoot.BeginAnimation(OpacityProperty, null);
         FlyoutScale.BeginAnimation(ScaleTransform.ScaleXProperty, null);
         FlyoutScale.BeginAnimation(ScaleTransform.ScaleYProperty, null);
@@ -205,5 +207,13 @@ public partial class AudioControlFlyoutWindow : FluentWindow
             FlyoutScale.ScaleY = 1;
         };
         FlyoutScale.BeginAnimation(ScaleTransform.ScaleYProperty, closeAnimation, HandoffBehavior.SnapshotAndReplace);
+    }
+
+    private void ApplyMotionEffects()
+    {
+        if (MotionPolicy.ResolveCurrent().UseDecorativeEffects)
+            FlyoutRoot.SetResourceReference(Border.EffectProperty, "AfFlyoutShadowEffect");
+        else
+            FlyoutRoot.Effect = null;
     }
 }

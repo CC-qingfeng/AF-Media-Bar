@@ -1006,41 +1006,44 @@ namespace AFMediaBar.Components
             if (isCovered && !CanUseTaskbarComponentHover())
                 return;
 
-            if (SongInfoStackPanel.Effect is not BlurEffect blur)
-            {
-                blur = new BlurEffect
-                {
-                    Radius = 0,
-                    KernelType = KernelType.Gaussian,
-                    RenderingBias = RenderingBias.Performance
-                };
-                SongInfoStackPanel.Effect = blur;
-            }
-
-            var targetRadius = isCovered ? TaskbarCoveredBlurRadius : 0;
-            var targetOpacity = isCovered ? TaskbarCoveredOpacity : 1;
-            if (immediate)
-            {
-                blur.BeginAnimation(BlurEffect.RadiusProperty, null);
-                SongInfoStackPanel.BeginAnimation(OpacityProperty, null);
-                blur.Radius = targetRadius;
-                SongInfoStackPanel.Opacity = targetOpacity;
-                return;
-            }
-
             var motion = CurrentMotion;
-            if (!motion.UseTransitions)
+            BlurEffect? blur = null;
+            if (motion.UseDecorativeEffects)
             {
-                blur.BeginAnimation(BlurEffect.RadiusProperty, null);
+                if (SongInfoStackPanel.Effect is not BlurEffect currentBlur || currentBlur.IsFrozen)
+                {
+                    currentBlur = new BlurEffect
+                    {
+                        Radius = 0,
+                        KernelType = KernelType.Gaussian,
+                        RenderingBias = RenderingBias.Performance
+                    };
+                    SongInfoStackPanel.Effect = currentBlur;
+                }
+
+                blur = currentBlur;
+            }
+            else if (SongInfoStackPanel.Effect is BlurEffect existingBlur)
+            {
+                existingBlur.BeginAnimation(BlurEffect.RadiusProperty, null);
+                SongInfoStackPanel.Effect = null;
+            }
+
+            var targetRadius = motion.UseDecorativeEffects && isCovered ? TaskbarCoveredBlurRadius : 0;
+            var targetOpacity = isCovered ? TaskbarCoveredOpacity : 1;
+            if (immediate || !motion.UseTransitions)
+            {
+                blur?.BeginAnimation(BlurEffect.RadiusProperty, null);
                 SongInfoStackPanel.BeginAnimation(OpacityProperty, null);
-                blur.Radius = targetRadius;
+                if (blur is not null)
+                    blur.Radius = targetRadius;
                 SongInfoStackPanel.Opacity = targetOpacity;
                 return;
             }
 
             var duration = isCovered ? motion.StandardDuration : motion.FastDuration;
             var easingMode = isCovered ? EasingMode.EaseOut : EasingMode.EaseInOut;
-            blur.BeginAnimation(BlurEffect.RadiusProperty, new DoubleAnimation
+            blur?.BeginAnimation(BlurEffect.RadiusProperty, new DoubleAnimation
             {
                 To = targetRadius,
                 Duration = duration,
@@ -1057,7 +1060,8 @@ namespace AFMediaBar.Components
         private void AnimateDirectFullPanelHandle(bool isVisible, bool immediate = false)
         {
             var targetOpacity = isVisible && CanShowDirectFullPanelHandle() ? 1 : 0;
-            if (immediate)
+            var motion = CurrentMotion;
+            if (immediate || !motion.UseTransitions)
             {
                 TaskbarDirectFullPanelHandle.BeginAnimation(OpacityProperty, null);
                 TaskbarDirectFullPanelHandle.Opacity = targetOpacity;
@@ -1067,7 +1071,7 @@ namespace AFMediaBar.Components
             TaskbarDirectFullPanelHandle.BeginAnimation(OpacityProperty, new DoubleAnimation
             {
                 To = targetOpacity,
-                Duration = TimeSpan.FromMilliseconds(140),
+                Duration = motion.FastDuration,
                 EasingFunction = new CubicEase
                 {
                     EasingMode = targetOpacity > 0 ? EasingMode.EaseOut : EasingMode.EaseInOut

@@ -107,7 +107,7 @@ The app runs in its own process. Its WPF player can be hosted as a taskbar child
 | App volume | Aggregate application icons and audio sessions across active output endpoints; the audio flyout, Full, and tray wheel adjust the selected media app in 2% steps |
 | Visualizer | Nine-band spectrum from WASAPI loopback capture, shown only while a connected media source is playing; disconnected state keeps only the music-note placeholder |
 | Metrics | The Full panel auto-sizes its height to visible content and can show system memory, CPU, GPU, and AF Media Bar process memory; hidden metrics stop sampling, and spectrum remains excluded by default |
-| Low-spec mode | Software rendering with transitions, marquees, and fades disabled |
+| Low-performance fallback | When WPF reports software rendering or a low-performance path, decorative continuous motion, marquees, spectrum easing, blur, and backdrop effects are disabled automatically |
 
 </div>
 

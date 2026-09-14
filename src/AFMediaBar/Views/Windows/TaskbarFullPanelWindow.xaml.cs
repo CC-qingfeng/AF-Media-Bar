@@ -43,6 +43,7 @@ public partial class TaskbarFullPanelWindow : FluentWindow
         IDisplayMonitorService displayMonitorService)
     {
         InitializeComponent();
+        ApplyMotionEffects();
         _mediaSessionService = mediaSessionService;
         _audioInteractionService = audioInteractionService;
         _metricsService = metricsService;
@@ -71,6 +72,7 @@ public partial class TaskbarFullPanelWindow : FluentWindow
 
         _isClosing = false;
         _anchor = anchor;
+        ApplyMotionEffects();
         Show();
         UpdateLayout();
         PositionNear(anchor);
@@ -134,6 +136,14 @@ public partial class TaskbarFullPanelWindow : FluentWindow
         PanelRoot.BeginAnimation(OpacityProperty, new DoubleAnimation(1, motion.PanelDuration) { EasingFunction = ease });
         PanelScale.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(1, motion.PanelDuration) { EasingFunction = ease });
         PanelScale.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(1, motion.PanelDuration) { EasingFunction = ease });
+    }
+
+    private void ApplyMotionEffects()
+    {
+        if (MotionPolicy.ResolveCurrent().UseDecorativeEffects)
+            PanelRoot.SetResourceReference(Border.EffectProperty, "AfPanelShadowEffect");
+        else
+            PanelRoot.Effect = null;
     }
 
     private void PositionNear(Rect anchor)

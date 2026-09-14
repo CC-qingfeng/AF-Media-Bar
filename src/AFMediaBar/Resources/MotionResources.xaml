@@ -10,6 +10,13 @@
     <PowerEase x:Key="AfEaseOut" Power="3" EasingMode="EaseOut" />
     <PowerEase x:Key="AfEaseInOut" Power="3" EasingMode="EaseInOut" />
 
+    <!-- 阴影按控件层级分档；低性能/高对比度路径由宿主清除。 -->
+    <!-- Shadow tiers stay resource-backed; hosts clear them on low-performance/high-contrast paths. -->
+    <DropShadowEffect x:Key="AfButtonShadowEffect" BlurRadius="6" ShadowDepth="1" Opacity="0.16" />
+    <DropShadowEffect x:Key="AfPanelShadowEffect" BlurRadius="24" ShadowDepth="6" Opacity="0.28" />
+    <DropShadowEffect x:Key="AfFlyoutShadowEffect" BlurRadius="16" ShadowDepth="3" Opacity="0.24" />
+    <DropShadowEffect x:Key="AfNotificationShadowEffect" BlurRadius="12" ShadowDepth="2" Opacity="0.24" />
+
     <CornerRadius x:Key="AfButtonCornerRadius">4</CornerRadius>
     <CornerRadius x:Key="AfSurfaceCornerRadius">8</CornerRadius>
     <CornerRadius x:Key="AfNotificationCornerRadius">10</CornerRadius>

@@ -4,6 +4,7 @@ using System.Windows.Media;
 using System.Windows.Media.Effects;
 using AFMediaBar.Classes.Models;
 using AFMediaBar.Classes.Models.Layout;
+using AFMediaBar.Classes.Services;
 using FontIcon = Wpf.Ui.Controls.FontIcon;
 
 namespace AFMediaBar.Classes.Services.Layout;
@@ -396,7 +397,7 @@ public sealed class LayoutRenderEngine
         // Apply background blur effect (if background image exists)
         if (_backgroundImage is not null)
         {
-            if (effects.Blur > 0)
+            if (MotionPolicy.ResolveCurrent().UseDecorativeEffects && effects.Blur > 0)
             {
                 _backgroundImage.Effect = new BlurEffect
                 {
