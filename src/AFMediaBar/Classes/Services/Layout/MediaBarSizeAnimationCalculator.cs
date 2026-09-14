@@ -20,7 +20,7 @@ public static class MediaBarSizeAnimationCalculator
     /// <param name="target">目标尺寸。/ Target size.</param>
     /// <param name="progress">上一帧进度，范围为 0 到 1。/ Previous progress in the 0-1 range.</param>
     /// <param name="elapsedMilliseconds">本帧经过的毫秒数。/ Elapsed milliseconds for this frame.</param>
-    /// <param name="durationMilliseconds">完整动画时长，必须为正数。/ Full animation duration, which must be positive.</param>
+    /// <param name="durationMilliseconds">完整动画时长；非正数或非有限值会立即完成。/ Full animation duration; non-positive or non-finite values complete immediately.</param>
     /// <returns>当前尺寸、规范化进度和完成状态。/ Current size, normalized progress, and completion state.</returns>
     public static Frame Advance(
         double start,
@@ -29,13 +29,13 @@ public static class MediaBarSizeAnimationCalculator
         double elapsedMilliseconds,
         double durationMilliseconds = 220)
     {
-        if (durationMilliseconds <= 0)
+        if (!double.IsFinite(durationMilliseconds) || durationMilliseconds <= 0)
         {
             return new Frame(target, 1, true);
         }
 
-        var normalizedProgress = Math.Clamp(progress, 0, 1);
-        var elapsed = Math.Max(0, elapsedMilliseconds);
+        var normalizedProgress = double.IsFinite(progress) ? Math.Clamp(progress, 0, 1) : 0;
+        var elapsed = double.IsFinite(elapsedMilliseconds) ? Math.Max(0, elapsedMilliseconds) : 0;
         var nextProgress = Math.Clamp(
             normalizedProgress + elapsed / durationMilliseconds,
             0,

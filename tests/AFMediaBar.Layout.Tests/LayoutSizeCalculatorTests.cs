@@ -312,6 +312,26 @@ public sealed class LayoutSizeCalculatorTests
     }
 
     [TestMethod]
+    public void MediaBarSizeAnimationCalculatorUsesProvidedDuration()
+    {
+        var frame = MediaBarSizeAnimationCalculator.Advance(100, 300, 0, 80, 160);
+
+        Assert.AreEqual(0.5, frame.Progress, 0.001);
+        Assert.AreEqual(275, frame.Value, 0.01);
+        Assert.IsFalse(frame.IsCompleted);
+    }
+
+    [TestMethod]
+    public void MediaBarSizeAnimationCalculatorTreatsNonFiniteProgressAndElapsedAsNeutral()
+    {
+        var frame = MediaBarSizeAnimationCalculator.Advance(100, 300, double.NaN, double.PositiveInfinity, 220);
+
+        Assert.AreEqual(0, frame.Progress, 0.001);
+        Assert.AreEqual(100, frame.Value, 0.01);
+        Assert.IsFalse(frame.IsCompleted);
+    }
+
+    [TestMethod]
     public void WindowBackdropPolicyFallsBackForUnsupportedMicaAndHighContrast()
     {
         Assert.AreEqual(

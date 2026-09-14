@@ -43,6 +43,7 @@ public partial class TaskbarWindow : Window
     private readonly DispatcherTimer _timer;
     private readonly DispatcherTimer _sizeAnimationTimer;
     private readonly DispatcherTimer _spectrumTimer;
+    private bool _spectrumActive;
     private readonly GlobalInteractionRouter _interactionRouter;
     private readonly AudioInteractionService _audioInteractionService;
 
@@ -129,8 +130,19 @@ public partial class TaskbarWindow : Window
         _spectrumTimer.Tick += (_, _) =>
         {
             if (!_isClosing && _appliedOrientation == LayoutOrientation.Horizontal &&
-                _audioMonitorService.GetSpectrum(_spectrumBands))
+                MediaControl.IsPlaying && _audioMonitorService.GetSpectrum(_spectrumBands))
+            {
+                _spectrumActive = true;
                 MediaControl.ApplySpectrum(_spectrumBands);
+                return;
+            }
+
+            if (_spectrumActive)
+            {
+                Array.Clear(_spectrumBands, 0, _spectrumBands.Length);
+                MediaControl.ApplySpectrum(_spectrumBands);
+                _spectrumActive = false;
+            }
         };
         _spectrumTimer.Start();
 
@@ -926,7 +938,8 @@ public partial class TaskbarWindow : Window
             _sizeAnimationStart,
             _sizeAnimationTarget,
             _sizeAnimationProgress,
-            elapsedMilliseconds: 16);
+            elapsedMilliseconds: 16,
+            durationMilliseconds: MotionPolicy.ResolveCurrent().PositionDuration.TotalMilliseconds);
         _sizeAnimationProgress = frame.Progress;
         ApplyPrimaryLength(frame.Value);
         UpdatePosition();

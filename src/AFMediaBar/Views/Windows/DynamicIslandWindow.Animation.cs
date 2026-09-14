@@ -97,7 +97,8 @@ public partial class DynamicIslandWindow
             _sizeAnimationStart,
             _sizeAnimationTarget,
             _sizeAnimationProgress,
-            elapsedMilliseconds: 16);
+            elapsedMilliseconds: 16,
+            durationMilliseconds: MotionPolicy.ResolveCurrent().PositionDuration.TotalMilliseconds);
         _sizeAnimationProgress = frame.Progress;
         ApplyAnimatedSize(frame.Value, _appliedOrientation ?? LayoutOrientation.Horizontal);
         if (frame.IsCompleted)
