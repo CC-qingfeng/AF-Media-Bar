@@ -8,12 +8,13 @@ public enum MediaInteractionMode
     Gestures = 2
 }
 
-/// <summary>鼠标滚轮执行的媒体动作。 / Media action performed by the mouse wheel.</summary>
+/// <summary>播放器表面滚轮执行的媒体动作；旧音频值仅用于设置兼容读取。 / Media action for player-surface wheel input; legacy audio values remain only for settings compatibility.</summary>
 public enum WheelAction
 {
     PreviousNext = 0,
     CurrentApplicationVolume = 1,
-    OutputDevice = 2
+    OutputDevice = 2,
+    SwitchMediaSource = 3
 }
 
 /// <summary>组合滚轮使用的鼠标按键。 / Mouse button used by a chorded wheel gesture.</summary>
@@ -165,7 +166,7 @@ public readonly record struct TaskbarExperienceSettings(
     }
 }
 
-/// <summary>四种显示模式共用的交互设置。 / Interaction settings shared by all display modes.</summary>
+/// <summary>播放器显示模式共用的媒体交互设置。 / Media-interaction settings shared by player display modes.</summary>
 public readonly record struct GlobalInteractionSettings(
     MediaInteractionMode Mode,
     WheelAction PrimaryWheelAction,
@@ -180,9 +181,9 @@ public readonly record struct GlobalInteractionSettings(
         WheelAction.PreviousNext,
         false,
         MouseChordButton.Left,
-        WheelAction.CurrentApplicationVolume,
+        WheelAction.SwitchMediaSource,
         TrayClickAction.OpenAudioControl,
-        true);
+        false);
 
     public GlobalInteractionSettings Normalize()
     {
@@ -190,12 +191,18 @@ public readonly record struct GlobalInteractionSettings(
         return this with
         {
             Mode = Enum.IsDefined(Mode) ? Mode : defaults.Mode,
-            PrimaryWheelAction = Enum.IsDefined(PrimaryWheelAction) ? PrimaryWheelAction : defaults.PrimaryWheelAction,
+            PrimaryWheelAction = NormalizePlayerWheelAction(PrimaryWheelAction, defaults.PrimaryWheelAction),
             ChordButton = Enum.IsDefined(ChordButton) ? ChordButton : defaults.ChordButton,
-            ChordWheelAction = Enum.IsDefined(ChordWheelAction) ? ChordWheelAction : defaults.ChordWheelAction,
-            TrayClickAction = Enum.IsDefined(TrayClickAction) ? TrayClickAction : defaults.TrayClickAction
+            ChordWheelAction = NormalizePlayerWheelAction(ChordWheelAction, defaults.ChordWheelAction),
+            TrayClickAction = Enum.IsDefined(TrayClickAction) ? TrayClickAction : defaults.TrayClickAction,
+            // 兼容读取 schema 4 的旧字段；托盘滚轮已恢复为独立的 TrayWheelBehavior。
+            // Retain the schema-4 field for reading compatibility; tray wheel uses TrayWheelBehavior again.
+            TrayUsesGlobalWheel = false
         };
     }
+
+    private static WheelAction NormalizePlayerWheelAction(WheelAction action, WheelAction fallback) =>
+        action is WheelAction.PreviousNext or WheelAction.SwitchMediaSource ? action : fallback;
 }
 
 /// <summary>一个显示模式的基础表面外观。 / Basic surface appearance for one display mode.</summary>

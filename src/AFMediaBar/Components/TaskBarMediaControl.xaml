@@ -21,6 +21,39 @@
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="FontSize" Value="12" />
             <Setter Property="Tag" Value="MediaAction" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="ButtonSurface"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="4"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              RecognizesAccessKey="True" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ButtonSurface" Property="Background" Value="#20FFFFFF" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="ButtonSurface" Property="Background" Value="#38FFFFFF" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="ButtonSurface" Property="Background" Value="Transparent" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Opacity" Value="0.32" />
+                    <Setter Property="Background" Value="Transparent" />
+                    <Setter Property="BorderBrush" Value="Transparent" />
+                </Trigger>
+            </Style.Triggers>
         </Style>
         <Style x:Key="TaskbarSpectrumBar" TargetType="Border">
             <Setter Property="Width" Value="2" />
@@ -280,8 +313,8 @@
                                         Tag="MediaAction"
                                         IsMoveToPointEnabled="True"
                                         PreviewMouseLeftButtonDown="TaskbarHoverProgress_PreviewMouseLeftButtonDown"
-                                        PreviewMouseMove="TaskbarHoverProgress_PreviewMouseMove"
-                                        PreviewMouseLeftButtonUp="TaskbarHoverProgress_PreviewMouseLeftButtonUp" />
+                                        PreviewMouseLeftButtonUp="TaskbarHoverProgress_PreviewMouseLeftButtonUp"
+                                        LostMouseCapture="TaskbarHoverProgress_LostMouseCapture" />
                             </StackPanel>
                             <Button x:Name="TaskbarFullPanelHandle"
                                     Width="44"

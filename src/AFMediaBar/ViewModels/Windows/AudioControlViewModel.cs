@@ -25,12 +25,13 @@ public partial class AudioControlViewModel : ObservableObject, IDisposable
     private readonly MediaSessionService _mediaSessionService;
     private readonly ShellTrayIconService _trayIconService;
     private readonly NativeMouseInputMonitor _mouseInputMonitor;
-    private readonly GlobalInteractionRouter _interactionRouter;
     private readonly AudioMonitorService _audioMonitorService;
     private readonly Dictionary<string, int> _volumeApplyVersions = new(StringComparer.OrdinalIgnoreCase);
     private int _deviceApplyVersion;
     private bool _isRefreshing;
     private bool _isPreviewingOutputDevice;
+    private int _pendingTrayDeviceSteps;
+    private bool _isProcessingTrayDevice;
     private int _pendingTrayVolumeSteps;
     private bool _isProcessingTrayVolume;
     private int _tooltipRefreshVersion;
@@ -78,7 +79,6 @@ public partial class AudioControlViewModel : ObservableObject, IDisposable
         MediaSessionService mediaSessionService,
         ShellTrayIconService trayIconService,
         NativeMouseInputMonitor mouseInputMonitor,
-        GlobalInteractionRouter interactionRouter,
         AudioMonitorService audioMonitorService)
     {
         _deviceService = deviceService;
@@ -87,7 +87,6 @@ public partial class AudioControlViewModel : ObservableObject, IDisposable
         _mediaSessionService = mediaSessionService;
         _trayIconService = trayIconService;
         _mouseInputMonitor = mouseInputMonitor;
-        _interactionRouter = interactionRouter;
         _audioMonitorService = audioMonitorService;
 
         RefreshCommand = new AsyncRelayCommand(RefreshAsync);
@@ -98,7 +97,6 @@ public partial class AudioControlViewModel : ObservableObject, IDisposable
         _mouseInputMonitor.WheelChanged += OnTrayWheelChanged;
         _mediaSessionService.SnapshotChanged += OnMediaSnapshotChanged;
         SettingsManager.TrayWheelBehaviorChanged += OnTrayWheelBehaviorChanged;
-        SettingsManager.InteractionSettingsChanged += OnInteractionSettingsChanged;
         _mouseInputMonitor.Start();
         QueueTrayTooltipRefresh();
     }
@@ -160,14 +158,18 @@ public partial class AudioControlViewModel : ObservableObject, IDisposable
     /// <param name="delta">滚轮增量 / Wheel delta.</param>
     public void PreviewOutputDeviceWheel(int delta)
     {
-        if (OutputDevices.Count == 0 || delta == 0)
+        PreviewOutputDeviceSteps(TrayWheelPolicy.GetDeviceSteps(delta));
+    }
+
+    private void PreviewOutputDeviceSteps(int signedSteps)
+    {
+        if (OutputDevices.Count == 0 || signedSteps == 0)
         {
             return;
         }
 
         var current = Math.Max(0, SelectedOutputDevice is null ? 0 : OutputDevices.IndexOf(SelectedOutputDevice));
-        var steps = WheelInput.GetStepCount(delta) * (delta > 0 ? -1 : 1);
-        var device = OutputDevices[WheelInput.MoveCircular(current, steps, OutputDevices.Count)];
+        var device = OutputDevices[WheelInput.MoveCircular(current, signedSteps, OutputDevices.Count)];
 
         _isPreviewingOutputDevice = true;
         try
@@ -178,6 +180,10 @@ public partial class AudioControlViewModel : ObservableObject, IDisposable
         {
             _isPreviewingOutputDevice = false;
         }
+
+        // 单设备或循环回原设备时属性值不会变化，也必须即时刷新原生提示。
+        // Refresh the native tooltip immediately even when one device or a full cycle keeps the same selection.
+        SetTrayTooltip($"输出设备：{device.DisplayName}");
     }
 
     partial void OnSelectedOutputDeviceChanged(AudioDeviceOption? value)
@@ -283,15 +289,78 @@ public partial class AudioControlViewModel : ObservableObject, IDisposable
         }
     }
 
-    private async void OnTrayWheelChanged(object? sender, TrayWheelEventArgs e)
+    private void OnTrayWheelChanged(object? sender, TrayWheelEventArgs e)
     {
-        var feedback = await _interactionRouter.ExecuteWheelAsync(
-            e.Delta,
-            e.IsLeftButtonDown,
-            e.IsRightButtonDown,
-            isTray: true);
-        if (!string.IsNullOrWhiteSpace(feedback))
-            SetTrayTooltip(feedback);
+        switch (SettingsManager.Current.TrayWheelBehavior)
+        {
+            case TrayWheelBehavior.AdjustVolume:
+                _pendingTrayVolumeSteps += TrayWheelPolicy.GetVolumeSteps(e.Delta);
+                _ = ProcessTrayVolumeAsync();
+                break;
+            case TrayWheelBehavior.SwitchOutputDevice:
+                _pendingTrayDeviceSteps += TrayWheelPolicy.GetDeviceSteps(e.Delta);
+                _ = ProcessTrayDeviceAsync();
+                break;
+        }
+    }
+
+    private async Task ProcessTrayDeviceAsync()
+    {
+        if (_isProcessingTrayDevice)
+            return;
+
+        _isProcessingTrayDevice = true;
+        try
+        {
+            while (_pendingTrayDeviceSteps != 0)
+            {
+                if (OutputDevices.Count == 0)
+                    await LoadOutputDevicesForTrayAsync();
+                if (_disposed)
+                    return;
+                if (OutputDevices.Count == 0)
+                {
+                    _pendingTrayDeviceSteps = 0;
+                    SetTrayTooltip("输出设备：不可用");
+                    return;
+                }
+
+                var steps = _pendingTrayDeviceSteps;
+                _pendingTrayDeviceSteps = 0;
+                PreviewOutputDeviceSteps(steps);
+            }
+        }
+        catch (Exception exception)
+        {
+            Debug.WriteLine($"[AudioControlViewModel] Tray device preview failed: {exception}");
+            SetTrayTooltip("输出设备切换失败");
+        }
+        finally
+        {
+            _isProcessingTrayDevice = false;
+            if (!_disposed && _pendingTrayDeviceSteps != 0)
+                _ = ProcessTrayDeviceAsync();
+        }
+    }
+
+    private async Task LoadOutputDevicesForTrayAsync()
+    {
+        var devices = await _deviceService.GetRenderDevicesAsync().WaitAsync(TimeSpan.FromSeconds(3));
+        if (_disposed)
+            return;
+
+        _isRefreshing = true;
+        try
+        {
+            OutputDevices.Clear();
+            foreach (var device in devices)
+                OutputDevices.Add(device);
+            SelectedOutputDevice = devices.FirstOrDefault(device => device.IsDefault) ?? devices.FirstOrDefault();
+        }
+        finally
+        {
+            _isRefreshing = false;
+        }
     }
 
     private async Task ProcessTrayVolumeAsync()
@@ -381,7 +450,8 @@ public partial class AudioControlViewModel : ObservableObject, IDisposable
 
         _tooltipSourceId = snapshot.SourceId;
         _tooltipSourceName = snapshot.SourceName;
-        QueueTrayTooltipRefresh();
+        if (SettingsManager.Current.TrayWheelBehavior == TrayWheelBehavior.AdjustVolume)
+            QueueTrayTooltipRefresh();
     }
 
     private void OnTrayTooltipOpening(object? sender, EventArgs e) => QueueTrayTooltipRefresh();
@@ -391,8 +461,6 @@ public partial class AudioControlViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(TrayWheelBehavior));
         QueueTrayTooltipRefresh();
     }
-
-    private void OnInteractionSettingsChanged(object? sender, EventArgs e) => QueueTrayTooltipRefresh();
 
     private void QueueTrayTooltipRefresh()
     {
@@ -404,11 +472,22 @@ public partial class AudioControlViewModel : ObservableObject, IDisposable
     {
         try
         {
-            await Task.CompletedTask;
-            var interaction = SettingsManager.Current.Interaction;
-            var text = interaction.TrayUsesGlobalWheel
-                ? $"AF Media Bar · 滚轮：{GetWheelActionName(interaction.PrimaryWheelAction)}"
-                : "AF Media Bar";
+            var behavior = SettingsManager.Current.TrayWheelBehavior;
+            ApplicationVolumeSnapshot? application = null;
+            AudioDeviceOption? device = null;
+            if (behavior == TrayWheelBehavior.AdjustVolume)
+            {
+                application = await Task.Run(() => _volumeService.GetCurrentMediaVolume(
+                    _mediaSessionService.SelectedSourceId,
+                    _mediaSessionService.SelectedSourceName));
+            }
+            else if (behavior == TrayWheelBehavior.SwitchOutputDevice)
+            {
+                var devices = await _deviceService.GetRenderDevicesAsync();
+                device = devices.FirstOrDefault(candidate => candidate.IsDefault) ?? devices.FirstOrDefault();
+            }
+
+            var text = AudioTooltipPolicy.Build(behavior, application, device);
 
             if (!_disposed && version == _tooltipRefreshVersion)
             {
@@ -425,20 +504,7 @@ public partial class AudioControlViewModel : ObservableObject, IDisposable
         }
     }
 
-    private void UpdateTooltipFromLoadedState()
-    {
-        var interaction = SettingsManager.Current.Interaction;
-        SetTrayTooltip(interaction.TrayUsesGlobalWheel
-            ? $"AF Media Bar · 滚轮：{GetWheelActionName(interaction.PrimaryWheelAction)}"
-            : "AF Media Bar");
-    }
-
-    private static string GetWheelActionName(WheelAction action) => action switch
-    {
-        WheelAction.CurrentApplicationVolume => "当前应用音量",
-        WheelAction.OutputDevice => "输出设备",
-        _ => "上一首 / 下一首"
-    };
+    private void UpdateTooltipFromLoadedState() => QueueTrayTooltipRefresh();
 
     private void SetTrayTooltip(string text)
     {
@@ -462,9 +528,10 @@ public partial class AudioControlViewModel : ObservableObject, IDisposable
         _mouseInputMonitor.WheelChanged -= OnTrayWheelChanged;
         _mediaSessionService.SnapshotChanged -= OnMediaSnapshotChanged;
         SettingsManager.TrayWheelBehaviorChanged -= OnTrayWheelBehaviorChanged;
-        SettingsManager.InteractionSettingsChanged -= OnInteractionSettingsChanged;
         _mouseInputMonitor.Dispose();
         _deviceApplyVersion++;
+        _pendingTrayDeviceSteps = 0;
+        _pendingTrayVolumeSteps = 0;
         _volumeApplyVersions.Clear();
     }
 }

@@ -1165,39 +1165,20 @@ namespace AFMediaBar.Components
             if (!_snapshot.CanSeek || _snapshot.Duration <= 0)
                 return;
             _isSeeking = true;
-            TaskbarHoverProgress.CaptureMouse();
-            UpdateSeekValue(e.GetPosition(TaskbarHoverProgress).X);
-            e.Handled = true;
-        }
-
-        private void TaskbarHoverProgress_PreviewMouseMove(object sender, MouseEventArgs e)
-        {
-            if (!_isSeeking || e.LeftButton != MouseButtonState.Pressed)
-                return;
-            UpdateSeekValue(e.GetPosition(TaskbarHoverProgress).X);
-            e.Handled = true;
         }
 
         private void TaskbarHoverProgress_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
         {
             if (!_isSeeking)
                 return;
-            UpdateSeekValue(e.GetPosition(TaskbarHoverProgress).X);
             _isSeeking = false;
-            TaskbarHoverProgress.ReleaseMouseCapture();
             SeekRequested?.Invoke(TaskbarHoverProgress.Value);
             if (!HoverRevealHost.IsMouseOver && !SongInfoStackPanel.IsMouseOver)
                 HideTaskbarHoverLayer();
-            e.Handled = true;
         }
 
-        private void UpdateSeekValue(double pointerX)
-        {
-            if (TaskbarHoverProgress.ActualWidth <= 0 || _snapshot.Duration <= 0)
-                return;
-            var ratio = Math.Clamp(pointerX / TaskbarHoverProgress.ActualWidth, 0, 1);
-            TaskbarHoverProgress.Value = ratio * _snapshot.Duration;
-        }
+        private void TaskbarHoverProgress_LostMouseCapture(object sender, MouseEventArgs e) =>
+            _isSeeking = false;
 
         private void UpdateTaskbarProgress()
         {

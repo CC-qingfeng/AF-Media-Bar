@@ -11,7 +11,15 @@ public partial class InteractionViewModel : ObservableObject
     public MouseChordButton ChordButton { get => Current.ChordButton; set => Update(Current with { ChordButton = value }); }
     public WheelAction ChordWheelAction { get => Current.ChordWheelAction; set => Update(Current with { ChordWheelAction = value }); }
     public TrayClickAction TrayClickAction { get => Current.TrayClickAction; set => Update(Current with { TrayClickAction = value }); }
-    public bool TrayUsesGlobalWheel { get => Current.TrayUsesGlobalWheel; set => Update(Current with { TrayUsesGlobalWheel = value }); }
+    public TrayWheelBehavior TrayWheelBehavior
+    {
+        get => SettingsManager.Current.TrayWheelBehavior;
+        set
+        {
+            SettingsManager.SetTrayWheelBehavior(value);
+            OnPropertyChanged();
+        }
+    }
     public bool CanConfigureChord => ChordWheelEnabled;
     public bool TransportButtonsVisible => Mode != MediaInteractionMode.Gestures;
     private static GlobalInteractionSettings Current => SettingsManager.Current.Interaction;
@@ -36,7 +44,7 @@ public partial class InteractionViewModel : ObservableObject
         OnPropertyChanged(nameof(Mode)); OnPropertyChanged(nameof(PrimaryWheelAction));
         OnPropertyChanged(nameof(ChordWheelEnabled)); OnPropertyChanged(nameof(ChordButton));
         OnPropertyChanged(nameof(ChordWheelAction)); OnPropertyChanged(nameof(TrayClickAction));
-        OnPropertyChanged(nameof(TrayUsesGlobalWheel)); OnPropertyChanged(nameof(CanConfigureChord));
+        OnPropertyChanged(nameof(TrayWheelBehavior)); OnPropertyChanged(nameof(CanConfigureChord));
         OnPropertyChanged(nameof(TransportButtonsVisible));
     }
 }

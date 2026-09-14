@@ -222,6 +222,8 @@ public partial class TaskbarFullPanelWindow : FluentWindow
             await _mediaSessionService.SeekAsync(ProgressSlider.Value);
     }
 
+    private void ProgressSlider_LostMouseCapture(object sender, MouseEventArgs e) => _isSeeking = false;
+
     private async void DeviceCombo_DropDownOpened(object sender, EventArgs e) => await RefreshAudioAsync();
     private async void DeviceCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {

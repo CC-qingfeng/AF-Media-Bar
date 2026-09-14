@@ -231,7 +231,10 @@ public static class SettingsManager
     }
     public static void ResetInteraction()
     {
-        var next = Current.Clone(); next.Interaction = GlobalInteractionSettings.Default;
+        var next = Current.Clone();
+        var defaults = new AppSettings();
+        next.Interaction = GlobalInteractionSettings.Default;
+        next.TrayWheelBehavior = defaults.TrayWheelBehavior;
         Replace(next, SettingsResetScope.Interaction);
     }
     public static void ResetLyrics()

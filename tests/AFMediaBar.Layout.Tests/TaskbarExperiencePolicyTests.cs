@@ -149,11 +149,10 @@ public sealed class TaskbarExperiencePolicyTests
     }
 
     [TestMethod]
-    public void ButtonsDisablePlayerWheelButTrayCanKeepGlobalMapping()
+    public void ButtonsDisablePlayerWheel()
     {
         var settings = GlobalInteractionSettings.Default with { Mode = MediaInteractionMode.Buttons };
-        Assert.IsNull(GlobalWheelGesturePolicy.Resolve(settings, false, false, isTray: false));
-        Assert.AreEqual(WheelAction.PreviousNext, GlobalWheelGesturePolicy.Resolve(settings, false, false, isTray: true));
+        Assert.IsNull(GlobalWheelGesturePolicy.Resolve(settings, false, false));
     }
 
     [TestMethod]
@@ -164,9 +163,34 @@ public sealed class TaskbarExperiencePolicyTests
             ChordWheelEnabled = true,
             ChordButton = MouseChordButton.Right,
             PrimaryWheelAction = WheelAction.PreviousNext,
-            ChordWheelAction = WheelAction.OutputDevice
+            ChordWheelAction = WheelAction.SwitchMediaSource
         };
-        Assert.AreEqual(WheelAction.OutputDevice, GlobalWheelGesturePolicy.Resolve(settings, false, true, false));
-        Assert.AreEqual(WheelAction.PreviousNext, GlobalWheelGesturePolicy.Resolve(settings, true, false, false));
+        Assert.AreEqual(WheelAction.SwitchMediaSource, GlobalWheelGesturePolicy.Resolve(settings, false, true));
+        Assert.AreEqual(WheelAction.PreviousNext, GlobalWheelGesturePolicy.Resolve(settings, true, false));
+    }
+
+    [TestMethod]
+    public void LegacyAudioWheelActionsNormalizeToPlayerActions()
+    {
+        var settings = GlobalInteractionSettings.Default with
+        {
+            PrimaryWheelAction = WheelAction.OutputDevice,
+            ChordWheelAction = WheelAction.CurrentApplicationVolume,
+            TrayUsesGlobalWheel = true
+        };
+
+        var normalized = settings.Normalize();
+
+        Assert.AreEqual(WheelAction.PreviousNext, normalized.PrimaryWheelAction);
+        Assert.AreEqual(WheelAction.SwitchMediaSource, normalized.ChordWheelAction);
+        Assert.IsFalse(normalized.TrayUsesGlobalWheel);
+    }
+
+    [TestMethod]
+    public void MediaSourceWheelMovesCircularlyInBothDirections()
+    {
+        Assert.AreEqual(2, WheelInput.MoveCircular(0, -1, 3));
+        Assert.AreEqual(0, WheelInput.MoveCircular(2, 1, 3));
+        Assert.AreEqual(1, WheelInput.MoveCircular(0, 4, 3));
     }
 }

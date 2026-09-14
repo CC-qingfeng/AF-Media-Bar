@@ -92,7 +92,7 @@ The app runs in its own process. Its WPF player can be hosted as a taskbar child
 
 | Category | Capabilities |
 | --- | --- |
-| Media | Previous, play/pause, next, repeat, and seekable progress; Buttons, Hybrid, and Gestures apply to the taskbar body and Hover, while Full always retains explicit buttons |
+| Media | Previous, play/pause, next, repeat, and click-to-position or draggable progress; unavailable controls keep a transparent background and dim their icons; Full always retains explicit buttons |
 | Source interaction | Click the title or lyric to return to the media app; right-click the bar to switch sources |
 | Track-change notification | Optionally show the current track after it changes and starts playing, with six placements, 1–10 second duration, fullscreen suppression, and fixed- or foreground-display targeting |
 | Live lyrics | Lyrics exist only in taskbar rest and replace title plus artist/source when available; configure secondary content and alignment on the Lyrics page |
@@ -102,7 +102,7 @@ The app runs in its own process. Its WPF player can be hosted as a taskbar child
 | Light customization | Toggle Hover/Full, choose density, content layout, and interaction, and configure Full with Compact/Full presets or four visibility groups; arbitrary cross-layer component placement is deferred |
 | Information density | Minimal, Balanced, and Information presets consistently change buttons, seek width, and artwork-text-spectrum gaps; only the middle text region receives a Hover minimum, and no empty middle region is reserved while disconnected |
 | Auto-hide | Hide when every media session is stopped; collapse containers use an anchor container and shared edge, while four-way collapse still requires real-Windows acceptance |
-| Tray audio controls | Choose the tray left-click action and optionally reuse global plain-wheel plus left/right-button wheel mappings |
+| Tray audio controls | Choose the tray left-click action and independently use the wheel for output devices, current-media volume, or disable it; player gesture mappings are not consulted |
 | Audio devices | Switch devices in a stable ordered list; wheel-preview and apply after scrolling stops |
 | App volume | Aggregate application icons and audio sessions across active output endpoints; adjust the selected media app in 2% tray-wheel steps |
 | Visualizer | Nine-band spectrum from WASAPI loopback capture, shown only while a connected media source is playing; disconnected state keeps only the music-note placeholder |
@@ -153,14 +153,14 @@ AF Media Bar is not commercially code-signed, so Windows SmartScreen may show an
 | Click artwork | Play/pause in Hybrid or Gestures; Buttons uses only visible controls |
 | Click title or lyric | Return to the media app |
 | Open the Lyrics page | Toggle live lyrics, secondary content, and alignment |
-| Scroll up/down over the media area | Previous/next by default, configurable to current-app volume or output device |
+| Scroll up/down over the media area | Previous/next by default, or cycle media sources; player-surface scrolling does not control output devices or application volume |
 | Right-click the bar and choose “Switch media source” | Switch between available media sessions |
 | Enable Track-change notification under Display Modes | Show the current track only after an observable track change begins playing; configure placement, duration, fullscreen policy, and fixed/foreground display targeting |
 | Choose the taskbar target display under Display Modes | Close an open Full panel and rebuild the taskbar host through its safe reload path; a disconnected target temporarily falls back to the primary display without discarding the preference |
 | Click the AF Media Bar tray icon | Open output-device, spatial-audio status, and application-volume controls |
 | Scroll over the flyout's output-device row | Preview a device and switch about 1.2 seconds after scrolling stops |
 | Hover over the AF Media Bar tray icon | Show the default wheel action and its current value in the native Windows tooltip |
-| Scroll over the tray icon | Optionally reuse global plain-wheel and left/right-button wheel mappings and update the native tooltip |
+| Scroll over the tray icon | Independently switch output devices or adjust current-media volume in 2% steps; device previews update the native tooltip immediately and apply after about 1.2 seconds of inactivity |
 | Click the spatial-audio row | Show the current spatial format and open System > Sound > All sound devices; third-party apps cannot reliably switch Dolby/DTS modes for the system |
 | Drag an empty area of the strip | Move the bar and does not drag while locked |
 | Switch to dynamic-island mode | Drag the player anywhere in the desktop work area; drag it to an edge to enable paused retraction, while playback keeps it expanded |

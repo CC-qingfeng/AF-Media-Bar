@@ -32,8 +32,10 @@
                 <Grid>
                     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                     <Slider x:Name="ProgressSlider" Minimum="0" Maximum="1" Tag="MediaAction"
+                            IsMoveToPointEnabled="True"
                             PreviewMouseLeftButtonDown="ProgressSlider_MouseLeftButtonDown"
-                            PreviewMouseLeftButtonUp="ProgressSlider_MouseLeftButtonUp"/>
+                            PreviewMouseLeftButtonUp="ProgressSlider_MouseLeftButtonUp"
+                            LostMouseCapture="ProgressSlider_LostMouseCapture"/>
                     <Grid Grid.Row="1" Margin="3,0">
                         <TextBlock x:Name="PositionText" FontSize="10" Opacity="0.62"/>
                         <TextBlock x:Name="DurationText" FontSize="10" Opacity="0.62" HorizontalAlignment="Right"/>
@@ -58,6 +60,7 @@
                     <Grid><TextBlock Text="当前应用音量" FontSize="11" Opacity="0.62"/>
                         <TextBlock x:Name="VolumeText" FontSize="11" HorizontalAlignment="Right" Opacity="0.62"/></Grid>
                     <Slider x:Name="VolumeSlider" Minimum="0" Maximum="100" Margin="0,3,0,0"
+                            IsMoveToPointEnabled="True"
                             PreviewMouseLeftButtonUp="VolumeSlider_MouseLeftButtonUp"/>
                 </StackPanel>
             </Grid>

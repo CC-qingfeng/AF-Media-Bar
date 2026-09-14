@@ -341,12 +341,22 @@ public sealed class LayoutSizeCalculatorTests
         Assert.IsFalse(AudioApplyPolicy.IsCurrent(false, 2, 3));
         Assert.AreEqual(1, TrayWheelPolicy.GetVolumeSteps(120));
         Assert.AreEqual(-1, TrayWheelPolicy.GetVolumeSteps(-120));
+        Assert.AreEqual(0, TrayWheelPolicy.GetVolumeSteps(0));
+        Assert.AreEqual(-1, TrayWheelPolicy.GetDeviceSteps(120));
+        Assert.AreEqual(1, TrayWheelPolicy.GetDeviceSteps(-120));
+        Assert.AreEqual(-2, TrayWheelPolicy.GetDeviceSteps(240));
         Assert.AreEqual(
             "输出设备：扬声器",
             AudioTooltipPolicy.Build(
                 TrayWheelBehavior.SwitchOutputDevice,
                 null,
                 new AudioDeviceOption("id", "policy", "扬声器", true)));
+        Assert.AreEqual(
+            "当前媒体音量：不可用",
+            AudioTooltipPolicy.Build(TrayWheelBehavior.AdjustVolume, null, null));
+        Assert.AreEqual(
+            "托盘滚轮已禁用",
+            AudioTooltipPolicy.Build(TrayWheelBehavior.Disabled, null, null));
     }
 
     [TestMethod]

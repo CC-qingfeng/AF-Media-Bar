@@ -59,7 +59,7 @@ public sealed class SettingsPersistenceServiceTests
                 TaskbarInformationDensity.Information,
                 TaskbarContentLayout.CenteredStack,
                 new TaskbarFullPanelSettings(true, false, true, false)),
-            Interaction = new GlobalInteractionSettings(MediaInteractionMode.Gestures, WheelAction.OutputDevice, true, MouseChordButton.Right, WheelAction.CurrentApplicationVolume, TrayClickAction.OpenSettings, false),
+            Interaction = new GlobalInteractionSettings(MediaInteractionMode.Gestures, WheelAction.SwitchMediaSource, true, MouseChordButton.Right, WheelAction.PreviousNext, TrayClickAction.OpenSettings, false),
             TaskbarSurface = new ModeSurfaceSettings(PlayerSurfaceStyle.ThemeTint, 72, 12),
             LyricsTextAlignment = LyricsTextAlignment.Right,
             TrackChangeNotification = new TrackChangeNotificationSettings(
@@ -82,6 +82,7 @@ public sealed class SettingsPersistenceServiceTests
         Assert.AreEqual(700, SettingsManager.Current.Appearance.FontWeight);
         Assert.AreEqual(120, SettingsManager.Current.DynamicIslandLeft);
         Assert.AreEqual(MediaInteractionMode.Gestures, SettingsManager.Current.Interaction.Mode);
+        Assert.AreEqual(WheelAction.SwitchMediaSource, SettingsManager.Current.Interaction.PrimaryWheelAction);
         Assert.AreEqual(MouseChordButton.Right, SettingsManager.Current.Interaction.ChordButton);
         Assert.AreEqual(TaskbarInformationDensity.Information, SettingsManager.Current.TaskbarExperience.Density);
         Assert.AreEqual(new TaskbarFullPanelSettings(true, false, true, false), SettingsManager.Current.TaskbarExperience.FullPanel);
@@ -302,6 +303,15 @@ public sealed class SettingsPersistenceServiceTests
         Assert.AreEqual(700, SettingsManager.Current.Appearance.FontWeight);
         SettingsManager.ResetAppearance();
         Assert.AreEqual(AppearanceSettings.Default, SettingsManager.Current.Appearance);
+
+        SettingsManager.Current.Interaction = GlobalInteractionSettings.Default with
+        {
+            PrimaryWheelAction = WheelAction.SwitchMediaSource
+        };
+        SettingsManager.Current.TrayWheelBehavior = TrayWheelBehavior.Disabled;
+        SettingsManager.ResetInteraction();
+        Assert.AreEqual(GlobalInteractionSettings.Default, SettingsManager.Current.Interaction);
+        Assert.AreEqual(TrayWheelBehavior.SwitchOutputDevice, SettingsManager.Current.TrayWheelBehavior);
 
         SettingsManager.Current.TaskbarExperience = TaskbarExperienceSettings.Default with
         {
