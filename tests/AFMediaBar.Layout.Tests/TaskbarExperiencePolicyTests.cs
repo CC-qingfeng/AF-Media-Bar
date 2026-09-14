@@ -78,6 +78,14 @@ public sealed class TaskbarExperiencePolicyTests
     }
 
     [TestMethod]
+    public void ComponentSpacingChangesHoverMinimum()
+    {
+        var compact = TaskbarExperiencePolicy.CalculateHoverLayerWidth(true, true, TaskbarInformationDensity.Balanced, 4);
+        var spacious = TaskbarExperiencePolicy.CalculateHoverLayerWidth(true, true, TaskbarInformationDensity.Balanced, 24);
+        Assert.IsTrue(spacious > compact);
+    }
+
+    [TestMethod]
     public void SpectrumRequiresConnectedPlayingMedia()
     {
         Assert.IsFalse(TaskbarExperiencePolicy.ShouldShowSpectrum(MediaSnapshot.Disconnected));

@@ -229,6 +229,12 @@ public static class SettingsManager
         next.TaskbarBarAvoidIcons = defaults.TaskbarBarAvoidIcons; next.TaskbarBarPositionLocked = defaults.TaskbarBarPositionLocked;
         Replace(next, SettingsResetScope.DisplayModes);
     }
+    public static void ResetExtraFeatures()
+    {
+        var next = Current.Clone();
+        next.TrackChangeNotification = TrackChangeNotificationSettings.Default;
+        Replace(next, SettingsResetScope.DisplayModes);
+    }
     public static void ResetInteraction()
     {
         var next = Current.Clone();

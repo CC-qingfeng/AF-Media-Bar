@@ -18,6 +18,33 @@ public partial class DisplayModesViewModel : ObservableObject
     public bool IsTaskbarMode => CurrentWindowMode == WindowMode.Taskbar;
     public bool IsDynamicIslandMode => CurrentWindowMode == WindowMode.DynamicIsland;
 
+    /// <summary>灵动岛背景方案。/ Dynamic-island background scheme.</summary>
+    public DynamicIslandBackgroundMode DynamicIslandBackgroundMode
+    {
+        get => SettingsManager.Current.DynamicIslandBackgroundMode;
+        set
+        {
+            if (_isRefreshing || SettingsManager.Current.DynamicIslandBackgroundMode == value) return;
+            SettingsManager.Current.DynamicIslandBackgroundMode = value;
+            SettingsManager.RaiseLayoutSettingsChanged(CurrentWindowMode, Orientation);
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>灵动岛贴靠边缘。/ Edge where the dynamic island docks.</summary>
+    public DynamicIslandEdge DynamicIslandEdge
+    {
+        get => SettingsManager.Current.DynamicIslandEdge;
+        set
+        {
+            if (_isRefreshing || SettingsManager.Current.DynamicIslandEdge == value) return;
+            SettingsManager.Current.DynamicIslandEdge = value;
+            SettingsManager.Current.DynamicIslandEdgeDocked = true;
+            SettingsManager.RaiseLayoutSettingsChanged(CurrentWindowMode, Orientation);
+            OnPropertyChanged();
+        }
+    }
+
     public bool TrackChangeNotificationEnabled
     {
         get => NotificationSettings.Enabled;
@@ -97,6 +124,13 @@ public partial class DisplayModesViewModel : ObservableObject
     {
         get => SettingsManager.Current.TaskbarExperience.ContentLayout;
         set => UpdateExperience(SettingsManager.Current.TaskbarExperience with { ContentLayout = value });
+    }
+
+    /// <summary>当前模式的组件间距（DIP）。/ Component gap for the current mode in DIP.</summary>
+    public double ComponentSpacingDip
+    {
+        get => SettingsManager.Current.TaskbarExperience.ComponentSpacingDip;
+        set => UpdateExperience(SettingsManager.Current.TaskbarExperience with { ComponentSpacingDip = value });
     }
 
     public bool FollowMediaTextLength
@@ -295,6 +329,7 @@ public partial class DisplayModesViewModel : ObservableObject
     }
 
     public void ResetDisplayModes() => SettingsManager.ResetDisplayModes();
+    public void ResetExtraFeatures() => SettingsManager.ResetExtraFeatures();
 
     private void OnSettingsChanged(object? sender, SettingsChangedEventArgs e)
     {
@@ -351,6 +386,7 @@ public partial class DisplayModesViewModel : ObservableObject
         try
         {
             OnPropertyChanged(nameof(CurrentWindowMode)); OnPropertyChanged(nameof(IsTaskbarMode)); OnPropertyChanged(nameof(IsDynamicIslandMode));
+            OnPropertyChanged(nameof(DynamicIslandBackgroundMode)); OnPropertyChanged(nameof(DynamicIslandEdge));
             RaiseExperience(); OnPropertyChanged(nameof(Orientation)); OnPropertyChanged(nameof(IsTaskbarPositionLocked));
             OnPropertyChanged(nameof(IsTaskbarAvoidingIcons)); OnPropertyChanged(nameof(TaskbarCrossAxisOffsetDip));
             OnPropertyChanged(nameof(TaskbarTargetMonitorDeviceId));
@@ -363,6 +399,7 @@ public partial class DisplayModesViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(HoverLayerEnabled)); OnPropertyChanged(nameof(FullLayerEnabled));
         OnPropertyChanged(nameof(Density)); OnPropertyChanged(nameof(ContentLayout));
+        OnPropertyChanged(nameof(ComponentSpacingDip));
         OnPropertyChanged(nameof(FollowMediaTextLength)); OnPropertyChanged(nameof(UsesFixedTaskbarLength));
         OnPropertyChanged(nameof(FixedTaskbarLengthMinimum)); OnPropertyChanged(nameof(FixedTaskbarLengthMaximum));
         OnPropertyChanged(nameof(FixedTaskbarLengthDip)); OnPropertyChanged(nameof(FixedTaskbarLengthRangeText));

@@ -357,8 +357,11 @@ namespace AFMediaBar.Components
             var metrics = TaskbarDensityMetrics.From(SettingsManager.Current.TaskbarExperience.Density);
             var artworkRight = GetTaskbarArtworkRight();
             var spectrumVisible = TaskbarExperiencePolicy.ShouldShowSpectrum(_snapshot);
-            var textLeft = artworkRight + (_isConnected ? metrics.SectionGap : 0);
-            var reservedRight = (spectrumVisible ? metrics.SectionGap + TaskbarSpectrumWidth : 0) +
+            var sectionGap = Math.Clamp(SettingsManager.Current.TaskbarExperience.ComponentSpacingDip,
+                TaskbarExperienceSettings.MinimumComponentSpacingDip,
+                TaskbarExperienceSettings.MaximumComponentSpacingDip);
+            var textLeft = artworkRight + (_isConnected ? sectionGap : 0);
+            var reservedRight = (spectrumVisible ? sectionGap + TaskbarSpectrumWidth : 0) +
                                 TaskbarTrailingMargin;
             var textWidth = _isConnected
                 ? Math.Max(0, primaryLength - textLeft - reservedRight)
@@ -770,7 +773,8 @@ namespace AFMediaBar.Components
                     experience.HoverLayerEnabled,
                     progressVisible,
                     experience.Density,
-                    double.PositiveInfinity);
+                    double.PositiveInfinity,
+                    experience.ComponentSpacingDip);
                 _minimumPrimaryLength = TaskbarExperiencePolicy.CalculateWidth(
                     0,
                     GetTaskbarArtworkRight(),
@@ -782,7 +786,8 @@ namespace AFMediaBar.Components
                     experience.HoverLayerEnabled,
                     progressVisible,
                     experience.Density,
-                    double.PositiveInfinity);
+                    double.PositiveInfinity,
+                    experience.ComponentSpacingDip);
                 request = request with
                 {
                     Width = _snapshot.IsConnected

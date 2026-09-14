@@ -156,6 +156,15 @@ public readonly record struct TaskbarExperienceSettings(
     TaskbarLengthMode LengthMode,
     double FixedLengthDip)
 {
+    /// <summary>任务栏组件之间的实际间距（DIP）。/ Actual gap between taskbar components in DIP.</summary>
+    public double ComponentSpacingDip { get; init; } = 12;
+
+    /// <summary>组件间距的持久化安全下限。/ Persistence-safe lower bound for component spacing.</summary>
+    public const double MinimumComponentSpacingDip = 4;
+
+    /// <summary>组件间距的持久化安全上限。/ Persistence-safe upper bound for component spacing.</summary>
+    public const double MaximumComponentSpacingDip = 32;
+
     /// <summary>固定长度设置的持久化安全下限。 / Persistence-safe lower bound for the fixed-length setting.</summary>
     public const double MinimumStoredFixedLengthDip = 120;
 
@@ -182,7 +191,10 @@ public readonly record struct TaskbarExperienceSettings(
             LengthMode = Enum.IsDefined(LengthMode) ? LengthMode : defaults.LengthMode,
             FixedLengthDip = double.IsFinite(FixedLengthDip) && FixedLengthDip >= MinimumStoredFixedLengthDip
                 ? Math.Clamp(FixedLengthDip, MinimumStoredFixedLengthDip, MaximumStoredFixedLengthDip)
-                : defaults.FixedLengthDip
+                : defaults.FixedLengthDip,
+            ComponentSpacingDip = double.IsFinite(ComponentSpacingDip)
+                ? Math.Clamp(ComponentSpacingDip, MinimumComponentSpacingDip, MaximumComponentSpacingDip)
+                : defaults.ComponentSpacingDip
         };
     }
 }

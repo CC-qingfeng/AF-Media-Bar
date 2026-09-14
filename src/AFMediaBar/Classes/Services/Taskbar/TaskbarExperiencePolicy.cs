@@ -44,21 +44,23 @@ public static class TaskbarExperiencePolicy
         bool hoverLayerEnabled,
         bool progressVisible,
         TaskbarInformationDensity density,
-        double maximumWidth)
+        double maximumWidth,
+        double? componentSpacingDip = null)
     {
         var artworkOnlyWidth = Math.Max(0, artworkRight) + Math.Max(0, trailingMargin);
         if (!mediaConnected)
             return ClampWidth(artworkOnlyWidth, maximumWidth);
 
         var metrics = TaskbarDensityMetrics.From(density);
+        var sectionGap = ResolveSectionGap(metrics, componentSpacingDip);
         var hoverWidth = hoverLayerEnabled
-            ? CalculateHoverLayerWidth(transportVisible, progressVisible, density)
+            ? CalculateHoverLayerWidth(transportVisible, progressVisible, density, componentSpacingDip)
             : 0;
         var middleWidth = Math.Max(Math.Max(0, measuredTextWidth), hoverWidth);
         var desired = Math.Max(0, artworkRight) +
-                      metrics.SectionGap +
-                      middleWidth +
-                      (spectrumVisible ? metrics.SectionGap + Math.Max(0, spectrumWidth) : 0) +
+                       sectionGap +
+                       middleWidth +
+                       (spectrumVisible ? sectionGap + Math.Max(0, spectrumWidth) : 0) +
                       Math.Max(0, trailingMargin);
         return ClampWidth(desired, maximumWidth);
     }
@@ -109,15 +111,21 @@ public static class TaskbarExperiencePolicy
     public static double CalculateHoverLayerWidth(
         bool transportVisible,
         bool progressVisible,
-        TaskbarInformationDensity density)
+        TaskbarInformationDensity density,
+        double? componentSpacingDip = null)
     {
         var metrics = TaskbarDensityMetrics.From(density);
+        var sectionGap = ResolveSectionGap(metrics, componentSpacingDip);
         var buttonCount = transportVisible ? 5 : 2;
-        var buttons = buttonCount * (metrics.ButtonSize + 2);
-        var deviceGap = 4;
-        var progress = progressVisible ? 8 + metrics.ProgressWidth : 0;
-        return 11 + buttons + deviceGap + progress;
+        var buttons = buttonCount * metrics.ButtonSize + Math.Max(0, buttonCount - 1) * sectionGap;
+        var progress = progressVisible ? sectionGap + metrics.ProgressWidth : 0;
+        return 11 + buttons + progress;
     }
+
+    private static double ResolveSectionGap(TaskbarDensityMetrics metrics, double? componentSpacingDip) =>
+        componentSpacingDip is { } value && double.IsFinite(value)
+            ? Math.Clamp(value, TaskbarExperienceSettings.MinimumComponentSpacingDip, TaskbarExperienceSettings.MaximumComponentSpacingDip)
+            : metrics.SectionGap;
 
     public static double GetPosition(MediaSnapshot snapshot, DateTimeOffset now)
     {
