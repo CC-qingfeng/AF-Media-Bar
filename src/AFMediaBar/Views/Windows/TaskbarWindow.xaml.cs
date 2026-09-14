@@ -845,11 +845,12 @@ public partial class TaskbarWindow : Window
             maximum > 0 ? maximum : double.PositiveInfinity,
             TaskbarLengthMode.FollowContent,
             request.PrimaryLength);
+        var motion = MotionPolicy.ResolveCurrent();
 
         var current = MediaControl.CurrentLayout is { } layout
             ? orientation == LayoutOrientation.Horizontal ? layout.Canvas.Width : layout.Canvas.Height
             : target;
-        if (Math.Abs(target - current) < LayoutSizeCalculator.MinimumChangeDip)
+        if (!motion.UseContinuousMotion || Math.Abs(target - current) < LayoutSizeCalculator.MinimumChangeDip)
         {
             ApplyPrimaryLength(target);
             UpdatePosition();

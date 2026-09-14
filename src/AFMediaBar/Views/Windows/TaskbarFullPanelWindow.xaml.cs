@@ -5,6 +5,8 @@ using AFMediaBar.Classes.Settings;
 using System.Diagnostics;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Threading;
 using Wpf.Ui.Controls;
 
@@ -53,7 +55,7 @@ public partial class TaskbarFullPanelWindow : FluentWindow
         _timer.Tick += Timer_Tick;
         _timer.Start();
         ApplySnapshot(_mediaSessionService.CurrentSnapshot ?? MediaSnapshot.Disconnected);
-        ApplyFullPanelSettings();
+        ApplyFullPanelSettings(animate: false);
     }
 
     public void ToggleNear(Rect anchor)
@@ -67,10 +69,12 @@ public partial class TaskbarFullPanelWindow : FluentWindow
             return;
         }
 
+        _isClosing = false;
         _anchor = anchor;
         Show();
         UpdateLayout();
         PositionNear(anchor);
+        BeginOpenAnimation(anchor);
         Activate();
     }
 
@@ -81,7 +85,55 @@ public partial class TaskbarFullPanelWindow : FluentWindow
             return;
 
         _isClosing = true;
-        Close();
+        var motion = MotionPolicy.ResolveCurrent();
+        if (!IsVisible || !motion.UseTransitions)
+        {
+            Close();
+            return;
+        }
+
+        PanelRoot.BeginAnimation(OpacityProperty, new DoubleAnimation
+        {
+            To = 0,
+            Duration = motion.ExitDuration,
+            EasingFunction = new PowerEase { Power = 3, EasingMode = EasingMode.EaseInOut }
+        });
+        PanelScale.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation
+        {
+            To = 0.985,
+            Duration = motion.ExitDuration,
+            EasingFunction = new PowerEase { Power = 3, EasingMode = EasingMode.EaseInOut }
+        });
+        var closeAnimation = new DoubleAnimation
+        {
+            To = 0.985,
+            Duration = motion.ExitDuration,
+            EasingFunction = new PowerEase { Power = 3, EasingMode = EasingMode.EaseInOut },
+            FillBehavior = FillBehavior.Stop
+        };
+        closeAnimation.Completed += (_, _) => Close();
+        PanelScale.BeginAnimation(ScaleTransform.ScaleYProperty, closeAnimation, HandoffBehavior.SnapshotAndReplace);
+    }
+
+    private void BeginOpenAnimation(Rect anchor)
+    {
+        var motion = MotionPolicy.ResolveCurrent();
+        PanelRoot.BeginAnimation(OpacityProperty, null);
+        PanelScale.BeginAnimation(ScaleTransform.ScaleXProperty, null);
+        PanelScale.BeginAnimation(ScaleTransform.ScaleYProperty, null);
+        PanelRoot.Opacity = motion.UseTransitions ? 0 : 1;
+        PanelScale.ScaleX = motion.UseTransitions ? 0.98 : 1;
+        PanelScale.ScaleY = motion.UseTransitions ? 0.98 : 1;
+        PanelRoot.RenderTransformOrigin = Top < anchor.Top
+            ? new Point(0.5, 1)
+            : new Point(0.5, 0);
+        if (!motion.UseTransitions)
+            return;
+
+        var ease = new PowerEase { Power = 3, EasingMode = EasingMode.EaseOut };
+        PanelRoot.BeginAnimation(OpacityProperty, new DoubleAnimation(1, motion.PanelDuration) { EasingFunction = ease });
+        PanelScale.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(1, motion.PanelDuration) { EasingFunction = ease });
+        PanelScale.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(1, motion.PanelDuration) { EasingFunction = ease });
     }
 
     private void PositionNear(Rect anchor)
@@ -132,12 +184,16 @@ public partial class TaskbarFullPanelWindow : FluentWindow
     }
 
     private void OnTaskbarExperienceSettingsChanged(object? sender, EventArgs e) =>
-        Dispatcher.BeginInvoke(ApplyFullPanelSettings);
+        Dispatcher.BeginInvoke(() => ApplyFullPanelSettings(animate: true));
 
-    private void ApplyFullPanelSettings()
+    private void ApplyFullPanelSettings(bool animate)
     {
         var settings = SettingsManager.Current.TaskbarExperience.FullPanel.Normalize();
         var audioBecameVisible = !_audioControlsVisible && settings.AudioControlsVisible;
+        var mediaInfoWasVisible = MediaInfoSection.Visibility == Visibility.Visible;
+        var mediaControlsWereVisible = MediaControlsSection.Visibility == Visibility.Visible;
+        var audioWasVisible = AudioControlsSection.Visibility == Visibility.Visible;
+        var performanceWasVisible = PerformanceSection.Visibility == Visibility.Visible;
         _audioControlsVisible = settings.AudioControlsVisible;
         _performanceVisible = settings.PerformanceVisible;
 
@@ -145,6 +201,14 @@ public partial class TaskbarFullPanelWindow : FluentWindow
         MediaControlsSection.Visibility = settings.MediaControlsVisible ? Visibility.Visible : Visibility.Collapsed;
         AudioControlsSection.Visibility = settings.AudioControlsVisible ? Visibility.Visible : Visibility.Collapsed;
         PerformanceSection.Visibility = settings.PerformanceVisible ? Visibility.Visible : Visibility.Collapsed;
+
+        if (animate)
+        {
+            SetSectionEntryState(MediaInfoSection, settings.MediaInfoVisible && !mediaInfoWasVisible);
+            SetSectionEntryState(MediaControlsSection, settings.MediaControlsVisible && !mediaControlsWereVisible);
+            SetSectionEntryState(AudioControlsSection, settings.AudioControlsVisible && !audioWasVisible);
+            SetSectionEntryState(PerformanceSection, settings.PerformanceVisible && !performanceWasVisible);
+        }
 
         if (audioBecameVisible)
             _ = RefreshAudioAsync();
@@ -154,7 +218,40 @@ public partial class TaskbarFullPanelWindow : FluentWindow
             UpdateLayout();
             if (IsVisible && _anchor is Rect anchor)
                 PositionNear(anchor);
+            if (animate)
+                AnimateVisibleSections();
         }));
+    }
+
+    private void SetSectionEntryState(UIElement section, bool entering)
+    {
+        section.BeginAnimation(OpacityProperty, null);
+        section.Opacity = entering && MotionPolicy.ResolveCurrent().UseTransitions ? 0 : 1;
+    }
+
+    private void AnimateVisibleSections()
+    {
+        var motion = MotionPolicy.ResolveCurrent();
+        if (!motion.UseTransitions)
+            return;
+
+        var ease = new PowerEase { Power = 3, EasingMode = EasingMode.EaseOut };
+        foreach (var section in new UIElement[]
+                 {
+                     MediaInfoSection,
+                     MediaControlsSection,
+                     AudioControlsSection,
+                     PerformanceSection
+                 })
+        {
+            if (section.Visibility != Visibility.Visible || section.Opacity >= 1)
+                continue;
+
+            section.BeginAnimation(OpacityProperty, new DoubleAnimation(1, motion.FastDuration)
+            {
+                EasingFunction = ease
+            });
+        }
     }
 
     private async Task RefreshAudioAsync()

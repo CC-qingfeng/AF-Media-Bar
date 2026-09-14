@@ -10,9 +10,28 @@
         FontWeight="{DynamicResource AppTextFontWeight}"
         Foreground="{DynamicResource TextFillColorPrimaryBrush}"
         Deactivated="Window_Deactivated" PreviewKeyDown="Window_PreviewKeyDown">
-    <Border Margin="8" Padding="16" CornerRadius="14"
+    <ui:FluentWindow.Resources>
+        <Style TargetType="{x:Type ui:Button}" BasedOn="{StaticResource {x:Type ui:Button}}">
+            <Setter Property="RenderTransformOrigin" Value="0.5,0.5" />
+            <Setter Property="RenderTransform">
+                <Setter.Value><ScaleTransform ScaleX="1" ScaleY="1" /></Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsPressed" Value="True">
+                    <Setter Property="RenderTransform">
+                        <Setter.Value><ScaleTransform ScaleX="0.97" ScaleY="0.97" /></Setter.Value>
+                    </Setter>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </ui:FluentWindow.Resources>
+    <Border x:Name="PanelRoot" Margin="8" Padding="16" CornerRadius="14"
             Background="Transparent"
             BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}" BorderThickness="1">
+        <Border.RenderTransformOrigin>0.5,0.5</Border.RenderTransformOrigin>
+        <Border.RenderTransform>
+            <ScaleTransform x:Name="PanelScale" ScaleX="1" ScaleY="1" />
+        </Border.RenderTransform>
         <Border.Effect><DropShadowEffect BlurRadius="24" ShadowDepth="6" Opacity="0.28" /></Border.Effect>
         <StackPanel>
             <Grid x:Name="MediaInfoSection" Margin="0,0,0,13">
@@ -32,6 +51,7 @@
                 <Grid>
                     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                     <Slider x:Name="ProgressSlider" Minimum="0" Maximum="1" Tag="MediaAction"
+                            FocusVisualStyle="{DynamicResource AfFocusVisualStyle}"
                             IsMoveToPointEnabled="True"
                             PreviewMouseLeftButtonDown="ProgressSlider_MouseLeftButtonDown"
                             PreviewMouseLeftButtonUp="ProgressSlider_MouseLeftButtonUp"
@@ -64,6 +84,7 @@
                     <Grid><TextBlock Text="当前应用音量" FontSize="11" Opacity="0.62"/>
                         <TextBlock x:Name="VolumeText" FontSize="11" HorizontalAlignment="Right" Opacity="0.62"/></Grid>
                     <Slider x:Name="VolumeSlider" Minimum="0" Maximum="100" Margin="0,3,0,0"
+                            FocusVisualStyle="{DynamicResource AfFocusVisualStyle}"
                             IsMoveToPointEnabled="True"
                             SmallChange="2" LargeChange="10"
                             PreviewMouseLeftButtonUp="VolumeSlider_MouseLeftButtonUp"

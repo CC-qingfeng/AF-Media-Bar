@@ -12,6 +12,7 @@
       <ResourceDictionary.MergedDictionaries>
         <ui:ThemesDictionary Theme="Light" />
         <ui:ControlsDictionary />
+        <ResourceDictionary Source="/AFMediaBar;component/Resources/MotionResources.xaml" />
       </ResourceDictionary.MergedDictionaries>
       <FontFamily x:Key="AppTextFontFamily">Segoe UI Variable Text, Segoe UI</FontFamily>
       <FontWeight x:Key="AppTextFontWeight">Normal</FontWeight>

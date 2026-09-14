@@ -1,6 +1,8 @@
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
+using System.Windows.Media.Animation;
+using System.Windows.Media;
 using System.Windows.Threading;
 using AFMediaBar.Classes.Interop;
 using AFMediaBar.Classes.Models;
@@ -14,6 +16,7 @@ namespace AFMediaBar.Views.Windows;
 public partial class AudioControlFlyoutWindow : FluentWindow
 {
     private bool _isOutputDeviceDropDownOpen;
+    private bool _isHiding;
 
     public AudioControlViewModel ViewModel { get; }
 
@@ -37,15 +40,30 @@ public partial class AudioControlFlyoutWindow : FluentWindow
     {
         if (IsVisible)
         {
-            Hide();
+            BeginHideAnimation();
             return;
         }
 
+        _isHiding = false;
         await ViewModel.RefreshAsync();
+        FlyoutRoot.BeginAnimation(OpacityProperty, null);
+        FlyoutScale.BeginAnimation(ScaleTransform.ScaleXProperty, null);
+        FlyoutScale.BeginAnimation(ScaleTransform.ScaleYProperty, null);
+        var motion = MotionPolicy.ResolveCurrent();
+        FlyoutRoot.Opacity = motion.UseTransitions ? 0 : 1;
+        FlyoutScale.ScaleX = motion.UseTransitions ? 0.98 : 1;
+        FlyoutScale.ScaleY = motion.UseTransitions ? 0.98 : 1;
         Show();
         Activate();
         UpdateLayout();
         PositionNear(bounds);
+        if (motion.UseTransitions)
+        {
+            var ease = new PowerEase { Power = 3, EasingMode = EasingMode.EaseOut };
+            FlyoutRoot.BeginAnimation(OpacityProperty, new DoubleAnimation(1, motion.PanelDuration) { EasingFunction = ease });
+            FlyoutScale.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(1, motion.PanelDuration) { EasingFunction = ease });
+            FlyoutScale.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(1, motion.PanelDuration) { EasingFunction = ease });
+        }
     }
 
     private void PositionNear(TrayIconBounds? bounds)
@@ -67,6 +85,9 @@ public partial class AudioControlFlyoutWindow : FluentWindow
         var spaceAbove = icon.Top - info.rcWork.Top;
         var y = spaceAbove >= height + 8 ? icon.Top - height - 8 : icon.Bottom + 8;
         y = Math.Clamp(y, info.rcWork.Top, info.rcWork.Bottom - height);
+        FlyoutRoot.RenderTransformOrigin = y < icon.Top
+            ? new Point(0.85, 1)
+            : new Point(0.85, 0);
         var handle = new WindowInteropHelper(this).Handle;
         NativeMethods.SetWindowPos(handle, -1, x, y, 0, 0,
             NativeMethods.SWP_NOSIZE | NativeMethods.SWP_NOACTIVATE | NativeMethods.SWP_SHOWWINDOW);
@@ -135,7 +156,7 @@ public partial class AudioControlFlyoutWindow : FluentWindow
         {
             if (IsVisible && !_isOutputDeviceDropDownOpen && !OutputDeviceComboBox.IsDropDownOpen && !IsActive)
             {
-                Hide();
+                BeginHideAnimation();
             }
         }, DispatcherPriority.ContextIdle);
     }
@@ -146,8 +167,43 @@ public partial class AudioControlFlyoutWindow : FluentWindow
         if (Application.Current?.Dispatcher.HasShutdownStarted != true)
         {
             e.Cancel = true;
-            Hide();
+            BeginHideAnimation();
         }
         base.OnClosing(e);
+    }
+
+    private void BeginHideAnimation()
+    {
+        if (_isHiding || !IsVisible)
+            return;
+
+        _isHiding = true;
+        var motion = MotionPolicy.ResolveCurrent();
+        if (!motion.UseTransitions)
+        {
+            Hide();
+            _isHiding = false;
+            return;
+        }
+
+        var ease = new PowerEase { Power = 3, EasingMode = EasingMode.EaseInOut };
+        FlyoutRoot.BeginAnimation(OpacityProperty, new DoubleAnimation(0, motion.ExitDuration) { EasingFunction = ease });
+        FlyoutScale.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(0.985, motion.ExitDuration) { EasingFunction = ease });
+        var closeAnimation = new DoubleAnimation(0.985, motion.ExitDuration)
+        {
+            EasingFunction = ease,
+            FillBehavior = FillBehavior.Stop
+        };
+        closeAnimation.Completed += (_, _) =>
+        {
+            if (!IsVisible)
+                return;
+            Hide();
+            _isHiding = false;
+            FlyoutRoot.Opacity = 1;
+            FlyoutScale.ScaleX = 1;
+            FlyoutScale.ScaleY = 1;
+        };
+        FlyoutScale.BeginAnimation(ScaleTransform.ScaleYProperty, closeAnimation, HandoffBehavior.SnapshotAndReplace);
     }
 }

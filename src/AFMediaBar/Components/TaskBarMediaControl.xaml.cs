@@ -394,8 +394,9 @@ namespace AFMediaBar.Components
             TaskbarDirectFullPanelHandle.Margin = new Thickness(textLeft, 1, 0, 0);
             if (HoverRevealHost.Visibility == Visibility.Visible)
             {
-                HoverRevealHost.BeginAnimation(FrameworkElement.WidthProperty, null);
+                HoverRevealClip.BeginAnimation(RectangleGeometry.RectProperty, null);
                 HoverRevealHost.Width = textWidth;
+                HoverRevealClip.Rect = new Rect(0, 0, textWidth, HoverRevealHost.Height);
             }
 
             QueueMarqueeUpdate(textWidth);
@@ -412,10 +413,32 @@ namespace AFMediaBar.Components
         /// <summary>把九段频谱值应用到任务栏静置层。 / Applies nine spectrum-band values to the taskbar rest layer.</summary>
         public void ApplySpectrum(ReadOnlySpan<float> bands)
         {
+            var motion = CurrentMotion;
             for (var index = 0; index < TaskbarSpectrum.Children.Count; index++)
             {
                 if (TaskbarSpectrum.Children[index] is Border bar)
-                    bar.Height = 3 + Math.Clamp(index < bands.Length ? bands[index] : 0, 0, 1) * 18;
+                {
+                    var targetScale = (3 + Math.Clamp(index < bands.Length ? bands[index] : 0, 0, 1) * 18) / 21d;
+                    if (bar.RenderTransform is not ScaleTransform scale || scale.IsFrozen)
+                    {
+                        scale = new ScaleTransform(1, 0.15);
+                        bar.RenderTransform = scale;
+                    }
+
+                    scale.BeginAnimation(
+                        ScaleTransform.ScaleYProperty,
+                        motion.UseContinuousMotion
+                            ? new DoubleAnimation
+                            {
+                                To = targetScale,
+                                Duration = TimeSpan.FromMilliseconds(80),
+                                EasingFunction = CreateEaseOut()
+                            }
+                            : null,
+                        HandoffBehavior.SnapshotAndReplace);
+                    if (!motion.UseContinuousMotion)
+                        scale.ScaleY = targetScale;
+                }
             }
         }
 
@@ -820,7 +843,8 @@ namespace AFMediaBar.Components
             var enabled = _currentMode == WindowMode.Taskbar &&
                           !_isVertical &&
                           _isConnected &&
-                          experience.LengthMode == TaskbarLengthMode.Fixed;
+                          experience.LengthMode == TaskbarLengthMode.Fixed &&
+                          CurrentMotion.UseContinuousMotion;
             var fingerprint = $"{enabled}|{textWidth:0.##}|{SongTitle.Text}|{SongArtist.Text}|{SongLyrics.Text}|{SongLyricsSecondary.Text}|{SongMetadataPanel.Visibility}|{SongLyricsPanel.Visibility}|{SongLyricsSecondaryContainer.Visibility}";
             if (fingerprint == _lastMarqueeFingerprint)
                 return;
@@ -915,7 +939,20 @@ namespace AFMediaBar.Components
         {
             try
             {
-                const int msDuration = 300;
+                var motion = CurrentMotion;
+                if (!motion.UseTransitions)
+                {
+                    SongInfoStackPanel.BeginAnimation(OpacityProperty, null);
+                    SongInfoStackPanel.Opacity = _isTaskbarHoverVisible ? TaskbarCoveredOpacity : 1;
+                    if (SongInfoStackPanel.RenderTransform is TranslateTransform instantTransform)
+                    {
+                        instantTransform.BeginAnimation(TranslateTransform.XProperty, null);
+                        instantTransform.X = 0;
+                    }
+                    return;
+                }
+
+                var duration = motion.StandardDuration;
 
                 // 不透明度动画：从 0 到 1
                 // Opacity animation: from 0 to 1
@@ -923,18 +960,18 @@ namespace AFMediaBar.Components
                 {
                     From = 0.0,
                     To = _isTaskbarHoverVisible ? TaskbarCoveredOpacity : 1.0,
-                    Duration = TimeSpan.FromMilliseconds(msDuration),
-                    EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+                    Duration = duration,
+                    EasingFunction = CreateEaseOut()
                 };
 
                 // 平移动画：从左侧 -10px 滑入
                 // Translation animation: slide in from -10px left
                 DoubleAnimation translateAnimation = new()
                 {
-                    From = -10,
+                    From = -6,
                     To = 0,
-                    Duration = TimeSpan.FromMilliseconds(msDuration),
-                    EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+                    Duration = duration,
+                    EasingFunction = CreateEaseOut()
                 };
 
                 // 应用动画
@@ -991,19 +1028,29 @@ namespace AFMediaBar.Components
                 return;
             }
 
-            var duration = TimeSpan.FromMilliseconds(isCovered ? 180 : 150);
+            var motion = CurrentMotion;
+            if (!motion.UseTransitions)
+            {
+                blur.BeginAnimation(BlurEffect.RadiusProperty, null);
+                SongInfoStackPanel.BeginAnimation(OpacityProperty, null);
+                blur.Radius = targetRadius;
+                SongInfoStackPanel.Opacity = targetOpacity;
+                return;
+            }
+
+            var duration = isCovered ? motion.StandardDuration : motion.FastDuration;
             var easingMode = isCovered ? EasingMode.EaseOut : EasingMode.EaseInOut;
             blur.BeginAnimation(BlurEffect.RadiusProperty, new DoubleAnimation
             {
                 To = targetRadius,
                 Duration = duration,
-                EasingFunction = new CubicEase { EasingMode = easingMode }
+                EasingFunction = easingMode == EasingMode.EaseOut ? CreateEaseOut() : CreateEaseInOut()
             }, HandoffBehavior.SnapshotAndReplace);
             SongInfoStackPanel.BeginAnimation(OpacityProperty, new DoubleAnimation
             {
                 To = targetOpacity,
                 Duration = duration,
-                EasingFunction = new CubicEase { EasingMode = easingMode }
+                EasingFunction = easingMode == EasingMode.EaseOut ? CreateEaseOut() : CreateEaseInOut()
             }, HandoffBehavior.SnapshotAndReplace);
         }
 
@@ -1054,30 +1101,44 @@ namespace AFMediaBar.Components
                 surface.BorderBrush = border;
             }
 
-            var duration = TimeSpan.FromMilliseconds(200);
+            var motion = CurrentMotion;
+            if (!motion.UseTransitions)
+            {
+                background.BeginAnimation(SolidColorBrush.ColorProperty, null);
+                background.BeginAnimation(SolidColorBrush.OpacityProperty, null);
+                border.BeginAnimation(SolidColorBrush.ColorProperty, null);
+                border.BeginAnimation(SolidColorBrush.OpacityProperty, null);
+                background.Color = backgroundColor;
+                background.Opacity = backgroundOpacity;
+                border.Color = borderColor;
+                border.Opacity = borderOpacity;
+                return;
+            }
+
+            var duration = motion.StandardDuration;
             background.BeginAnimation(SolidColorBrush.ColorProperty, new ColorAnimation
             {
                 To = backgroundColor,
                 Duration = duration,
-                EasingFunction = new CubicEase { EasingMode = easingMode }
+                EasingFunction = easingMode == EasingMode.EaseOut ? CreateEaseOut() : CreateEaseInOut()
             });
             background.BeginAnimation(SolidColorBrush.OpacityProperty, new DoubleAnimation
             {
                 To = backgroundOpacity,
                 Duration = duration,
-                EasingFunction = new CubicEase { EasingMode = easingMode }
+                EasingFunction = easingMode == EasingMode.EaseOut ? CreateEaseOut() : CreateEaseInOut()
             });
             border.BeginAnimation(SolidColorBrush.ColorProperty, new ColorAnimation
             {
                 To = borderColor,
                 Duration = duration,
-                EasingFunction = new CubicEase { EasingMode = easingMode }
+                EasingFunction = easingMode == EasingMode.EaseOut ? CreateEaseOut() : CreateEaseInOut()
             });
             border.BeginAnimation(SolidColorBrush.OpacityProperty, new DoubleAnimation
             {
                 To = borderOpacity,
                 Duration = duration,
-                EasingFunction = new CubicEase { EasingMode = easingMode }
+                EasingFunction = easingMode == EasingMode.EaseOut ? CreateEaseOut() : CreateEaseInOut()
             });
         }
 
@@ -1098,6 +1159,7 @@ namespace AFMediaBar.Components
             if (!CanUseTaskbarComponentHover())
                 return;
 
+            StopMarqueeAnimations();
             AnimateComponentHover(SongInfoHoverOverlay, true);
             AnimateDirectFullPanelHandle(true);
             _hoverCloseTimer.Stop();
@@ -1109,6 +1171,7 @@ namespace AFMediaBar.Components
         private void SongInfoStackPanel_MouseLeave(object sender, MouseEventArgs e)
         {
             _hoverOpenTimer.Stop();
+            QueueMarqueeUpdate(Math.Max(0, SongInfoStackPanel.Width));
             if (!_isTaskbarHoverVisible)
             {
                 if (!TaskbarDirectFullPanelHandle.IsMouseOver)
@@ -1165,17 +1228,25 @@ namespace AFMediaBar.Components
             AnimateSongInfoCovered(true);
             HoverRevealHost.Visibility = Visibility.Visible;
             HoverRevealHost.IsHitTestVisible = true;
-            HoverRevealHost.BeginAnimation(FrameworkElement.WidthProperty, null);
             var targetWidth = Math.Max(0, SongInfoStackPanel.Width);
-            HoverRevealHost.Width = Math.Min(Math.Max(1, HoverRevealHost.ActualWidth), targetWidth);
-            var reveal = new DoubleAnimation
+            HoverRevealHost.Width = targetWidth;
+            HoverRevealClip.BeginAnimation(RectangleGeometry.RectProperty, null);
+            var currentWidth = Math.Clamp(HoverRevealClip.Rect.Width, 0, targetWidth);
+            HoverRevealClip.Rect = new Rect(0, 0, currentWidth, HoverRevealHost.Height);
+            if (!CurrentMotion.UseTransitions)
             {
-                From = HoverRevealHost.Width,
-                To = targetWidth,
-                Duration = TimeSpan.FromMilliseconds(180),
-                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+                HoverRevealClip.Rect = new Rect(0, 0, targetWidth, HoverRevealHost.Height);
+                return;
+            }
+
+            var reveal = new RectAnimation
+            {
+                From = new Rect(0, 0, currentWidth, HoverRevealHost.Height),
+                To = new Rect(0, 0, targetWidth, HoverRevealHost.Height),
+                Duration = CurrentMotion.PanelDuration,
+                EasingFunction = CreateEaseOut()
             };
-            HoverRevealHost.BeginAnimation(FrameworkElement.WidthProperty, reveal, HandoffBehavior.SnapshotAndReplace);
+            HoverRevealClip.BeginAnimation(RectangleGeometry.RectProperty, reveal, HandoffBehavior.SnapshotAndReplace);
         }
 
         private void HideTaskbarHoverLayer(bool immediate = false)
@@ -1186,8 +1257,9 @@ namespace AFMediaBar.Components
                 return;
             if (immediate || HoverRevealHost.Visibility != Visibility.Visible)
             {
-                HoverRevealHost.BeginAnimation(FrameworkElement.WidthProperty, null);
+                HoverRevealClip.BeginAnimation(RectangleGeometry.RectProperty, null);
                 HoverRevealHost.Width = 0;
+                HoverRevealClip.Rect = new Rect(0, 0, 0, HoverRevealHost.Height);
                 HoverRevealHost.Visibility = Visibility.Collapsed;
                 HoverRevealHost.IsHitTestVisible = false;
                 _isTaskbarHoverVisible = false;
@@ -1201,24 +1273,36 @@ namespace AFMediaBar.Components
 
             AnimateSongInfoCovered(false);
 
-            var hide = new DoubleAnimation
+            if (!CurrentMotion.UseTransitions)
             {
-                From = HoverRevealHost.ActualWidth,
-                To = 0,
-                Duration = TimeSpan.FromMilliseconds(150),
-                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn }
+                HoverRevealClip.BeginAnimation(RectangleGeometry.RectProperty, null);
+                HoverRevealHost.Width = 0;
+                HoverRevealClip.Rect = new Rect(0, 0, 0, HoverRevealHost.Height);
+                HoverRevealHost.Visibility = Visibility.Collapsed;
+                HoverRevealHost.IsHitTestVisible = false;
+                _isTaskbarHoverVisible = false;
+                return;
+            }
+
+            var hide = new RectAnimation
+            {
+                From = HoverRevealClip.Rect,
+                To = new Rect(0, 0, 0, HoverRevealHost.Height),
+                Duration = CurrentMotion.ExitDuration,
+                EasingFunction = CreateEaseInOut()
             };
             hide.Completed += (_, _) =>
             {
-                HoverRevealHost.BeginAnimation(FrameworkElement.WidthProperty, null);
+                HoverRevealClip.BeginAnimation(RectangleGeometry.RectProperty, null);
                 HoverRevealHost.Width = 0;
+                HoverRevealClip.Rect = new Rect(0, 0, 0, HoverRevealHost.Height);
                 HoverRevealHost.Visibility = Visibility.Collapsed;
                 HoverRevealHost.IsHitTestVisible = false;
                 _isTaskbarHoverVisible = false;
                 if (!SongInfoStackPanel.IsMouseOver && !TaskbarDirectFullPanelHandle.IsMouseOver)
                     AnimateComponentHover(SongInfoHoverOverlay, false);
             };
-            HoverRevealHost.BeginAnimation(FrameworkElement.WidthProperty, hide, HandoffBehavior.SnapshotAndReplace);
+            HoverRevealClip.BeginAnimation(RectangleGeometry.RectProperty, hide, HandoffBehavior.SnapshotAndReplace);
         }
 
         private void SongImageBorder_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)

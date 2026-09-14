@@ -163,16 +163,39 @@ public partial class TrackChangeNotificationWindow : FluentWindow
 
     private void BeginEntryAnimation(TrackChangeNotificationPosition position)
     {
+        var motion = MotionPolicy.ResolveCurrent();
         var startsAtTop = position is TrackChangeNotificationPosition.TopLeft or
             TrackChangeNotificationPosition.TopCenter or TrackChangeNotificationPosition.TopRight;
+        EntryScaleTransform.BeginAnimation(ScaleTransform.ScaleXProperty, null);
+        EntryScaleTransform.BeginAnimation(ScaleTransform.ScaleYProperty, null);
         EntryTransform.Y = startsAtTop ? -12 : 12;
-        AnimatedRoot.Opacity = 0;
-        var duration = TimeSpan.FromMilliseconds(160);
+        EntryScaleTransform.ScaleX = motion.UseTransitions ? 0.98 : 1;
+        EntryScaleTransform.ScaleY = motion.UseTransitions ? 0.98 : 1;
+        AnimatedRoot.Opacity = motion.UseTransitions ? 0 : 1;
+        if (!motion.UseTransitions)
+        {
+            EntryTransform.Y = 0;
+            return;
+        }
+
+        var duration = motion.StandardDuration;
         EntryTransform.BeginAnimation(
             TranslateTransform.YProperty,
             new DoubleAnimation(0, new Duration(duration))
             {
-                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+                EasingFunction = new PowerEase { Power = 3, EasingMode = EasingMode.EaseOut }
+            });
+        EntryScaleTransform.BeginAnimation(
+            ScaleTransform.ScaleXProperty,
+            new DoubleAnimation(1, new Duration(duration))
+            {
+                EasingFunction = new PowerEase { Power = 3, EasingMode = EasingMode.EaseOut }
+            });
+        EntryScaleTransform.BeginAnimation(
+            ScaleTransform.ScaleYProperty,
+            new DoubleAnimation(1, new Duration(duration))
+            {
+                EasingFunction = new PowerEase { Power = 3, EasingMode = EasingMode.EaseOut }
             });
         AnimatedRoot.BeginAnimation(
             OpacityProperty,
@@ -183,7 +206,14 @@ public partial class TrackChangeNotificationWindow : FluentWindow
     {
         _hideTimer.Stop();
         var version = _presentationVersion;
-        var animation = new DoubleAnimation(0, new Duration(TimeSpan.FromMilliseconds(120)));
+        var motion = MotionPolicy.ResolveCurrent();
+        if (!motion.UseTransitions)
+        {
+            Hide();
+            return;
+        }
+
+        var animation = new DoubleAnimation(0, new Duration(motion.ExitDuration));
         animation.Completed += (_, _) =>
         {
             if (version == _presentationVersion && IsVisible)
@@ -197,8 +227,12 @@ public partial class TrackChangeNotificationWindow : FluentWindow
     private void StopAnimations()
     {
         AnimatedRoot.BeginAnimation(OpacityProperty, null);
+        EntryScaleTransform.BeginAnimation(ScaleTransform.ScaleXProperty, null);
+        EntryScaleTransform.BeginAnimation(ScaleTransform.ScaleYProperty, null);
         EntryTransform.BeginAnimation(TranslateTransform.YProperty, null);
         AnimatedRoot.Opacity = 1;
+        EntryScaleTransform.ScaleX = 1;
+        EntryScaleTransform.ScaleY = 1;
         EntryTransform.Y = 0;
     }
 

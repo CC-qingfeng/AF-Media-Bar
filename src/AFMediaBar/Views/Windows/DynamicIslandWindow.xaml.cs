@@ -27,7 +27,6 @@ public partial class DynamicIslandWindow : Window
     private const double EdgeRevealDip = 5;
     private const double EdgeDockThresholdDip = 28;
     private const double PositionToleranceDip = 0.5;
-    private const int PositionAnimationDurationMs = 260;
     private readonly MainWindowViewModel _viewModel;
     private readonly DispatcherTimer _sizeAnimationTimer;
     private bool _isExpanded;
@@ -270,6 +269,7 @@ public partial class DynamicIslandWindow : Window
             return;
 
         var target = request.PrimaryLength;
+        var motion = MotionPolicy.ResolveCurrent();
         var maximum = GetAvailablePrimaryLengthDip(orientation);
         if (maximum > 0)
             target = Math.Min(target, maximum);
@@ -281,7 +281,7 @@ public partial class DynamicIslandWindow : Window
                 : target;
 
         CaptureSizeAnchors(orientation, current);
-        if (Math.Abs(target - current) < LayoutSizeCalculator.MinimumChangeDip)
+        if (!motion.UseContinuousMotion || Math.Abs(target - current) < LayoutSizeCalculator.MinimumChangeDip)
         {
             ApplyAnimatedSize(target, orientation);
             return;
@@ -467,6 +467,9 @@ public partial class DynamicIslandWindow : Window
 
     private void SetPosition(Point target, bool animated)
     {
+        if (!MotionPolicy.ResolveCurrent().UseTransitions)
+            animated = false;
+
         var currentLeft = Left;
         var currentTop = Top;
         if (double.IsNaN(currentLeft) || double.IsNaN(currentTop))
@@ -501,12 +504,14 @@ public partial class DynamicIslandWindow : Window
 
         _positionAnimationTarget = target;
         _positionAnimationActive = true;
-        var easing = new CubicEase { EasingMode = _isExpanded ? EasingMode.EaseOut : EasingMode.EaseInOut };
+        var motion = MotionPolicy.ResolveCurrent();
+        var easing = _isExpanded ? new PowerEase { Power = 3, EasingMode = EasingMode.EaseOut }
+            : new PowerEase { Power = 3, EasingMode = EasingMode.EaseInOut };
         var leftAnimation = new DoubleAnimation
         {
             From = currentLeft,
             To = target.X,
-            Duration = TimeSpan.FromMilliseconds(PositionAnimationDurationMs),
+            Duration = motion.PositionDuration,
             EasingFunction = easing,
             FillBehavior = FillBehavior.Stop
         };
@@ -514,7 +519,7 @@ public partial class DynamicIslandWindow : Window
         {
             From = currentTop,
             To = target.Y,
-            Duration = TimeSpan.FromMilliseconds(PositionAnimationDurationMs),
+            Duration = motion.PositionDuration,
             EasingFunction = easing,
             FillBehavior = FillBehavior.Stop
         };

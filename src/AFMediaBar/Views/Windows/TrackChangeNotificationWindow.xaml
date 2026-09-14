@@ -18,7 +18,10 @@
             BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}" BorderThickness="1"
             Opacity="0">
         <Border.RenderTransform>
-            <TranslateTransform x:Name="EntryTransform" />
+            <TransformGroup>
+                <ScaleTransform x:Name="EntryScaleTransform" ScaleX="1" ScaleY="1" />
+                <TranslateTransform x:Name="EntryTransform" />
+            </TransformGroup>
         </Border.RenderTransform>
         <Border.Effect>
             <DropShadowEffect BlurRadius="12" ShadowDepth="2" Opacity="0.24" />

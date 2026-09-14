@@ -22,13 +22,18 @@
             <Setter Property="FontSize" Value="12" />
             <Setter Property="Tag" Value="MediaAction" />
             <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="RenderTransformOrigin" Value="0.5,0.5" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
                         <Border x:Name="ButtonSurface"
                                 Background="{TemplateBinding Background}"
                                 CornerRadius="4"
+                                RenderTransformOrigin="0.5,0.5"
                                 SnapsToDevicePixels="True">
+                            <Border.RenderTransform>
+                                <ScaleTransform ScaleX="1" ScaleY="1" />
+                            </Border.RenderTransform>
                             <ContentPresenter HorizontalAlignment="Center"
                                               VerticalAlignment="Center"
                                               RecognizesAccessKey="True" />
@@ -39,6 +44,11 @@
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
                                 <Setter TargetName="ButtonSurface" Property="Background" Value="#38FFFFFF" />
+                                <Setter TargetName="ButtonSurface" Property="RenderTransform">
+                                    <Setter.Value>
+                                        <ScaleTransform ScaleX="0.97" ScaleY="0.97" />
+                                    </Setter.Value>
+                                </Setter>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter TargetName="ButtonSurface" Property="Background" Value="Transparent" />
@@ -57,11 +67,17 @@
         </Style>
         <Style x:Key="TaskbarSpectrumBar" TargetType="Border">
             <Setter Property="Width" Value="2" />
-            <Setter Property="Height" Value="4" />
+            <Setter Property="Height" Value="21" />
             <Setter Property="Margin" Value="1,0" />
             <Setter Property="CornerRadius" Value="1" />
             <Setter Property="VerticalAlignment" Value="Bottom" />
             <Setter Property="Background" Value="#DFFFFFFF" />
+            <Setter Property="RenderTransformOrigin" Value="0.5,1" />
+            <Setter Property="RenderTransform">
+                <Setter.Value>
+                    <ScaleTransform ScaleY="0.15" />
+                </Setter.Value>
+            </Setter>
         </Style>
     </UserControl.Resources>
 
@@ -267,6 +283,9 @@
                   IsHitTestVisible="False"
                   MouseEnter="TaskbarHoverLayer_MouseEnter"
                   MouseLeave="TaskbarHoverLayer_MouseLeave">
+                <Grid.Clip>
+                    <RectangleGeometry x:Name="HoverRevealClip" Rect="0,0,0,42" />
+                </Grid.Clip>
                 <Border x:Name="TaskbarHoverLayer"
                         Width="276"
                         Height="40"
@@ -321,6 +340,7 @@
                                         Minimum="0"
                                         Maximum="1"
                                         Tag="MediaAction"
+                                        FocusVisualStyle="{DynamicResource AfFocusVisualStyle}"
                                         IsMoveToPointEnabled="True"
                                         PreviewMouseLeftButtonDown="TaskbarHoverProgress_PreviewMouseLeftButtonDown"
                                         PreviewMouseLeftButtonUp="TaskbarHoverProgress_PreviewMouseLeftButtonUp"

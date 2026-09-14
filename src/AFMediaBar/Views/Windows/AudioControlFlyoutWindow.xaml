@@ -24,12 +24,16 @@
     <ui:FluentWindow.Resources>
         <converters:ByteArrayToImageSourceConverter x:Key="ByteArrayToImageSourceConverter" />
     </ui:FluentWindow.Resources>
-    <Border Margin="4"
+    <Border x:Name="FlyoutRoot" Margin="4"
             Padding="10"
             CornerRadius="8"
             Background="Transparent"
             BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
             BorderThickness="1">
+        <Border.RenderTransformOrigin>0.85,1</Border.RenderTransformOrigin>
+        <Border.RenderTransform>
+            <ScaleTransform x:Name="FlyoutScale" ScaleX="1" ScaleY="1" />
+        </Border.RenderTransform>
         <Border.Effect>
             <DropShadowEffect BlurRadius="16" ShadowDepth="3" Opacity="0.24" />
         </Border.Effect>
@@ -148,9 +152,10 @@
                                             </Style>
                                         </TextBlock.Style>
                                     </TextBlock>
-                                    <Slider Grid.Column="2" Minimum="0" Maximum="100"
-                                            MinWidth="0"
-                                            Margin="0,0,6,0"
+                    <Slider Grid.Column="2" Minimum="0" Maximum="100"
+                            MinWidth="0"
+                            FocusVisualStyle="{DynamicResource AfFocusVisualStyle}"
+                            Margin="0,0,6,0"
                                             Value="{Binding VolumePercent, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                             PreviewMouseLeftButtonDown="ApplicationVolumeSlider_OnPreviewMouseLeftButtonDown"
                                             PreviewMouseLeftButtonUp="ApplicationVolumeSlider_OnPreviewMouseLeftButtonUp"
