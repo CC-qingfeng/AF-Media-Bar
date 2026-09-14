@@ -27,6 +27,8 @@ public partial class DynamicIslandWindow : Window
     private const double EdgeDockThresholdDip = 28;
     private readonly MainWindowViewModel _viewModel;
     private readonly DispatcherTimer _sizeAnimationTimer;
+    private readonly DispatcherTimer _foregroundSamplingTimer;
+    private readonly AdaptiveForegroundSamplingSession _foregroundSamplingSession;
     private bool _isExpanded;
     private bool _isClosing;
     private bool _isDragging;
@@ -41,11 +43,19 @@ public partial class DynamicIslandWindow : Window
     /// 创建灵动岛媒体宿主窗口。
     /// Creates the dynamic-island media host window.
     /// </summary>
-    public DynamicIslandWindow(MainWindowViewModel viewModel, WindowAppearanceService appearanceService)
+    public DynamicIslandWindow(
+        MainWindowViewModel viewModel,
+        WindowAppearanceService appearanceService,
+        ScreenBackgroundSampler screenBackgroundSampler)
     {
         WindowHelper.SetNoActivate(this);
         InitializeComponent();
         _viewModel = viewModel;
+        _foregroundSamplingSession = new AdaptiveForegroundSamplingSession(
+            screenBackgroundSampler,
+            Dispatcher,
+            GetAdaptiveForegroundSampleBounds,
+            MediaControl.ApplyAdaptiveForegroundDecision);
         DataContext = new MainWindowDataContext(viewModel);
         ContextMenuHelper.AttachOutsideClickDismissal(PlayerMenu);
         appearanceService.Attach(PlayerMenu, this);
@@ -56,12 +66,16 @@ public partial class DynamicIslandWindow : Window
         MediaControl.DesiredSizeChanged += MediaControl_DesiredSizeChanged;
         _sizeAnimationTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
         _sizeAnimationTimer.Tick += (_, _) => AdvanceSizeAnimation();
+        _foregroundSamplingTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1500) };
+        _foregroundSamplingTimer.Tick += (_, _) => _foregroundSamplingSession.RequestRefresh();
         Loaded += (_, _) =>
         {
             RestoreSavedPosition();
             ApplyLayoutSettings(SettingsManager.Current.LayoutOrientationMode);
             MediaControl.ApplyAppearanceSettings();
             SetPosition(_isExpanded ? GetExpandedPosition() : GetCollapsedPosition(), animated: false);
+            _foregroundSamplingTimer.Start();
+            Dispatcher.BeginInvoke(_foregroundSamplingSession.RequestRefresh, DispatcherPriority.ContextIdle);
         };
     }
 
@@ -76,7 +90,10 @@ public partial class DynamicIslandWindow : Window
     private IntPtr WindowProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
         if (msg is NativeMethods.WM_DPICHANGED or NativeMethods.WM_DISPLAYCHANGE)
+        {
+            _foregroundSamplingSession.Invalidate(clearDecision: false);
             ScheduleDpiRecovery(hwnd);
+        }
 
         return IntPtr.Zero;
     }
@@ -148,11 +165,14 @@ public partial class DynamicIslandWindow : Window
 
         Dispatcher.Invoke(() =>
         {
+            var wasVisible = Visibility == Visibility.Visible;
             if (!snapshot.IsConnected)
             {
                 MediaControl.UpdateSongInfo(snapshot);
                 MediaControl.ApplyAppearanceSettings();
                 Visibility = Visibility.Visible;
+                if (!wasVisible)
+                    Dispatcher.BeginInvoke(_foregroundSamplingSession.RequestRefresh, DispatcherPriority.ContextIdle);
                 if (_isDragging)
                     return;
                 if (SettingsManager.Current.DynamicIslandEdgeDocked && !IsCursorWithinWindow())
@@ -166,6 +186,8 @@ public partial class DynamicIslandWindow : Window
             MediaControl.UpdateSongInfo(snapshot);
             MediaControl.ApplyAppearanceSettings();
             Visibility = Visibility.Visible;
+            if (!wasVisible)
+                Dispatcher.BeginInvoke(_foregroundSamplingSession.RequestRefresh, DispatcherPriority.ContextIdle);
 
             if (_isDragging)
                 return;
@@ -230,6 +252,28 @@ public partial class DynamicIslandWindow : Window
     public void ApplyAppearanceSettings()
     {
         MediaControl.ApplyAppearanceSettings();
+        if (SettingsManager.Current.Appearance.PlayerForegroundMode == PlayerForegroundMode.Automatic &&
+            SettingsManager.Current.DynamicIslandBackgroundMode == DynamicIslandBackgroundMode.Transparent)
+        {
+            Dispatcher.BeginInvoke(_foregroundSamplingSession.RequestRefresh, DispatcherPriority.ContextIdle);
+        }
+        else
+        {
+            _foregroundSamplingSession.Invalidate(clearDecision: true);
+        }
+    }
+
+    private Int32Rect? GetAdaptiveForegroundSampleBounds()
+    {
+        if (_isClosing || _isDragging || _dpiRecoveryQueued || _positionAnimationActive ||
+            _sizeAnimationTimer.IsEnabled || Visibility != Visibility.Visible ||
+            SettingsManager.Current.Appearance.PlayerForegroundMode != PlayerForegroundMode.Automatic ||
+            SettingsManager.Current.DynamicIslandBackgroundMode != DynamicIslandBackgroundMode.Transparent)
+        {
+            return null;
+        }
+
+        return MediaControl.TryGetForegroundSampleBounds(out var bounds) ? bounds : null;
     }
 
     private void MediaControl_DesiredSizeChanged(object? sender, MediaBarSizeRequestEventArgs eventArgs)
@@ -335,6 +379,7 @@ public partial class DynamicIslandWindow : Window
         }
 
         _isDragging = true;
+        _foregroundSamplingSession.Invalidate(clearDecision: false);
         StopPositionAnimationAtCurrentPosition();
         _isExpanded = true;
 
@@ -362,6 +407,7 @@ public partial class DynamicIslandWindow : Window
         {
             ApplyPendingSizeRequest();
         }
+        Dispatcher.BeginInvoke(_foregroundSamplingSession.RequestRefresh, DispatcherPriority.ContextIdle);
     }
 
     private void Window_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
@@ -408,6 +454,8 @@ public partial class DynamicIslandWindow : Window
             _windowSource = null;
         }
         _sizeAnimationTimer.Stop();
+        _foregroundSamplingTimer.Stop();
+        _foregroundSamplingSession.Dispose();
         BeginAnimation(TopProperty, null);
         BeginAnimation(LeftProperty, null);
         MediaControl.TogglePlayPauseRequested -= MediaControl_TogglePlayPauseRequested;

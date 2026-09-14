@@ -56,6 +56,8 @@ public readonly record struct AppearanceSettings(
     CjkFontPreset CjkFont,
     int FontWeight,
     PlayerForegroundMode PlayerForegroundMode,
+    // 保留旧 JSON 字段以避免设置 schema 迁移；该选项已从 UI 和呈现逻辑移除。
+    // Retain the legacy JSON field to avoid a settings-schema migration; the option is no longer presented or applied.
     bool EnhancedReadability,
     ApplicationThemeMode ApplicationThemeMode,
     ApplicationBackdropMode BackdropMode)

@@ -10,6 +10,7 @@ using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Threading;
 using Wpf.Ui;
 using Wpf.Ui.Abstractions;
 using Wpf.Ui.Appearance;
@@ -33,6 +34,7 @@ namespace AFMediaBar.Views.Windows
         private readonly AudioControlFlyoutWindow _audioControlFlyout;
         private readonly NativeMouseInputMonitor _mouseInputMonitor;
         private readonly WindowAppearanceService _appearanceService;
+        private readonly ScreenBackgroundSampler _screenBackgroundSampler;
         private readonly TaskbarOccupiedAreaService _occupiedAreaService;
         private readonly TaskbarLengthConstraintsService _taskbarLengthConstraints;
         private readonly Func<SettingsWindow> _settingsWindowFactory;
@@ -75,6 +77,7 @@ namespace AFMediaBar.Views.Windows
             AudioControlFlyoutWindow audioControlFlyout,
             NativeMouseInputMonitor mouseInputMonitor,
             WindowAppearanceService appearanceService,
+            ScreenBackgroundSampler screenBackgroundSampler,
             TaskbarOccupiedAreaService occupiedAreaService,
             TaskbarLengthConstraintsService taskbarLengthConstraints,
             Func<SettingsWindow> settingsWindowFactory,
@@ -95,6 +98,7 @@ namespace AFMediaBar.Views.Windows
             _audioControlFlyout = audioControlFlyout;
             _mouseInputMonitor = mouseInputMonitor;
             _appearanceService = appearanceService;
+            _screenBackgroundSampler = screenBackgroundSampler;
             _occupiedAreaService = occupiedAreaService;
             _taskbarLengthConstraints = taskbarLengthConstraints;
             _settingsWindowFactory = settingsWindowFactory;
@@ -125,6 +129,7 @@ namespace AFMediaBar.Views.Windows
             // Subscribe to layout settings changed event
             SettingsManager.LayoutSettingsChanged += SettingsManager_OnLayoutSettingsChanged;
             SettingsManager.AppearanceSettingsChanged += SettingsManager_OnAppearanceSettingsChanged;
+            ApplicationThemeManager.Changed += ApplicationThemeManager_OnChanged;
             SettingsManager.LyricsSettingsChanged += SettingsManager_OnLyricsSettingsChanged;
             SettingsManager.TaskbarExperienceSettingsChanged += SettingsManager_OnTaskbarExperienceSettingsChanged;
             SettingsManager.InteractionSettingsChanged += SettingsManager_OnTaskbarExperienceSettingsChanged;
@@ -227,6 +232,7 @@ namespace AFMediaBar.Views.Windows
             _mediaSessionService.SessionsChanged -= MediaSessionService_OnSessionsChanged;
             SettingsManager.LayoutSettingsChanged -= SettingsManager_OnLayoutSettingsChanged;
             SettingsManager.AppearanceSettingsChanged -= SettingsManager_OnAppearanceSettingsChanged;
+            ApplicationThemeManager.Changed -= ApplicationThemeManager_OnChanged;
             SettingsManager.LyricsSettingsChanged -= SettingsManager_OnLyricsSettingsChanged;
             SettingsManager.TaskbarExperienceSettingsChanged -= SettingsManager_OnTaskbarExperienceSettingsChanged;
             SettingsManager.InteractionSettingsChanged -= SettingsManager_OnTaskbarExperienceSettingsChanged;
@@ -586,6 +592,17 @@ namespace AFMediaBar.Views.Windows
             });
         }
 
+        private void ApplicationThemeManager_OnChanged(ApplicationTheme theme, Color accent)
+        {
+            Dispatcher.BeginInvoke(() =>
+            {
+                if (_isClosing)
+                    return;
+                _taskbarWindow?.ApplyAppearanceSettings();
+                _dynamicIslandWindow?.ApplyAppearanceSettings();
+            }, DispatcherPriority.Background);
+        }
+
         private void TrackChangeNotificationCoordinator_OnDismissRequested(object? sender, EventArgs e) =>
             Dispatcher.BeginInvoke(() => _trackChangeNotificationWindow?.HideImmediately());
 
@@ -659,7 +676,8 @@ namespace AFMediaBar.Views.Windows
                 _taskbarLengthConstraints,
                 _interactionRouter,
                 _audioInteractionService,
-                _audioMonitorService);
+                _audioMonitorService,
+                _screenBackgroundSampler);
             window.AudioControlRequested += TaskbarWindow_AudioControlRequested;
             window.OpenFullPanelRequested += TaskbarWindow_OpenFullPanelRequested;
             return window;

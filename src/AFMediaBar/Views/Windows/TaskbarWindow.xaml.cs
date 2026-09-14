@@ -72,6 +72,7 @@ public partial class TaskbarWindow : Window
     private MediaBarSizeRequest? _pendingSizeRequest;
     private MediaBarSizeRequest? _lastDesiredSizeRequest;
     private readonly AudioMonitorService _audioMonitorService;
+    private readonly AdaptiveForegroundSamplingSession _foregroundSamplingSession;
     private readonly float[] _spectrumBands = new float[AudioMonitorService.BandCount];
     private MediaSnapshot _lastSnapshot = MediaSnapshot.Disconnected;
 
@@ -91,7 +92,8 @@ public partial class TaskbarWindow : Window
         TaskbarLengthConstraintsService lengthConstraints,
         GlobalInteractionRouter interactionRouter,
         AudioInteractionService audioInteractionService,
-        AudioMonitorService audioMonitorService)
+        AudioMonitorService audioMonitorService,
+        ScreenBackgroundSampler screenBackgroundSampler)
     {
         WindowHelper.SetNoActivate(this);
         InitializeComponent();
@@ -118,6 +120,11 @@ public partial class TaskbarWindow : Window
         _interactionRouter = interactionRouter;
         _audioInteractionService = audioInteractionService;
         _audioMonitorService = audioMonitorService;
+        _foregroundSamplingSession = new AdaptiveForegroundSamplingSession(
+            screenBackgroundSampler,
+            Dispatcher,
+            GetAdaptiveForegroundSampleBounds,
+            MediaControl.ApplyAdaptiveForegroundDecision);
 
         _timer = new DispatcherTimer();
         _timer.Interval = TimeSpan.FromMilliseconds(1500); // slow auto-update for display changes
@@ -172,11 +179,13 @@ public partial class TaskbarWindow : Window
             _timer.Stop();
             _sizeAnimationTimer.Stop();
             _spectrumTimer.Stop();
+            _foregroundSamplingSession.Invalidate(clearDecision: false);
             return IntPtr.Zero;
         }
 
         if (_setupComplete && TaskbarHostMessagePolicy.IsEnvironmentChange(msg))
         {
+            _foregroundSamplingSession.Invalidate(clearDecision: false);
             // Explorer 重排任务栏期间只使用保守区间，避免同步 UI Automation 探测与 Shell 互相等待。
             // Use the conservative range while Explorer rearranges the taskbar so synchronous
             // UI Automation probing cannot deadlock with the Shell during repeated display changes.
@@ -231,12 +240,14 @@ public partial class TaskbarWindow : Window
         }
 
         UpdatePosition();
+        _foregroundSamplingSession.RequestRefresh();
     }
 
     private void Window_Loaded(object sender, RoutedEventArgs e)
     {
         SetupWindow();
         _setupComplete = true;
+        Dispatcher.BeginInvoke(_foregroundSamplingSession.RequestRefresh, DispatcherPriority.ContextIdle);
     }
 
     #region TaskBar Layout&Position
@@ -446,6 +457,7 @@ public partial class TaskbarWindow : Window
         if (!SettingsManager.Current.TaskbarBarEnabled || _isClosing || _isEnvironmentSuspended)
             return;
 
+        var wasVisible = Visibility == Visibility.Visible;
         _lastSnapshot = snapshot;
 
         if (!_timer.IsEnabled)
@@ -462,7 +474,11 @@ public partial class TaskbarWindow : Window
         // Recheck on the UI thread immediately before touching Window.Visibility. Explorer
         // can destroy the child HWND between a media callback and this presentation step.
         if (!_isClosing && !_isEnvironmentSuspended)
+        {
             Visibility = Visibility.Visible;
+            if (!wasVisible)
+                Dispatcher.BeginInvoke(_foregroundSamplingSession.RequestRefresh, DispatcherPriority.ContextIdle);
+        }
     }
 
     #endregion
@@ -601,6 +617,21 @@ public partial class TaskbarWindow : Window
     public void ApplyAppearanceSettings()
     {
         MediaControl.ApplyAppearanceSettings();
+        if (SettingsManager.Current.Appearance.PlayerForegroundMode == PlayerForegroundMode.Automatic)
+            Dispatcher.BeginInvoke(_foregroundSamplingSession.RequestRefresh, DispatcherPriority.ContextIdle);
+        else
+            _foregroundSamplingSession.Invalidate(clearDecision: true);
+    }
+
+    private Int32Rect? GetAdaptiveForegroundSampleBounds()
+    {
+        if (_isClosing || _isEnvironmentSuspended || Visibility != Visibility.Visible ||
+            SettingsManager.Current.Appearance.PlayerForegroundMode != PlayerForegroundMode.Automatic)
+        {
+            return null;
+        }
+
+        return MediaControl.TryGetForegroundSampleBounds(out var bounds) ? bounds : null;
     }
 
     /// <summary>在全局左键点击位于菜单外时关闭右键菜单。 / Closes the context menu after a global left click outside it.</summary>
@@ -668,6 +699,7 @@ public partial class TaskbarWindow : Window
         _timer.Stop();
         _sizeAnimationTimer.Stop();
         _spectrumTimer.Stop();
+        _foregroundSamplingSession.Invalidate(clearDecision: false);
         _pendingSizeRequest = null;
         PlayerMenu.IsOpen = false;
     }
@@ -683,6 +715,7 @@ public partial class TaskbarWindow : Window
         if (!_spectrumTimer.IsEnabled)
             _spectrumTimer.Start();
         UpdatePosition();
+        Dispatcher.BeginInvoke(_foregroundSamplingSession.RequestRefresh, DispatcherPriority.ContextIdle);
     }
 
     internal void DetachFromTaskbar()
@@ -1000,6 +1033,7 @@ public partial class TaskbarWindow : Window
         _timer.Stop();
         _sizeAnimationTimer.Stop();
         _spectrumTimer.Stop();
+        _foregroundSamplingSession.Dispose();
         MediaControl.TogglePlayPauseRequested -= MediaControl_TogglePlayPauseRequested;
         MediaControl.SkipPreviousRequested -= MediaControl_SkipPreviousRequested;
         MediaControl.SkipNextRequested -= MediaControl_SkipNextRequested;

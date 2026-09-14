@@ -120,6 +120,7 @@ namespace AFMediaBar.Components
         private MediaSnapshot _snapshot = MediaSnapshot.Disconnected;
         private bool _isTaskbarHoverVisible;
         private bool _isSeeking;
+        private PlayerForegroundDecision? _adaptiveForegroundDecision;
         private DateTime _suppressArtworkClickUntilUtc;
         private const double TaskbarSpectrumWidth = 38;
         private const double TaskbarTrailingMargin = 4;
@@ -139,6 +140,50 @@ namespace AFMediaBar.Components
 
         /// <summary>当前横向任务栏悬停层和固定组件所需的最小长度。 / Current minimum length required by the horizontal taskbar hover layer and fixed components.</summary>
         public double MinimumPrimaryLength => _minimumPrimaryLength;
+
+        /// <summary>
+        /// 返回当前可见文字表面的物理屏幕像素矩形，供宿主采样实际背景。
+        /// Returns the physical screen-pixel rectangle of the visible text surface for host background sampling.
+        /// </summary>
+        public bool TryGetForegroundSampleBounds(out Int32Rect bounds)
+        {
+            bounds = Int32Rect.Empty;
+            if (!_isConnected || _isTaskbarHoverVisible || !SongInfoSurface.IsVisible ||
+                SongInfoSurface.ActualWidth <= 1 || SongInfoSurface.ActualHeight <= 1 ||
+                PresentationSource.FromVisual(SongInfoSurface) is null)
+            {
+                return false;
+            }
+
+            try
+            {
+                var origin = SongInfoSurface.PointToScreen(new Point(0, 0));
+                var dpi = VisualTreeHelper.GetDpi(SongInfoSurface);
+                var width = (int)Math.Round(SongInfoSurface.ActualWidth * dpi.DpiScaleX);
+                var height = (int)Math.Round(SongInfoSurface.ActualHeight * dpi.DpiScaleY);
+                if (width <= 1 || height <= 1 || !double.IsFinite(origin.X) || !double.IsFinite(origin.Y))
+                    return false;
+
+                bounds = new Int32Rect((int)Math.Round(origin.X), (int)Math.Round(origin.Y), width, height);
+                return true;
+            }
+            catch (InvalidOperationException)
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// 应用宿主从实际屏幕背景解析出的自动前景决定；null 恢复主题回退。
+        /// Applies the automatic foreground decision resolved from the real screen background; null restores theme fallback.
+        /// </summary>
+        public void ApplyAdaptiveForegroundDecision(PlayerForegroundDecision? decision)
+        {
+            if (_adaptiveForegroundDecision == decision)
+                return;
+            _adaptiveForegroundDecision = decision;
+            ApplyAppearanceSettings();
+        }
 
         // === 歌词显示状态 Lyrics Display State ===
         // 解析后的行缓存 + 当前行下标，避免每个快照重复解析。
@@ -448,8 +493,8 @@ namespace AFMediaBar.Components
         }
 
         /// <summary>
-        /// 应用播放器文字、可读性背景和灵动岛背景设置。
-        /// Applies player text, readability background, and dynamic-island background settings.
+        /// 应用播放器文字和灵动岛背景设置。
+        /// Applies player text and dynamic-island background settings.
         /// </summary>
         public void ApplyAppearanceSettings()
         {
@@ -461,32 +506,22 @@ namespace AFMediaBar.Components
                 WindowsThemeDetector.GetWindowsTheme(out var windowsAppTheme, out _);
                 isDark = windowsAppTheme == WindowsThemeDetector.ThemeMode.Dark;
             }
-            var usesLightText = appearance.PlayerForegroundMode switch
-            {
-                PlayerForegroundMode.LightText => true,
-                PlayerForegroundMode.DarkText => false,
-                _ => isDark
-            };
+            var presentation = PlayerForegroundPolicy.ResolvePresentation(
+                appearance.PlayerForegroundMode,
+                SystemParameters.HighContrast,
+                isDark,
+                _adaptiveForegroundDecision);
 
             Brush foreground;
-            Brush readabilityBackground;
-            if (SystemParameters.HighContrast)
+            if (presentation.UsesSystemColors)
             {
                 foreground = SystemColors.WindowTextBrush;
-                readabilityBackground = appearance.EnhancedReadability && _isConnected
-                    ? SystemColors.WindowBrush
-                    : Brushes.Transparent;
             }
             else
             {
-                foreground = new SolidColorBrush(usesLightText
+                foreground = new SolidColorBrush(presentation.UsesLightText
                     ? Colors.White
-                    : Color.FromArgb(0xE4, 0x1C, 0x1C, 0x1C));
-                readabilityBackground = appearance.EnhancedReadability && _isConnected
-                    ? new SolidColorBrush(usesLightText
-                        ? Color.FromArgb(0x78, 0x00, 0x00, 0x00)
-                        : Color.FromArgb(0xB8, 0xFF, 0xFF, 0xFF))
-                    : Brushes.Transparent;
+                    : Color.FromRgb(0x1C, 0x1C, 0x1C));
             }
 
             SongTitle.Foreground = foreground;
@@ -494,7 +529,8 @@ namespace AFMediaBar.Components
             SongLyricsSecondary.Foreground = foreground;
             SongLyricsSecondary.Opacity = SystemParameters.HighContrast ? 1 : 0.68;
             SongArtist.Foreground = foreground;
-            SongInfoStackPanel.Background = readabilityBackground;
+            SongInfoStackPanel.Background = Brushes.Transparent;
+            ApplyContrastShadow(presentation.NeedsContrastShadow, presentation.UsesLightText);
 
             if (_currentMode == WindowMode.Taskbar)
             {
@@ -514,6 +550,29 @@ namespace AFMediaBar.Components
                     : new SolidColorBrush(isDark
                         ? Color.FromArgb(0xFF, 0x20, 0x20, 0x20)
                         : Color.FromArgb(0xFF, 0xF3, 0xF3, 0xF3));
+        }
+
+        private void ApplyContrastShadow(bool enabled, bool usesLightText)
+        {
+            Effect? effect = null;
+            if (enabled)
+            {
+                var shadow = new DropShadowEffect
+                {
+                    Color = usesLightText ? Colors.Black : Colors.White,
+                    BlurRadius = 2,
+                    ShadowDepth = 0,
+                    Opacity = 0.85,
+                    RenderingBias = RenderingBias.Quality
+                };
+                shadow.Freeze();
+                effect = shadow;
+            }
+
+            SongTitle.Effect = effect;
+            SongArtist.Effect = effect;
+            SongLyrics.Effect = effect;
+            SongLyricsSecondary.Effect = effect;
         }
 
 

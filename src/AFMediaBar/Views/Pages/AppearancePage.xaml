@@ -175,13 +175,13 @@
                 <StackPanel>
                     <ui:TextBlock Text="文字颜色"
                                   FontWeight="{DynamicResource AppTextStrongFontWeight}" />
-                    <ui:TextBlock Text="选择媒体栏文字的颜色模式"
+                    <ui:TextBlock Text="自动模式会根据文字背后的实际颜色切换深浅"
                                   Appearance="Secondary"
                                   FontSize="12" />
                 </StackPanel>
             </ui:CardControl.Header>
             <StackPanel Orientation="Horizontal">
-                <RadioButton Content="自动"
+                <RadioButton Content="自动（根据背景）"
                              GroupName="ForegroundMode"
                              IsChecked="{Binding ViewModel.PlayerForegroundMode, Mode=OneWay, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Automatic}"
                              Command="{Binding ViewModel.SetPlayerForegroundModeCommand}"
@@ -199,20 +199,6 @@
                              Command="{Binding ViewModel.SetPlayerForegroundModeCommand}"
                              CommandParameter="{x:Static settings:PlayerForegroundMode.DarkText}" />
             </StackPanel>
-        </ui:CardControl>
-
-        <ui:CardControl Margin="0,0,0,24"
-                        Icon="{ui:SymbolIcon Eye24}">
-            <ui:CardControl.Header>
-                <StackPanel>
-                    <ui:TextBlock Text="增强可读性"
-                                  FontWeight="{DynamicResource AppTextStrongFontWeight}" />
-                    <ui:TextBlock Text="为文字增加背景以提升对比度"
-                                  Appearance="Secondary"
-                                  FontSize="12" />
-                </StackPanel>
-            </ui:CardControl.Header>
-            <ui:ToggleSwitch IsChecked="{Binding ViewModel.EnhancedReadability, Mode=TwoWay}" />
         </ui:CardControl>
 
         <TextBlock Text="应用主题"

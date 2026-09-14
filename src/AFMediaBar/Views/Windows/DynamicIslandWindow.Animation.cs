@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Media.Animation;
+using System.Windows.Threading;
 using AFMediaBar.Classes.Models;
 using AFMediaBar.Classes.Models.Layout;
 using AFMediaBar.Classes.Services;
@@ -49,6 +50,7 @@ public partial class DynamicIslandWindow
         if (!motion.UseContinuousMotion || Math.Abs(target - current) < LayoutSizeCalculator.MinimumChangeDip)
         {
             ApplyAnimatedSize(target, orientation);
+            Dispatcher.BeginInvoke(_foregroundSamplingSession.RequestRefresh, DispatcherPriority.ContextIdle);
             return;
         }
 
@@ -113,6 +115,7 @@ public partial class DynamicIslandWindow
 
             if (!_isDragging && !_positionAnimationActive)
                 SetPosition(_isExpanded ? GetExpandedPosition() : GetCollapsedPosition(), animated: false);
+            Dispatcher.BeginInvoke(_foregroundSamplingSession.RequestRefresh, DispatcherPriority.ContextIdle);
         }
     }
 
@@ -176,6 +179,7 @@ public partial class DynamicIslandWindow
         if (!animated && IsClose(new Point(currentLeft, currentTop), target))
             return;
 
+        _foregroundSamplingSession.Invalidate(clearDecision: false);
         BeginAnimation(LeftProperty, null);
         BeginAnimation(TopProperty, null);
         _positionAnimationActive = false;
@@ -189,6 +193,7 @@ public partial class DynamicIslandWindow
         {
             Left = target.X;
             Top = target.Y;
+            Dispatcher.BeginInvoke(_foregroundSamplingSession.RequestRefresh, DispatcherPriority.ContextIdle);
             return;
         }
 
@@ -225,6 +230,7 @@ public partial class DynamicIslandWindow
             _positionAnimationTarget = null;
             _positionAnimationActive = false;
             ApplyPendingSizeRequest();
+            Dispatcher.BeginInvoke(_foregroundSamplingSession.RequestRefresh, DispatcherPriority.ContextIdle);
         };
         BeginAnimation(LeftProperty, leftAnimation, HandoffBehavior.SnapshotAndReplace);
         BeginAnimation(TopProperty, topAnimation, HandoffBehavior.SnapshotAndReplace);

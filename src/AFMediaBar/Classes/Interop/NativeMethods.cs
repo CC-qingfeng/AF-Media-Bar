@@ -72,6 +72,11 @@ public static partial class NativeMethods
     // monitor
     public const int MONITOR_DEFAULTTONEAREST = 2;
     public const int MONITORINFOF_PRIMARY = 1;
+    public const int SM_XVIRTUALSCREEN = 76;
+    public const int SM_YVIRTUALSCREEN = 77;
+    public const int SM_CXVIRTUALSCREEN = 78;
+    public const int SM_CYVIRTUALSCREEN = 79;
+    public const uint CLR_INVALID = 0xFFFFFFFF;
     public const int S_OK = 0;
     public const int DWMWA_EXTENDED_FRAME_BOUNDS = 9;
 
@@ -320,6 +325,18 @@ public static partial class NativeMethods
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool GetCursorPos(out POINT lpPoint);
 
+    /// <summary>获取屏幕或窗口设备上下文。/ Gets a device context for the screen or a window.</summary>
+    [LibraryImport("user32.dll")]
+    public static partial IntPtr GetDC(IntPtr hWnd);
+
+    /// <summary>释放通过 GetDC 获取的设备上下文。/ Releases a device context obtained through GetDC.</summary>
+    [LibraryImport("user32.dll")]
+    public static partial int ReleaseDC(IntPtr hWnd, IntPtr hDC);
+
+    /// <summary>读取系统度量值。/ Reads a system metric.</summary>
+    [LibraryImport("user32.dll")]
+    public static partial int GetSystemMetrics(int nIndex);
+
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool EnumDisplayMonitors(IntPtr hdc, IntPtr lprcClip, MonitorEnumProc lpfnEnum, IntPtr dwData);
@@ -444,6 +461,10 @@ public static partial class NativeMethods
 
     [LibraryImport("gdi32.dll")]
     public static partial IntPtr CreateRectRgn(int left, int top, int right, int bottom);
+
+    /// <summary>读取设备上下文中指定像素的 COLORREF 值。/ Reads the COLORREF value of a pixel in a device context.</summary>
+    [LibraryImport("gdi32.dll")]
+    public static partial uint GetPixel(IntPtr hdc, int x, int y);
 
     [LibraryImport("gdi32.dll")]
     public static partial int CombineRgn(IntPtr dest, IntPtr src1, IntPtr src2, int mode);

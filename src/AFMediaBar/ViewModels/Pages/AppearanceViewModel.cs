@@ -14,7 +14,6 @@ public partial class AppearanceViewModel : ObservableObject
     private CjkFontPreset _cjkFont;
     private int _fontWeight;
     private PlayerForegroundMode _playerForegroundMode;
-    private bool _enhancedReadability;
     private ApplicationThemeMode _applicationThemeMode;
     private ApplicationBackdropMode _backdropMode;
     private bool _isRefreshing;
@@ -26,7 +25,6 @@ public partial class AppearanceViewModel : ObservableObject
         _cjkFont = appearance.CjkFont;
         _fontWeight = appearance.FontWeight;
         _playerForegroundMode = appearance.PlayerForegroundMode;
-        _enhancedReadability = appearance.EnhancedReadability;
         _applicationThemeMode = appearance.ApplicationThemeMode;
         _backdropMode = appearance.BackdropMode;
         SettingsManager.SettingsChanged += OnSettingsChanged;
@@ -81,18 +79,6 @@ public partial class AppearanceViewModel : ObservableObject
         private set
         {
             if (SetProperty(ref _playerForegroundMode, value))
-            {
-                if (!_isRefreshing) Publish();
-            }
-        }
-    }
-
-    public bool EnhancedReadability
-    {
-        get => _enhancedReadability;
-        set
-        {
-            if (SetProperty(ref _enhancedReadability, value))
             {
                 if (!_isRefreshing) Publish();
             }
@@ -189,7 +175,7 @@ public partial class AppearanceViewModel : ObservableObject
         CjkFont,
         FontWeight,
         PlayerForegroundMode,
-        EnhancedReadability,
+        false,
         ApplicationThemeMode,
         BackdropMode));
 
@@ -206,7 +192,6 @@ public partial class AppearanceViewModel : ObservableObject
             CjkFont = appearance.CjkFont;
             FontWeight = appearance.FontWeight;
             PlayerForegroundMode = appearance.PlayerForegroundMode;
-            EnhancedReadability = appearance.EnhancedReadability;
             ApplicationThemeMode = appearance.ApplicationThemeMode;
             BackdropMode = appearance.BackdropMode;
             OnPropertyChanged(nameof(CurrentSurfaceName));
