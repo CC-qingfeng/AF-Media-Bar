@@ -34,6 +34,9 @@ namespace AFMediaBar.Views.Windows
             appearanceService.Attach(this);
             SetPageService(navigationViewPageProvider);
 
+            RootNavigation.TransitionDuration = (int)Math.Round(
+                MotionPolicy.ResolveCurrent().StandardDuration.TotalMilliseconds);
+
             navigationService.SetNavigationControl(RootNavigation);
         }
 

@@ -23,6 +23,8 @@
       <Style TargetType="{x:Type Page}">
         <Setter Property="TextElement.FontFamily" Value="{DynamicResource AppTextFontFamily}" />
         <Setter Property="TextElement.FontWeight" Value="{DynamicResource AppTextFontWeight}" />
+        <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto" />
+        <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
       </Style>
       <Style BasedOn="{StaticResource UiContextMenu}" TargetType="{x:Type ContextMenu}">
         <Setter Property="HasDropShadow" Value="False" />

@@ -29,6 +29,52 @@
                       Appearance="Secondary"
                       Margin="0,8,0,28" />
 
+        <ui:CardControl Margin="0,0,0,24"
+                        Icon="{ui:SymbolIcon ArrowSync24}">
+            <ui:CardControl.Header>
+                <StackPanel>
+                    <ui:TextBlock Text="交互动效"
+                                  FontWeight="{DynamicResource AppTextStrongFontWeight}" />
+                    <ui:TextBlock Text="根据系统动画、高对比度和渲染能力自动调整"
+                                  Appearance="Secondary"
+                                  FontSize="12" />
+                </StackPanel>
+            </ui:CardControl.Header>
+            <Grid MinWidth="500">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="18" />
+                    <ColumnDefinition Width="220" />
+                </Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="{Binding ViewModel.MotionModeText}"
+                               FontSize="15"
+                               FontWeight="{DynamicResource AppTextStrongFontWeight}" />
+                    <TextBlock Text="{Binding ViewModel.MotionDetailText}"
+                               Margin="0,4,0,0"
+                               FontSize="12"
+                               Opacity="0.68" />
+                </StackPanel>
+                <Border Grid.Column="2"
+                        Height="54"
+                        Padding="10,7"
+                        CornerRadius="8"
+                        Background="{DynamicResource ControlFillColorSecondaryBrush}"
+                        BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                        BorderThickness="1">
+                    <StackPanel>
+                        <TextBlock Text="AF Media Bar"
+                                   FontWeight="{DynamicResource AppTextStrongFontWeight}" />
+                        <StackPanel Orientation="Horizontal" Margin="0,5,0,0">
+                            <Border Width="34" Height="6" CornerRadius="3" Background="{DynamicResource AccentFillColorDefaultBrush}" />
+                            <Border Width="54" Height="6" Margin="5,0,0,0" CornerRadius="3" Background="{DynamicResource ControlFillColorDefaultBrush}" />
+                            <Border Width="20" Height="6" Margin="5,0,0,0" CornerRadius="3" Background="{DynamicResource ControlFillColorSecondaryBrush}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </ui:CardControl>
+
         <TextBlock Text="字体"
                    FontSize="18"
                    FontWeight="{DynamicResource AppTextStrongFontWeight}"

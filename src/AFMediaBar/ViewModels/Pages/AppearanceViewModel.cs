@@ -1,5 +1,6 @@
 using AFMediaBar.Classes.Settings;
 using AFMediaBar.Classes.Models.Layout;
+using AFMediaBar.Classes.Services;
 
 namespace AFMediaBar.ViewModels.Pages;
 
@@ -124,6 +125,22 @@ public partial class AppearanceViewModel : ObservableObject
 
     public string CurrentSurfaceName => SettingsManager.Current.WindowMode == WindowMode.Taskbar ? "任务栏模式" : "灵动岛模式";
     public bool CanCustomizeCurrentSurface => SettingsManager.Current.WindowMode != WindowMode.Taskbar;
+
+    /// <summary>当前桌面环境的动效级别。/ Current motion level for the desktop environment.</summary>
+    public string MotionModeText => MotionPolicy.ResolveCurrent().Mode switch
+    {
+        MotionMode.Full => "完整动效",
+        MotionMode.Reduced => "轻量动效",
+        _ => "即时更新"
+    };
+
+    /// <summary>当前动效策略的简短说明。/ Short explanation of the current motion policy.</summary>
+    public string MotionDetailText => MotionPolicy.ResolveCurrent().Mode switch
+    {
+        MotionMode.Full => "保留展开、反馈和频谱过渡",
+        MotionMode.Reduced => "已关闭模糊、跑马灯和连续频谱",
+        _ => "跟随系统设置，避免过渡延迟"
+    };
 
     public PlayerSurfaceStyle SurfaceStyle
     {
