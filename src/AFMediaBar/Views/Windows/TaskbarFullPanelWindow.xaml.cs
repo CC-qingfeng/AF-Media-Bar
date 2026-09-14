@@ -2,6 +2,7 @@ using AFMediaBar.Classes.Models;
 using AFMediaBar.Classes.Services;
 using AFMediaBar.Classes.Services.Audio;
 using AFMediaBar.Classes.Settings;
+using System.Diagnostics;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Threading;
@@ -12,6 +13,10 @@ namespace AFMediaBar.Views.Windows;
 /// <summary>任务栏外的完整媒体、音频与性能面板。 / Full media, audio, and performance panel outside the taskbar.</summary>
 public partial class TaskbarFullPanelWindow : FluentWindow
 {
+    private static readonly TimeSpan DeviceWheelApplyDelay =
+        TimeSpan.FromMilliseconds(AudioApplyPolicy.OutputDevicePreviewDelayMilliseconds);
+    private static readonly TimeSpan VolumeWheelApplyDelay =
+        TimeSpan.FromMilliseconds(AudioApplyPolicy.ApplicationVolumeDelayMilliseconds);
     private readonly MediaSessionService _mediaSessionService;
     private readonly AudioInteractionService _audioInteractionService;
     private readonly SystemMetricsService _metricsService;
@@ -24,6 +29,8 @@ public partial class TaskbarFullPanelWindow : FluentWindow
     private bool _audioControlsVisible;
     private bool _performanceVisible;
     private bool _isClosing;
+    private int _deviceApplyVersion;
+    private int _volumeApplyVersion;
     private Rect? _anchor;
 
     public TaskbarFullPanelWindow(
@@ -106,10 +113,10 @@ public partial class TaskbarFullPanelWindow : FluentWindow
         SourceText.Text = snapshot.SourceName;
         ArtworkImage.Source = snapshot.Artwork;
         ArtworkPlaceholder.Visibility = snapshot.Artwork is null ? Visibility.Visible : Visibility.Collapsed;
-        PreviousButton.IsEnabled = snapshot.CanSkipPrevious;
-        NextButton.IsEnabled = snapshot.CanSkipNext;
-        PlayButton.IsEnabled = snapshot.CanPlayPause;
-        RepeatButton.IsEnabled = snapshot.CanChangeRepeat;
+        SetButtonAvailability(PreviousButton, snapshot.CanSkipPrevious);
+        SetButtonAvailability(NextButton, snapshot.CanSkipNext);
+        SetButtonAvailability(PlayButton, snapshot.CanPlayPause);
+        SetButtonAvailability(RepeatButton, snapshot.CanChangeRepeat);
         RepeatButton.ToolTip = snapshot.RepeatMode switch
         {
             MediaRepeatMode.One => "单曲循环",
@@ -199,6 +206,12 @@ public partial class TaskbarFullPanelWindow : FluentWindow
         return time.TotalHours >= 1 ? time.ToString(@"h\:mm\:ss") : time.ToString(@"m\:ss");
     }
 
+    private static void SetButtonAvailability(System.Windows.Controls.Button button, bool enabled)
+    {
+        button.IsEnabled = enabled;
+        button.Opacity = enabled ? 1 : 0.32;
+    }
+
     private async void PreviousButton_Click(object sender, RoutedEventArgs e) => await _mediaSessionService.SkipPreviousAsync();
     private async void PlayButton_Click(object sender, RoutedEventArgs e) => await _mediaSessionService.TogglePlayPauseAsync();
     private async void NextButton_Click(object sender, RoutedEventArgs e) => await _mediaSessionService.SkipNextAsync();
@@ -228,7 +241,52 @@ public partial class TaskbarFullPanelWindow : FluentWindow
     private async void DeviceCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (!_isLoadingDevices && DeviceCombo.SelectedItem is AudioDeviceOption device)
+        {
+            var version = ++_deviceApplyVersion;
+            await ApplyOutputDeviceAsync(device, version, TimeSpan.Zero);
+        }
+    }
+
+    private void DeviceCombo_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        var devices = DeviceCombo.Items.OfType<AudioDeviceOption>().ToList();
+        var signedSteps = TrayWheelPolicy.GetDeviceSteps(e.Delta);
+        if (devices.Count == 0 || signedSteps == 0)
+            return;
+
+        var current = DeviceCombo.SelectedItem is AudioDeviceOption selected
+            ? Math.Max(0, devices.IndexOf(selected))
+            : 0;
+        var target = devices[WheelInput.MoveCircular(current, signedSteps, devices.Count)];
+        _isLoadingDevices = true;
+        try
+        {
+            DeviceCombo.SelectedItem = target;
+        }
+        finally
+        {
+            _isLoadingDevices = false;
+        }
+
+        var version = ++_deviceApplyVersion;
+        _ = ApplyOutputDeviceAsync(target, version, DeviceWheelApplyDelay);
+        e.Handled = true;
+    }
+
+    private async Task ApplyOutputDeviceAsync(AudioDeviceOption device, int version, TimeSpan delay)
+    {
+        try
+        {
+            if (delay > TimeSpan.Zero)
+                await Task.Delay(delay);
+            if (_isClosing || version != _deviceApplyVersion)
+                return;
             await _audioInteractionService.SetOutputDeviceAsync(device);
+        }
+        catch (Exception exception)
+        {
+            Debug.WriteLine($"[TaskbarFullPanelWindow] Output-device change failed: {exception}");
+        }
     }
 
     private async void VolumeSlider_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
@@ -236,8 +294,43 @@ public partial class TaskbarFullPanelWindow : FluentWindow
         if (_currentVolume is null)
             return;
         var value = (int)Math.Round(VolumeSlider.Value);
-        await Task.Run(() => _audioInteractionService.SetApplicationVolume(_currentVolume.ProcessName, value));
         VolumeText.Text = $"{value}%";
+        await QueueVolumeApplyAsync(value, TimeSpan.Zero);
+    }
+
+    private void VolumeSlider_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (_currentVolume is null)
+            return;
+
+        var steps = TrayWheelPolicy.GetVolumeSteps(e.Delta);
+        if (steps == 0)
+            return;
+        var value = Math.Clamp((int)Math.Round(VolumeSlider.Value) + steps * 2, 0, 100);
+        VolumeSlider.Value = value;
+        VolumeText.Text = $"{value}%";
+        _ = QueueVolumeApplyAsync(value, VolumeWheelApplyDelay);
+        e.Handled = true;
+    }
+
+    private async Task QueueVolumeApplyAsync(int value, TimeSpan delay)
+    {
+        if (_currentVolume is not { } volume)
+            return;
+
+        var version = ++_volumeApplyVersion;
+        try
+        {
+            if (delay > TimeSpan.Zero)
+                await Task.Delay(delay);
+            if (_isClosing || version != _volumeApplyVersion)
+                return;
+            await Task.Run(() => _audioInteractionService.SetApplicationVolume(volume.ProcessName, value));
+        }
+        catch (Exception exception)
+        {
+            Debug.WriteLine($"[TaskbarFullPanelWindow] Application-volume change failed: {exception}");
+        }
     }
 
     private void Window_Deactivated(object sender, EventArgs e)
@@ -263,6 +356,8 @@ public partial class TaskbarFullPanelWindow : FluentWindow
 
     private void OnClosed(object? sender, EventArgs e)
     {
+        _deviceApplyVersion++;
+        _volumeApplyVersion++;
         _timer.Stop();
         _mediaSessionService.SnapshotChanged -= OnSnapshotChanged;
         SettingsManager.TaskbarExperienceSettingsChanged -= OnTaskbarExperienceSettingsChanged;

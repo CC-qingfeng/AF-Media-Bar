@@ -58,7 +58,9 @@ public sealed class SettingsPersistenceServiceTests
                 true,
                 TaskbarInformationDensity.Information,
                 TaskbarContentLayout.CenteredStack,
-                new TaskbarFullPanelSettings(true, false, true, false)),
+                new TaskbarFullPanelSettings(true, false, true, false),
+                TaskbarLengthMode.Fixed,
+                444),
             Interaction = new GlobalInteractionSettings(MediaInteractionMode.Gestures, WheelAction.SwitchMediaSource, true, MouseChordButton.Right, WheelAction.PreviousNext, TrayClickAction.OpenSettings, false),
             TaskbarSurface = new ModeSurfaceSettings(PlayerSurfaceStyle.ThemeTint, 72, 12),
             LyricsTextAlignment = LyricsTextAlignment.Right,
@@ -86,6 +88,8 @@ public sealed class SettingsPersistenceServiceTests
         Assert.AreEqual(MouseChordButton.Right, SettingsManager.Current.Interaction.ChordButton);
         Assert.AreEqual(TaskbarInformationDensity.Information, SettingsManager.Current.TaskbarExperience.Density);
         Assert.AreEqual(new TaskbarFullPanelSettings(true, false, true, false), SettingsManager.Current.TaskbarExperience.FullPanel);
+        Assert.AreEqual(TaskbarLengthMode.Fixed, SettingsManager.Current.TaskbarExperience.LengthMode);
+        Assert.AreEqual(444, SettingsManager.Current.TaskbarExperience.FixedLengthDip);
         Assert.AreEqual(72, SettingsManager.Current.TaskbarSurface.BackgroundOpacityPercent);
         Assert.AreEqual(LyricsTextAlignment.Right, SettingsManager.Current.LyricsTextAlignment);
         Assert.AreEqual(@"\\.\DISPLAY2", SettingsManager.Current.TaskbarTargetMonitorDeviceId);
@@ -94,7 +98,7 @@ public sealed class SettingsPersistenceServiceTests
         Assert.AreEqual(NotificationTargetMode.ForegroundWindow, SettingsManager.Current.TrackChangeNotification.TargetMode);
         Assert.AreEqual(@"\\.\DISPLAY3", SettingsManager.Current.TrackChangeNotification.FixedMonitorDeviceId);
         var persisted = File.ReadAllText(reader.SettingsPath);
-        StringAssert.Contains(persisted, "\"schemaVersion\": 4");
+        StringAssert.Contains(persisted, "\"schemaVersion\": 5");
         StringAssert.Contains(persisted, "\"Disabled\"");
     }
 
@@ -143,7 +147,7 @@ public sealed class SettingsPersistenceServiceTests
 
         Assert.IsTrue(SettingsManager.Current.LyricsEnabled);
         Assert.IsTrue(Directory.GetFiles(_directory, "settings.json.unsupported-*").Length == 1);
-        StringAssert.Contains(File.ReadAllText(main), "\"schemaVersion\": 4");
+        StringAssert.Contains(File.ReadAllText(main), "\"schemaVersion\": 5");
     }
 
     [TestMethod]
@@ -209,6 +213,9 @@ public sealed class SettingsPersistenceServiceTests
         Assert.AreEqual(TrackChangeNotificationPosition.BottomLeft, SettingsManager.Current.TrackChangeNotification.Position);
         Assert.AreEqual(NotificationTargetMode.Fixed, SettingsManager.Current.TrackChangeNotification.TargetMode);
         Assert.AreEqual("DISPLAY2", SettingsManager.Current.TrackChangeNotification.FixedMonitorDeviceId);
+        Assert.AreEqual(TaskbarLengthMode.FollowContent, SettingsManager.Current.TaskbarExperience.LengthMode);
+        Assert.AreEqual(TaskbarExperienceSettings.Default.FixedLengthDip, SettingsManager.Current.TaskbarExperience.FixedLengthDip);
+        StringAssert.Contains(File.ReadAllText(service.SettingsPath), "\"schemaVersion\": 5");
     }
 
     [TestMethod]
@@ -230,6 +237,21 @@ public sealed class SettingsPersistenceServiceTests
     }
 
     [TestMethod]
+    public void Schema5MissingLengthFieldsUseDocumentedDefaults()
+    {
+        Directory.CreateDirectory(_directory);
+        File.WriteAllText(
+            Path.Combine(_directory, "settings.json"),
+            "{\"schemaVersion\":5,\"settings\":{\"taskbarExperience\":{\"hoverLayerEnabled\":true,\"fullLayerEnabled\":true,\"density\":\"Balanced\",\"contentLayout\":\"AdaptiveStack\",\"fullPanel\":{\"mediaInfoVisible\":true,\"mediaControlsVisible\":true}}}}}");
+
+        using var service = new SettingsPersistenceService(_directory);
+        service.Initialize();
+
+        Assert.AreEqual(TaskbarLengthMode.FollowContent, SettingsManager.Current.TaskbarExperience.LengthMode);
+        Assert.AreEqual(TaskbarExperienceSettings.Default.FixedLengthDip, SettingsManager.Current.TaskbarExperience.FixedLengthDip);
+    }
+
+    [TestMethod]
     public void DisplayModesProtectsLastFullPanelGroupAndRecognizesPresets()
     {
         SettingsManager.Replace(new AppSettings
@@ -239,7 +261,7 @@ public sealed class SettingsPersistenceServiceTests
                 FullPanel = new TaskbarFullPanelSettings(true, false, false, false)
             }
         });
-        var viewModel = new DisplayModesViewModel(new FakeDisplayMonitorService());
+        var viewModel = new DisplayModesViewModel(new FakeDisplayMonitorService(), new TaskbarLengthConstraintsService());
 
         viewModel.FullPanelMediaInfoVisible = false;
         Assert.IsTrue(viewModel.FullPanelMediaInfoVisible);
@@ -266,7 +288,7 @@ public sealed class SettingsPersistenceServiceTests
     public void DisplayModesUpdatesIndependentNotificationAndTaskbarTargets()
     {
         SettingsManager.Replace(new AppSettings());
-        var viewModel = new DisplayModesViewModel(new FakeDisplayMonitorService());
+        var viewModel = new DisplayModesViewModel(new FakeDisplayMonitorService(), new TaskbarLengthConstraintsService());
 
         viewModel.TrackChangeNotificationEnabled = true;
         viewModel.ShowTrackChangeNotificationWhenFullscreen = true;
@@ -282,6 +304,26 @@ public sealed class SettingsPersistenceServiceTests
         Assert.AreEqual(TrackChangeNotificationPosition.TopCenter, SettingsManager.Current.TrackChangeNotification.Position);
         Assert.IsTrue(SettingsManager.Current.TrackChangeNotification.ShowWhenFullscreen);
         Assert.IsTrue(viewModel.CanSelectTrackChangeNotificationMonitor);
+    }
+
+    [TestMethod]
+    public void DisplayModesClampsFixedLengthToLiveTaskbarRange()
+    {
+        SettingsManager.Replace(new AppSettings());
+        var constraints = new TaskbarLengthConstraintsService();
+        constraints.Update(280, 520);
+        var viewModel = new DisplayModesViewModel(new FakeDisplayMonitorService(), constraints);
+
+        viewModel.FollowMediaTextLength = false;
+        viewModel.FixedTaskbarLengthDip = 900;
+
+        Assert.IsTrue(viewModel.UsesFixedTaskbarLength);
+        Assert.AreEqual(520, viewModel.FixedTaskbarLengthDip);
+        Assert.AreEqual(520, SettingsManager.Current.TaskbarExperience.FixedLengthDip);
+
+        constraints.Update(320, 460);
+        Assert.AreEqual(320, viewModel.FixedTaskbarLengthMinimum);
+        Assert.AreEqual(460, viewModel.FixedTaskbarLengthMaximum);
     }
 
     [TestMethod]

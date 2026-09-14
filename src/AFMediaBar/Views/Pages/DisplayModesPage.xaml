@@ -180,6 +180,31 @@
                 <ui:CardControl Margin="0,0,0,8" Icon="{ui:SymbolIcon TextAlignJustify24}"><ui:CardControl.Header><StackPanel><TextBlock Text="内容布局" FontWeight="SemiBold"/><TextBlock Text="改变媒体文字的排列和对齐，不允许任意跨层拖放" Opacity="0.62" FontSize="12"/></StackPanel></ui:CardControl.Header>
                     <ComboBox MinWidth="190" SelectedValuePath="Tag" SelectedValue="{Binding ViewModel.ContentLayout, Mode=TwoWay}"><ComboBoxItem Content="紧凑单行" Tag="{x:Static settings:TaskbarContentLayout.CompactInline}"/><ComboBoxItem Content="自适应双行" Tag="{x:Static settings:TaskbarContentLayout.AdaptiveStack}"/><ComboBoxItem Content="居中双行" Tag="{x:Static settings:TaskbarContentLayout.CenteredStack}"/></ComboBox>
                 </ui:CardControl>
+                <ui:CardControl Margin="0,0,0,8" Icon="{ui:SymbolIcon Gauge24}">
+                    <ui:CardControl.Header>
+                        <StackPanel>
+                            <TextBlock Text="程序长度" FontWeight="SemiBold"/>
+                            <TextBlock Text="固定长度时，超出区域的标题、歌手和歌词会自动滚动" Opacity="0.62" FontSize="12"/>
+                        </StackPanel>
+                    </ui:CardControl.Header>
+                    <StackPanel MinWidth="470">
+                        <ui:ToggleSwitch Content="跟随标题、歌手和歌词长度"
+                                         IsChecked="{Binding ViewModel.FollowMediaTextLength, Mode=TwoWay}"/>
+                        <StackPanel Margin="0,12,0,0" IsEnabled="{Binding ViewModel.UsesFixedTaskbarLength}">
+                            <StackPanel Orientation="Horizontal">
+                                <Slider Width="300"
+                                        Minimum="{Binding ViewModel.FixedTaskbarLengthMinimum}"
+                                        Maximum="{Binding ViewModel.FixedTaskbarLengthMaximum}"
+                                        SmallChange="4" LargeChange="20"
+                                        Value="{Binding ViewModel.FixedTaskbarLengthDip, Mode=TwoWay}"/>
+                                <TextBlock Margin="12,0,0,0" VerticalAlignment="Center"
+                                           Text="{Binding ViewModel.FixedTaskbarLengthDip, StringFormat={}{0:0} DIP}"/>
+                            </StackPanel>
+                            <TextBlock Margin="0,5,0,0" FontSize="12" Opacity="0.62"
+                                       Text="{Binding ViewModel.FixedTaskbarLengthRangeText}"/>
+                        </StackPanel>
+                    </StackPanel>
+                </ui:CardControl>
                 <ui:CardControl Margin="0,0,0,8" Icon="{ui:SymbolIcon Orientation24}"><ui:CardControl.Header><StackPanel><TextBlock Text="任务栏方向" FontWeight="SemiBold"/><TextBlock Text="自动可识别底部、顶部、左侧和右侧任务栏" Opacity="0.62" FontSize="12"/></StackPanel></ui:CardControl.Header>
                     <ComboBox MinWidth="190" SelectedValuePath="Tag" SelectedValue="{Binding ViewModel.Orientation, Mode=TwoWay}"><ComboBoxItem Content="自动" Tag="{x:Static settings:LayoutOrientationMode.Auto}"/><ComboBoxItem Content="横向" Tag="{x:Static settings:LayoutOrientationMode.Horizontal}"/><ComboBoxItem Content="纵向（兼容布局）" Tag="{x:Static settings:LayoutOrientationMode.Vertical}"/></ComboBox>
                 </ui:CardControl>

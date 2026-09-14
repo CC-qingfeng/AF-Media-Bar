@@ -116,7 +116,7 @@
                               Width="{Binding ElementName=SongInfoStackPanel, Path=Width}"
                               Height="{Binding ElementName=SongInfoStackPanel, Path=Height}">
                             <StackPanel x:Name="SongMetadataPanel">
-                                <Canvas x:Name="SongTitleContainer" Height="19" Cursor="Hand" Tag="MediaAction"
+                                <Canvas x:Name="SongTitleContainer" Height="19" ClipToBounds="True" Cursor="Hand" Tag="MediaAction"
                                         MouseLeftButtonUp="SongTitleContainer_MouseLeftButtonUp">
                                     <TextBlock x:Name="SongTitle" Text=""
                                                TextTrimming="CharacterEllipsis"
@@ -127,7 +127,7 @@
                                         </TextBlock.RenderTransform>
                                     </TextBlock>
                                 </Canvas>
-                                <Canvas x:Name="SongArtistContainer" Margin="0,-1.5,0,0" Height="19">
+                                <Canvas x:Name="SongArtistContainer" Margin="0,-1.5,0,0" Height="19" ClipToBounds="True">
                                     <TextBlock x:Name="SongArtist" Text="" Opacity="0.5"
                                                TextTrimming="CharacterEllipsis"
                                                FontFamily="{DynamicResource AppTextFontFamily}"
@@ -148,6 +148,7 @@
                                         Grid.Row="0"
                                         Grid.RowSpan="2"
                                         Height="19"
+                                        ClipToBounds="True"
                                         VerticalAlignment="Center"
                                         Cursor="Hand"
                                         Tag="MediaAction"
@@ -159,11 +160,16 @@
                                                TextAlignment="Center"
                                                TextTrimming="CharacterEllipsis"
                                                FontFamily="{DynamicResource AppTextFontFamily}"
-                                               FontWeight="{DynamicResource AppTextFontWeight}" />
+                                               FontWeight="{DynamicResource AppTextFontWeight}">
+                                        <TextBlock.RenderTransform>
+                                            <TranslateTransform />
+                                        </TextBlock.RenderTransform>
+                                    </TextBlock>
                                 </Border>
                                 <Border x:Name="SongLyricsSecondaryContainer"
                                         Grid.Row="1"
                                         Height="{Binding ElementName=SongLyricsContainer, Path=Height}"
+                                        ClipToBounds="True"
                                         VerticalAlignment="Center"
                                         Visibility="Collapsed"
                                         Cursor="Hand"
@@ -178,7 +184,11 @@
                                                FontFamily="{DynamicResource AppTextFontFamily}"
                                                FontWeight="{DynamicResource AppTextFontWeight}"
                                                FontSize="{Binding ElementName=SongLyrics, Path=FontSize}"
-                                               Opacity="0.68" />
+                                               Opacity="0.68">
+                                        <TextBlock.RenderTransform>
+                                            <TranslateTransform />
+                                        </TextBlock.RenderTransform>
+                                    </TextBlock>
                                 </Border>
                             </Grid>
                         </Grid>

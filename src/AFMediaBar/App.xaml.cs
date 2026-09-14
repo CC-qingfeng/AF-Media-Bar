@@ -72,6 +72,7 @@ namespace AFMediaBar
                 services.AddSingleton<ITaskbarDockService, TaskbarDockService>();
                 services.AddSingleton<ITaskbarOccupiedAreaProbe, TaskbarOccupiedAreaProbe>();
                 services.AddSingleton<TaskbarOccupiedAreaService>();
+                services.AddSingleton<TaskbarLengthConstraintsService>();
 
                 // SMTC 媒体会话监听服务，生成 MediaSnapshot 快照供 UI 消费
                 // SMTC media session monitoring service, producing MediaSnapshot for UI consumption

@@ -99,12 +99,12 @@ The app runs in its own process. Its WPF player can be hosted as a taskbar child
 | Taskbar behavior | Horizontal taskbars retain the original Rest appearance; Hover directly blurs/dims the original text while controls stay crisp, Full stays outside the taskbar, and a fixed target display can be selected independently |
 | Window modes | Settings present Taskbar, Dynamic Island, Floating Orb, and Desktop Card; Taskbar and the existing island are available, with the latter two deferred |
 | Appearance | Global fonts, foreground, theme, and window material; the taskbar body is currently fixed transparent, while island surface style, opacity, and radius remain adjustable |
-| Light customization | Toggle Hover/Full, choose density, content layout, and interaction, and configure Full with Compact/Full presets or four visibility groups; arbitrary cross-layer component placement is deferred |
+| Light customization | Toggle Hover/Full and choose density, content layout, content-following or fixed length, and interaction; fixed length is bounded by the live Hover minimum and taskbar range, with marquees for long title, artist, and lyric text; Full retains its presets and four visibility groups |
 | Information density | Minimal, Balanced, and Information presets consistently change buttons, seek width, and artwork-text-spectrum gaps; only the middle text region receives a Hover minimum, and no empty middle region is reserved while disconnected |
 | Auto-hide | Hide when every media session is stopped; collapse containers use an anchor container and shared edge, while four-way collapse still requires real-Windows acceptance |
 | Tray audio controls | Choose the tray left-click action and independently use the wheel for output devices, current-media volume, or disable it; player gesture mappings are not consulted |
-| Audio devices | Switch devices in a stable ordered list; wheel-preview and apply after scrolling stops |
-| App volume | Aggregate application icons and audio sessions across active output endpoints; adjust the selected media app in 2% tray-wheel steps |
+| Audio devices | Switch devices in a stable ordered list; both the audio flyout and Full wheel-preview and apply after scrolling stops |
+| App volume | Aggregate application icons and audio sessions across active output endpoints; the audio flyout, Full, and tray wheel adjust the selected media app in 2% steps |
 | Visualizer | Nine-band spectrum from WASAPI loopback capture, shown only while a connected media source is playing; disconnected state keeps only the music-note placeholder |
 | Metrics | The Full panel auto-sizes its height to visible content and can show system memory, CPU, GPU, and AF Media Bar process memory; hidden metrics stop sampling, and spectrum remains excluded by default |
 | Low-spec mode | Software rendering with transitions, marquees, and fades disabled |
@@ -157,8 +157,9 @@ AF Media Bar is not commercially code-signed, so Windows SmartScreen may show an
 | Right-click the bar and choose “Switch media source” | Switch between available media sessions |
 | Enable Track-change notification under Display Modes | Show the current track only after an observable track change begins playing; configure placement, duration, fullscreen policy, and fixed/foreground display targeting |
 | Choose the taskbar target display under Display Modes | Close an open Full panel and rebuild the taskbar host through its safe reload path; a disconnected target temporarily falls back to the primary display without discarding the preference |
+| Disable content-length following under Display Modes | Choose a fixed value between the live Hover minimum and available taskbar length; overflowing title, artist, and lyric text scrolls within its clipped region |
 | Click the AF Media Bar tray icon | Open output-device, spatial-audio status, and application-volume controls |
-| Scroll over the flyout's output-device row | Preview a device and switch about 1.2 seconds after scrolling stops |
+| Scroll over the audio flyout or Full output-device row | Preview immediately and switch about 1.2 seconds after scrolling stops; Full gives long device names more room and exposes the complete name as a tooltip |
 | Hover over the AF Media Bar tray icon | Show the default wheel action and its current value in the native Windows tooltip |
 | Scroll over the tray icon | Independently switch output devices or adjust current-media volume in 2% steps; device previews update the native tooltip immediately and apply after about 1.2 seconds of inactivity |
 | Click the spatial-audio row | Show the current spatial format and open System > Sound > All sound devices; third-party apps cannot reliably switch Dolby/DTS modes for the system |

@@ -133,6 +133,45 @@ public sealed class TaskbarExperiencePolicyTests
     }
 
     [TestMethod]
+    public void FixedLengthClampsBetweenHoverMinimumAndAvailableMaximum()
+    {
+        Assert.AreEqual(
+            280,
+            TaskbarExperiencePolicy.ResolvePrimaryLength(640, 280, 520, TaskbarLengthMode.Fixed, 120),
+            0.001);
+        Assert.AreEqual(
+            520,
+            TaskbarExperiencePolicy.ResolvePrimaryLength(220, 280, 520, TaskbarLengthMode.Fixed, 900),
+            0.001);
+        Assert.AreEqual(
+            420,
+            TaskbarExperiencePolicy.ResolvePrimaryLength(420, 280, 520, TaskbarLengthMode.FollowContent, 300),
+            0.001);
+    }
+
+    [TestMethod]
+    public void InvalidFixedLengthSettingsNormalizeSafely()
+    {
+        var invalid = TaskbarExperienceSettings.Default with
+        {
+            LengthMode = (TaskbarLengthMode)99,
+            FixedLengthDip = double.NaN
+        };
+        var normalized = invalid.Normalize();
+
+        Assert.AreEqual(TaskbarLengthMode.FollowContent, normalized.LengthMode);
+        Assert.AreEqual(TaskbarExperienceSettings.Default.FixedLengthDip, normalized.FixedLengthDip);
+    }
+
+    [TestMethod]
+    public void MarqueeRunsOnlyForOverflowInFixedMode()
+    {
+        Assert.AreEqual(80, TaskbarExperiencePolicy.CalculateMarqueeOverflow(280, 200, TaskbarLengthMode.Fixed), 0.001);
+        Assert.AreEqual(0, TaskbarExperiencePolicy.CalculateMarqueeOverflow(180, 200, TaskbarLengthMode.Fixed), 0.001);
+        Assert.AreEqual(0, TaskbarExperiencePolicy.CalculateMarqueeOverflow(280, 200, TaskbarLengthMode.FollowContent), 0.001);
+    }
+
+    [TestMethod]
     public void ProgressExtrapolatesWhilePlayingAndClampsToDuration()
     {
         var now = DateTimeOffset.UtcNow;

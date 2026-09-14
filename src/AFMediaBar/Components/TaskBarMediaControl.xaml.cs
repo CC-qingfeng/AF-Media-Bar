@@ -87,6 +87,7 @@ namespace AFMediaBar.Components
                 _progressTimer.Stop();
                 _hoverOpenTimer.Stop();
                 _hoverCloseTimer.Stop();
+                StopMarqueeAnimations();
             };
 
             // 计时器必须先于布局初始化；布局会立即应用已持久化的悬停层开关。
@@ -110,6 +111,9 @@ namespace AFMediaBar.Components
         private string _translatedLyric = string.Empty;
         private string _secondaryLyric = string.Empty;
         private string _lastSizeFingerprint = string.Empty;
+        private string _lastMarqueeFingerprint = string.Empty;
+        private int _marqueeUpdateVersion;
+        private double _minimumPrimaryLength = 120;
         private readonly DispatcherTimer _progressTimer;
         private readonly DispatcherTimer _hoverOpenTimer;
         private readonly DispatcherTimer _hoverCloseTimer;
@@ -132,6 +136,9 @@ namespace AFMediaBar.Components
         public event Action<double>? SeekRequested;
         public event EventHandler<PlayerSurfaceWheelEventArgs>? WheelRequested;
         public event EventHandler<MediaBarSizeRequestEventArgs>? DesiredSizeChanged;
+
+        /// <summary>当前横向任务栏悬停层和固定组件所需的最小长度。 / Current minimum length required by the horizontal taskbar hover layer and fixed components.</summary>
+        public double MinimumPrimaryLength => _minimumPrimaryLength;
 
         // === 歌词显示状态 Lyrics Display State ===
         // 解析后的行缓存 + 当前行下标，避免每个快照重复解析。
@@ -329,6 +336,7 @@ namespace AFMediaBar.Components
                 HideTaskbarHoverLayer(immediate: true);
             if (!isHorizontalTaskbar)
             {
+                StopMarqueeAnimations();
                 AnimateComponentHover(SongImageHoverOverlay, false);
                 AnimateComponentHover(SongInfoHoverOverlay, false);
                 AnimateComponentHover(TaskbarSpectrumHoverSurface, false);
@@ -366,10 +374,6 @@ namespace AFMediaBar.Components
             SongArtistContainer.Width = textWidth;
             SongLyricsContainer.Width = textWidth;
             SongLyricsSecondaryContainer.Width = textWidth;
-            SongTitle.Width = textWidth;
-            SongArtist.Width = textWidth;
-            SongLyrics.Width = textWidth;
-            SongLyricsSecondary.Width = textWidth;
 
             Canvas.SetLeft(SongInfoHoverOverlay, textLeft);
             Canvas.SetTop(SongInfoHoverOverlay, textTop);
@@ -390,6 +394,8 @@ namespace AFMediaBar.Components
                 HoverRevealHost.BeginAnimation(FrameworkElement.WidthProperty, null);
                 HoverRevealHost.Width = textWidth;
             }
+
+            QueueMarqueeUpdate(textWidth);
         }
 
         private double GetTaskbarArtworkRight()
@@ -749,23 +755,131 @@ namespace AFMediaBar.Components
                 isResetToPreset);
             if (_currentMode == WindowMode.Taskbar && orientation == LayoutOrientation.Horizontal)
             {
+                var experience = SettingsManager.Current.TaskbarExperience.Normalize();
+                var spectrumVisible = TaskbarExperiencePolicy.ShouldShowSpectrum(_snapshot);
+                var transportVisible = SettingsManager.Current.Interaction.Mode != MediaInteractionMode.Gestures;
+                var progressVisible = _snapshot.Duration > 0;
+                var contentWidth = TaskbarExperiencePolicy.CalculateWidth(
+                    textWidth,
+                    GetTaskbarArtworkRight(),
+                    TaskbarSpectrumWidth,
+                    TaskbarTrailingMargin,
+                    _snapshot.IsConnected,
+                    spectrumVisible,
+                    transportVisible,
+                    experience.HoverLayerEnabled,
+                    progressVisible,
+                    experience.Density,
+                    double.PositiveInfinity);
+                _minimumPrimaryLength = TaskbarExperiencePolicy.CalculateWidth(
+                    0,
+                    GetTaskbarArtworkRight(),
+                    TaskbarSpectrumWidth,
+                    TaskbarTrailingMargin,
+                    _snapshot.IsConnected,
+                    spectrumVisible,
+                    transportVisible,
+                    experience.HoverLayerEnabled,
+                    progressVisible,
+                    experience.Density,
+                    double.PositiveInfinity);
                 request = request with
                 {
-                    Width = TaskbarExperiencePolicy.CalculateWidth(
-                        textWidth,
-                        GetTaskbarArtworkRight(),
-                        TaskbarSpectrumWidth,
-                        TaskbarTrailingMargin,
-                        _snapshot.IsConnected,
-                        TaskbarExperiencePolicy.ShouldShowSpectrum(_snapshot),
-                        SettingsManager.Current.Interaction.Mode != MediaInteractionMode.Gestures,
-                        SettingsManager.Current.TaskbarExperience.HoverLayerEnabled,
-                        _snapshot.Duration > 0,
-                        SettingsManager.Current.TaskbarExperience.Density,
-                        double.PositiveInfinity)
+                    Width = _snapshot.IsConnected
+                        ? TaskbarExperiencePolicy.ResolvePrimaryLength(
+                            contentWidth,
+                            _minimumPrimaryLength,
+                            double.PositiveInfinity,
+                            experience.LengthMode,
+                            experience.FixedLengthDip)
+                        : contentWidth
                 };
             }
             DesiredSizeChanged?.Invoke(this, new MediaBarSizeRequestEventArgs(request));
+        }
+
+        private void QueueMarqueeUpdate(double textWidth)
+        {
+            var version = ++_marqueeUpdateVersion;
+            Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
+            {
+                if (version != _marqueeUpdateVersion)
+                    return;
+                UpdateMarqueeAnimations(textWidth);
+            }));
+        }
+
+        private void UpdateMarqueeAnimations(double textWidth)
+        {
+            var experience = SettingsManager.Current.TaskbarExperience.Normalize();
+            var enabled = _currentMode == WindowMode.Taskbar &&
+                          !_isVertical &&
+                          _isConnected &&
+                          experience.LengthMode == TaskbarLengthMode.Fixed;
+            var fingerprint = $"{enabled}|{textWidth:0.##}|{SongTitle.Text}|{SongArtist.Text}|{SongLyrics.Text}|{SongLyricsSecondary.Text}|{SongMetadataPanel.Visibility}|{SongLyricsPanel.Visibility}|{SongLyricsSecondaryContainer.Visibility}";
+            if (fingerprint == _lastMarqueeFingerprint)
+                return;
+
+            _lastMarqueeFingerprint = fingerprint;
+            ConfigureMarquee(SongTitle, SongTitleContainer, enabled);
+            ConfigureMarquee(SongArtist, SongArtistContainer, enabled);
+            ConfigureMarquee(SongLyrics, SongLyricsContainer, enabled);
+            ConfigureMarquee(SongLyricsSecondary, SongLyricsSecondaryContainer, enabled);
+        }
+
+        private static void ConfigureMarquee(System.Windows.Controls.TextBlock text, FrameworkElement container, bool enabled)
+        {
+            if (text.RenderTransform is not TranslateTransform transform)
+            {
+                transform = new TranslateTransform();
+                text.RenderTransform = transform;
+            }
+            transform.BeginAnimation(TranslateTransform.XProperty, null);
+            transform.X = 0;
+
+            var available = double.IsFinite(container.ActualWidth) && container.ActualWidth > 0
+                ? container.ActualWidth
+                : double.IsFinite(container.Width) ? Math.Max(0, container.Width) : 0;
+            var measured = MeasureTextWidth(text.Text, text);
+            if (!enabled || container.Visibility != Visibility.Visible || available <= 0 || measured <= available + 1)
+            {
+                text.Width = Math.Max(0, available);
+                text.TextTrimming = TextTrimming.CharacterEllipsis;
+                return;
+            }
+
+            text.Width = measured;
+            text.TextTrimming = TextTrimming.None;
+            var overflow = TaskbarExperiencePolicy.CalculateMarqueeOverflow(
+                measured,
+                available,
+                TaskbarLengthMode.Fixed);
+            var travelSeconds = Math.Max(1, overflow / 30d);
+            var animation = new DoubleAnimationUsingKeyFrames
+            {
+                Duration = TimeSpan.FromSeconds(2 + travelSeconds * 2),
+                RepeatBehavior = RepeatBehavior.Forever
+            };
+            animation.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromTimeSpan(TimeSpan.Zero)));
+            animation.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromTimeSpan(TimeSpan.FromSeconds(1))));
+            animation.KeyFrames.Add(new LinearDoubleKeyFrame(-overflow, KeyTime.FromTimeSpan(TimeSpan.FromSeconds(1 + travelSeconds))));
+            animation.KeyFrames.Add(new LinearDoubleKeyFrame(-overflow, KeyTime.FromTimeSpan(TimeSpan.FromSeconds(2 + travelSeconds))));
+            animation.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromTimeSpan(TimeSpan.FromSeconds(2 + travelSeconds * 2))));
+            transform.BeginAnimation(TranslateTransform.XProperty, animation, HandoffBehavior.SnapshotAndReplace);
+        }
+
+        private void StopMarqueeAnimations()
+        {
+            _marqueeUpdateVersion++;
+            _lastMarqueeFingerprint = string.Empty;
+            foreach (var text in new[] { SongTitle, SongArtist, SongLyrics, SongLyricsSecondary })
+            {
+                if (text.RenderTransform is TranslateTransform transform)
+                {
+                    transform.BeginAnimation(TranslateTransform.XProperty, null);
+                    transform.X = 0;
+                }
+            }
         }
 
         private static double MeasureTextWidth(string text, System.Windows.Controls.TextBlock source)

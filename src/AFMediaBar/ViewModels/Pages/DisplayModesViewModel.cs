@@ -9,6 +9,7 @@ namespace AFMediaBar.ViewModels.Pages;
 public partial class DisplayModesViewModel : ObservableObject
 {
     private readonly IDisplayMonitorService _displayMonitorService;
+    private readonly TaskbarLengthConstraintsService _taskbarLengthConstraints;
     private bool _isRefreshing;
     private IReadOnlyList<DisplayMonitorOption> _monitorOptions = Array.Empty<DisplayMonitorOption>();
 
@@ -98,6 +99,40 @@ public partial class DisplayModesViewModel : ObservableObject
         set => UpdateExperience(SettingsManager.Current.TaskbarExperience with { ContentLayout = value });
     }
 
+    public bool FollowMediaTextLength
+    {
+        get => SettingsManager.Current.TaskbarExperience.LengthMode == TaskbarLengthMode.FollowContent;
+        set => UpdateExperience(SettingsManager.Current.TaskbarExperience with
+        {
+            LengthMode = value ? TaskbarLengthMode.FollowContent : TaskbarLengthMode.Fixed,
+            FixedLengthDip = value
+                ? SettingsManager.Current.TaskbarExperience.FixedLengthDip
+                : Math.Clamp(
+                    SettingsManager.Current.TaskbarExperience.FixedLengthDip,
+                    FixedTaskbarLengthMinimum,
+                    FixedTaskbarLengthMaximum)
+        });
+    }
+
+    public bool UsesFixedTaskbarLength => !FollowMediaTextLength;
+    public double FixedTaskbarLengthMinimum => Math.Ceiling(_taskbarLengthConstraints.MinimumLengthDip);
+    public double FixedTaskbarLengthMaximum => Math.Max(FixedTaskbarLengthMinimum, Math.Floor(_taskbarLengthConstraints.MaximumLengthDip));
+
+    public double FixedTaskbarLengthDip
+    {
+        get => Math.Clamp(
+            SettingsManager.Current.TaskbarExperience.FixedLengthDip,
+            FixedTaskbarLengthMinimum,
+            FixedTaskbarLengthMaximum);
+        set => UpdateExperience(SettingsManager.Current.TaskbarExperience with
+        {
+            FixedLengthDip = Math.Clamp(value, FixedTaskbarLengthMinimum, FixedTaskbarLengthMaximum)
+        });
+    }
+
+    public string FixedTaskbarLengthRangeText =>
+        $"可用范围：{FixedTaskbarLengthMinimum:0}–{FixedTaskbarLengthMaximum:0} DIP";
+
     public bool FullPanelMediaInfoVisible
     {
         get => FullPanelSettings.MediaInfoVisible;
@@ -173,11 +208,15 @@ public partial class DisplayModesViewModel : ObservableObject
         }
     }
 
-    public DisplayModesViewModel(IDisplayMonitorService displayMonitorService)
+    public DisplayModesViewModel(
+        IDisplayMonitorService displayMonitorService,
+        TaskbarLengthConstraintsService taskbarLengthConstraints)
     {
         _displayMonitorService = displayMonitorService;
+        _taskbarLengthConstraints = taskbarLengthConstraints;
         SettingsManager.SettingsChanged += OnSettingsChanged;
         _displayMonitorService.MonitorsChanged += OnMonitorsChanged;
+        _taskbarLengthConstraints.Changed += OnTaskbarLengthConstraintsChanged;
         _displayMonitorService.Refresh();
         RefreshMonitorOptions();
     }
@@ -265,6 +304,14 @@ public partial class DisplayModesViewModel : ObservableObject
 
     private void OnMonitorsChanged(object? sender, EventArgs e) => RefreshMonitorOptions();
 
+    private void OnTaskbarLengthConstraintsChanged(object? sender, EventArgs e)
+    {
+        OnPropertyChanged(nameof(FixedTaskbarLengthMinimum));
+        OnPropertyChanged(nameof(FixedTaskbarLengthMaximum));
+        OnPropertyChanged(nameof(FixedTaskbarLengthDip));
+        OnPropertyChanged(nameof(FixedTaskbarLengthRangeText));
+    }
+
     private void RefreshMonitorOptions()
     {
         var monitors = _displayMonitorService.GetMonitors();
@@ -316,6 +363,9 @@ public partial class DisplayModesViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(HoverLayerEnabled)); OnPropertyChanged(nameof(FullLayerEnabled));
         OnPropertyChanged(nameof(Density)); OnPropertyChanged(nameof(ContentLayout));
+        OnPropertyChanged(nameof(FollowMediaTextLength)); OnPropertyChanged(nameof(UsesFixedTaskbarLength));
+        OnPropertyChanged(nameof(FixedTaskbarLengthMinimum)); OnPropertyChanged(nameof(FixedTaskbarLengthMaximum));
+        OnPropertyChanged(nameof(FixedTaskbarLengthDip)); OnPropertyChanged(nameof(FixedTaskbarLengthRangeText));
         RaiseFullPanel();
     }
 

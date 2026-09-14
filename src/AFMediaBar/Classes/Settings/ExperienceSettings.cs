@@ -48,6 +48,13 @@ public enum TaskbarContentLayout
     CenteredStack = 2
 }
 
+/// <summary>任务栏媒体条主轴长度的决定方式。 / How the taskbar media bar resolves its primary-axis length.</summary>
+public enum TaskbarLengthMode
+{
+    FollowContent = 0,
+    Fixed = 1
+}
+
 /// <summary>播放器表面的基础背景方案。 / Basic background style for a player surface.</summary>
 public enum PlayerSurfaceStyle
 {
@@ -145,14 +152,24 @@ public readonly record struct TaskbarExperienceSettings(
     bool FullLayerEnabled,
     TaskbarInformationDensity Density,
     TaskbarContentLayout ContentLayout,
-    TaskbarFullPanelSettings FullPanel)
+    TaskbarFullPanelSettings FullPanel,
+    TaskbarLengthMode LengthMode,
+    double FixedLengthDip)
 {
+    /// <summary>固定长度设置的持久化安全下限。 / Persistence-safe lower bound for the fixed-length setting.</summary>
+    public const double MinimumStoredFixedLengthDip = 120;
+
+    /// <summary>固定长度设置的持久化安全上限；运行时仍按任务栏可用区间夹取。 / Persistence-safe upper bound; runtime still clamps to the taskbar's available range.</summary>
+    public const double MaximumStoredFixedLengthDip = 4096;
+
     public static TaskbarExperienceSettings Default { get; } = new(
         true,
         true,
         TaskbarInformationDensity.Balanced,
         TaskbarContentLayout.AdaptiveStack,
-        TaskbarFullPanelSettings.Default);
+        TaskbarFullPanelSettings.Default,
+        TaskbarLengthMode.FollowContent,
+        360);
 
     public TaskbarExperienceSettings Normalize()
     {
@@ -161,7 +178,11 @@ public readonly record struct TaskbarExperienceSettings(
         {
             Density = Enum.IsDefined(Density) ? Density : defaults.Density,
             ContentLayout = Enum.IsDefined(ContentLayout) ? ContentLayout : defaults.ContentLayout,
-            FullPanel = FullPanel.Normalize()
+            FullPanel = FullPanel.Normalize(),
+            LengthMode = Enum.IsDefined(LengthMode) ? LengthMode : defaults.LengthMode,
+            FixedLengthDip = double.IsFinite(FixedLengthDip) && FixedLengthDip >= MinimumStoredFixedLengthDip
+                ? Math.Clamp(FixedLengthDip, MinimumStoredFixedLengthDip, MaximumStoredFixedLengthDip)
+                : defaults.FixedLengthDip
         };
     }
 }

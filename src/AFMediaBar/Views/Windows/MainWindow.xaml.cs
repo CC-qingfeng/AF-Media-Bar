@@ -34,6 +34,7 @@ namespace AFMediaBar.Views.Windows
         private readonly NativeMouseInputMonitor _mouseInputMonitor;
         private readonly WindowAppearanceService _appearanceService;
         private readonly TaskbarOccupiedAreaService _occupiedAreaService;
+        private readonly TaskbarLengthConstraintsService _taskbarLengthConstraints;
         private readonly Func<SettingsWindow> _settingsWindowFactory;
         private readonly GlobalInteractionRouter _interactionRouter;
         private readonly AudioInteractionService _audioInteractionService;
@@ -75,6 +76,7 @@ namespace AFMediaBar.Views.Windows
             NativeMouseInputMonitor mouseInputMonitor,
             WindowAppearanceService appearanceService,
             TaskbarOccupiedAreaService occupiedAreaService,
+            TaskbarLengthConstraintsService taskbarLengthConstraints,
             Func<SettingsWindow> settingsWindowFactory,
             GlobalInteractionRouter interactionRouter,
             AudioInteractionService audioInteractionService,
@@ -94,6 +96,7 @@ namespace AFMediaBar.Views.Windows
             _mouseInputMonitor = mouseInputMonitor;
             _appearanceService = appearanceService;
             _occupiedAreaService = occupiedAreaService;
+            _taskbarLengthConstraints = taskbarLengthConstraints;
             _settingsWindowFactory = settingsWindowFactory;
             _interactionRouter = interactionRouter;
             _audioInteractionService = audioInteractionService;
@@ -653,6 +656,7 @@ namespace AFMediaBar.Views.Windows
                 this,
                 _appearanceService,
                 _occupiedAreaService,
+                _taskbarLengthConstraints,
                 _interactionRouter,
                 _audioInteractionService,
                 _audioMonitorService);

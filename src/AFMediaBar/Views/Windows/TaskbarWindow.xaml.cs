@@ -37,6 +37,7 @@ public partial class TaskbarWindow : Window
 
     private readonly ITaskbarDockService _taskBarService;
     private readonly TaskbarOccupiedAreaService _occupiedAreaService;
+    private readonly TaskbarLengthConstraintsService _lengthConstraints;
     private readonly MainWindowViewModel _viewModel;
     private readonly ITaskbarWindowHostActions _hostActions;
     private readonly DispatcherTimer _timer;
@@ -86,6 +87,7 @@ public partial class TaskbarWindow : Window
         ITaskbarWindowHostActions hostActions,
         WindowAppearanceService appearanceService,
         TaskbarOccupiedAreaService occupiedAreaService,
+        TaskbarLengthConstraintsService lengthConstraints,
         GlobalInteractionRouter interactionRouter,
         AudioInteractionService audioInteractionService,
         AudioMonitorService audioMonitorService)
@@ -109,6 +111,7 @@ public partial class TaskbarWindow : Window
 
         _taskBarService = taskBarService;
         _occupiedAreaService = occupiedAreaService;
+        _lengthConstraints = lengthConstraints;
         _viewModel = viewModel;
         _hostActions = hostActions;
         _interactionRouter = interactionRouter;
@@ -360,6 +363,8 @@ public partial class TaskbarWindow : Window
         var orientation = _appliedOrientation ?? LayoutOrientation.Horizontal;
         var preferredRange = GetPreferredSafeRange(taskbarRect, orientation, dpiScale);
         var maximumPrimary = preferredRange.Length / dpiScale;
+        if (orientation == LayoutOrientation.Horizontal)
+            _lengthConstraints.Update(MediaControl.MinimumPrimaryLength, maximumPrimary);
         if (DateTime.UtcNow >= _skipOccupiedAreaProbeUntilUtc && maximumPrimary > 0)
         {
             var currentPrimary = orientation == LayoutOrientation.Horizontal ? barWidth : barHeight;
@@ -829,9 +834,17 @@ public partial class TaskbarWindow : Window
     private void ApplyDesiredSizeRequest(MediaBarSizeRequest request, LayoutOrientation orientation)
     {
         var maximum = GetAvailablePrimaryLengthDip(orientation);
-        var target = request.PrimaryLength;
-        if (maximum > 0)
-            target = Math.Min(target, maximum);
+        var minimum = orientation == LayoutOrientation.Horizontal
+            ? MediaControl.MinimumPrimaryLength
+            : 1;
+        if (orientation == LayoutOrientation.Horizontal)
+            _lengthConstraints.Update(minimum, maximum);
+        var target = TaskbarExperiencePolicy.ResolvePrimaryLength(
+            request.PrimaryLength,
+            minimum,
+            maximum > 0 ? maximum : double.PositiveInfinity,
+            TaskbarLengthMode.FollowContent,
+            request.PrimaryLength);
 
         var current = MediaControl.CurrentLayout is { } layout
             ? orientation == LayoutOrientation.Horizontal ? layout.Canvas.Width : layout.Canvas.Height

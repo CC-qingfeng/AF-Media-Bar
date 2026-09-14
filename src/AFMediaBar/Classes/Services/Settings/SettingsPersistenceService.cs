@@ -11,7 +11,7 @@ namespace AFMediaBar.Classes.Services;
 /// <summary>负责用户设置 JSON 的加载、恢复、原子保存和防抖。 / Owns loading, recovery, atomic saving and debouncing of user settings JSON.</summary>
 public sealed class SettingsPersistenceService : IDisposable
 {
-    public const int CurrentSchemaVersion = 4;
+    public const int CurrentSchemaVersion = 5;
     private readonly string _directoryPath;
     private readonly string _settingsPath;
     private readonly string _backupPath;
@@ -29,6 +29,7 @@ public sealed class SettingsPersistenceService : IDisposable
     private Timer? _timer;
     private bool _initialized;
     private bool _disposed;
+    private int? _loadedSchemaVersion;
 
     /// <summary>schema 1–3 中等待启动阶段映射的旧任务栏显示器索引。 / Legacy taskbar-display index from schema 1–3 awaiting startup-time mapping.</summary>
     public int? LegacyTaskbarMonitorIndex { get; private set; }
@@ -108,6 +109,7 @@ public sealed class SettingsPersistenceService : IDisposable
     private void LoadCore()
     {
         LegacyTaskbarMonitorIndex = null;
+        _loadedSchemaVersion = null;
         AppSettings? loaded = null;
         if (File.Exists(_settingsPath))
         {
@@ -130,7 +132,7 @@ public sealed class SettingsPersistenceService : IDisposable
         }
 
         SettingsManager.Replace((loaded ?? new AppSettings()).Normalize());
-        if (!File.Exists(_settingsPath) || loaded is null)
+        if (!File.Exists(_settingsPath) || loaded is null || _loadedSchemaVersion < CurrentSchemaVersion)
             SaveCore(SettingsManager.Current);
     }
 
@@ -149,6 +151,7 @@ public sealed class SettingsPersistenceService : IDisposable
             ?? throw new JsonException("Settings envelope is empty.");
         if (envelope.SchemaVersion is < 1 or > CurrentSchemaVersion)
             throw new UnsupportedSettingsSchemaException(envelope.SchemaVersion);
+        _loadedSchemaVersion = envelope.SchemaVersion;
         var result = envelope.Settings ?? new AppSettings();
         if (envelope.SchemaVersion == 1)
         {
@@ -178,6 +181,16 @@ public sealed class SettingsPersistenceService : IDisposable
                                         legacyIndexNode.TryGetValue<int>(out var legacyIndex)
                 ? Math.Max(0, legacyIndex)
                 : 0;
+        }
+        if (envelope.SchemaVersion <= 4)
+        {
+            // Schema 5 adds taskbar length behavior. Existing users retain the previous
+            // content-following layout instead of receiving a new fixed width implicitly.
+            result.TaskbarExperience = result.TaskbarExperience with
+            {
+                LengthMode = TaskbarLengthMode.FollowContent,
+                FixedLengthDip = TaskbarExperienceSettings.Default.FixedLengthDip
+            };
         }
         return result.Normalize();
     }
@@ -270,6 +283,7 @@ public sealed class SettingsPersistenceService : IDisposable
                 typeof(TEnum) == typeof(TrayClickAction) ? TrayClickAction.OpenAudioControl :
                 typeof(TEnum) == typeof(TaskbarInformationDensity) ? TaskbarInformationDensity.Balanced :
                 typeof(TEnum) == typeof(TaskbarContentLayout) ? TaskbarContentLayout.AdaptiveStack :
+                typeof(TEnum) == typeof(TaskbarLengthMode) ? TaskbarLengthMode.FollowContent :
                 typeof(TEnum) == typeof(PlayerSurfaceStyle) ? PlayerSurfaceStyle.Automatic :
                 typeof(TEnum) == typeof(LyricsTextAlignment) ? LyricsTextAlignment.Center : default(TEnum);
             return (TEnum)value;

@@ -66,6 +66,45 @@ public static class TaskbarExperiencePolicy
     private static double ClampWidth(double desired, double maximumWidth) =>
         double.IsFinite(maximumWidth) ? Math.Min(desired, Math.Max(0, maximumWidth)) : desired;
 
+    /// <summary>
+    /// 按内容跟随或固定模式解析最终长度，并把固定值限制在当前悬停层下限与可用区间上限之间。
+    /// Resolves the final length in content-following or fixed mode and clamps a fixed value
+    /// between the current hover-layer minimum and the available-range maximum.
+    /// </summary>
+    public static double ResolvePrimaryLength(
+        double contentLength,
+        double minimumLength,
+        double maximumLength,
+        TaskbarLengthMode mode,
+        double fixedLength)
+    {
+        var minimum = double.IsFinite(minimumLength) ? Math.Max(0, minimumLength) : 0;
+        var maximum = double.IsFinite(maximumLength)
+            ? Math.Max(minimum, maximumLength)
+            : double.PositiveInfinity;
+        var content = double.IsFinite(contentLength) ? Math.Max(0, contentLength) : minimum;
+        var requested = mode == TaskbarLengthMode.Fixed && double.IsFinite(fixedLength)
+            ? fixedLength
+            : content;
+        return Math.Clamp(requested, minimum, maximum);
+    }
+
+    /// <summary>仅在固定长度模式下返回超出文字容器的滚动距离。 / Returns text overflow distance only in fixed-length mode.</summary>
+    public static double CalculateMarqueeOverflow(
+        double measuredTextLength,
+        double availableTextLength,
+        TaskbarLengthMode mode)
+    {
+        if (mode != TaskbarLengthMode.Fixed ||
+            !double.IsFinite(measuredTextLength) ||
+            !double.IsFinite(availableTextLength))
+        {
+            return 0;
+        }
+
+        return Math.Max(0, measuredTextLength - Math.Max(0, availableTextLength));
+    }
+
     /// <summary>计算中间文字区域容纳悬停控件所需的最小宽度。 / Calculates the middle text region's minimum width for hover controls.</summary>
     public static double CalculateHoverLayerWidth(
         bool transportVisible,
