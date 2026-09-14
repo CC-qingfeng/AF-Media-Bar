@@ -33,6 +33,7 @@ public partial class TaskbarFullPanelWindow : FluentWindow
     private bool _isClosing;
     private int _deviceApplyVersion;
     private int _volumeApplyVersion;
+    private int _sectionAnimationVersion;
     private Rect? _anchor;
 
     public TaskbarFullPanelWindow(
@@ -198,7 +199,11 @@ public partial class TaskbarFullPanelWindow : FluentWindow
 
     private void ApplyFullPanelSettings(bool animate)
     {
+        if (_isClosing)
+            return;
+
         var settings = SettingsManager.Current.TaskbarExperience.FullPanel.Normalize();
+        var animationVersion = ++_sectionAnimationVersion;
         var audioBecameVisible = !_audioControlsVisible && settings.AudioControlsVisible;
         var mediaInfoWasVisible = MediaInfoSection.Visibility == Visibility.Visible;
         var mediaControlsWereVisible = MediaControlsSection.Visibility == Visibility.Visible;
@@ -207,6 +212,57 @@ public partial class TaskbarFullPanelWindow : FluentWindow
         _audioControlsVisible = settings.AudioControlsVisible;
         _performanceVisible = settings.PerformanceVisible;
 
+        var motion = MotionPolicy.ResolveCurrent();
+        if (animate && motion.UseTransitions)
+        {
+            var exitingSections = new[]
+            {
+                (Section: (UIElement)MediaInfoSection, ShouldBeVisible: settings.MediaInfoVisible),
+                (Section: (UIElement)MediaControlsSection, ShouldBeVisible: settings.MediaControlsVisible),
+                (Section: (UIElement)AudioControlsSection, ShouldBeVisible: settings.AudioControlsVisible),
+                (Section: (UIElement)PerformanceSection, ShouldBeVisible: settings.PerformanceVisible)
+            }
+            .Where(state => !state.ShouldBeVisible && state.Section.Visibility == Visibility.Visible)
+            .Select(state => state.Section)
+            .ToArray();
+
+            if (exitingSections.Length > 0)
+            {
+                var ease = new PowerEase { Power = 3, EasingMode = EasingMode.EaseInOut };
+                void CompleteExitAnimations()
+                {
+                    if (_isClosing || animationVersion != _sectionAnimationVersion)
+                        return;
+
+                    foreach (var section in exitingSections)
+                    {
+                        section.BeginAnimation(OpacityProperty, null);
+                        section.Visibility = Visibility.Collapsed;
+                        section.Opacity = 1;
+                    }
+
+                    ApplyFullPanelSettings(animate: true);
+                }
+
+                for (var index = 0; index < exitingSections.Length; index++)
+                {
+                    var animation = new DoubleAnimation(0, motion.ExitDuration)
+                    {
+                        EasingFunction = ease,
+                        FillBehavior = FillBehavior.Stop
+                    };
+                    if (index == exitingSections.Length - 1)
+                        animation.Completed += (_, _) => CompleteExitAnimations();
+
+                    exitingSections[index].BeginAnimation(
+                        OpacityProperty,
+                        animation,
+                        HandoffBehavior.SnapshotAndReplace);
+                }
+                return;
+            }
+        }
+
         MediaInfoSection.Visibility = settings.MediaInfoVisible ? Visibility.Visible : Visibility.Collapsed;
         MediaControlsSection.Visibility = settings.MediaControlsVisible ? Visibility.Visible : Visibility.Collapsed;
         AudioControlsSection.Visibility = settings.AudioControlsVisible ? Visibility.Visible : Visibility.Collapsed;
@@ -214,10 +270,14 @@ public partial class TaskbarFullPanelWindow : FluentWindow
 
         if (animate)
         {
-            SetSectionEntryState(MediaInfoSection, settings.MediaInfoVisible && !mediaInfoWasVisible);
-            SetSectionEntryState(MediaControlsSection, settings.MediaControlsVisible && !mediaControlsWereVisible);
-            SetSectionEntryState(AudioControlsSection, settings.AudioControlsVisible && !audioWasVisible);
-            SetSectionEntryState(PerformanceSection, settings.PerformanceVisible && !performanceWasVisible);
+            SetSectionEntryState(MediaInfoSection, settings.MediaInfoVisible &&
+                (!mediaInfoWasVisible || MediaInfoSection.Opacity < 0.999));
+            SetSectionEntryState(MediaControlsSection, settings.MediaControlsVisible &&
+                (!mediaControlsWereVisible || MediaControlsSection.Opacity < 0.999));
+            SetSectionEntryState(AudioControlsSection, settings.AudioControlsVisible &&
+                (!audioWasVisible || AudioControlsSection.Opacity < 0.999));
+            SetSectionEntryState(PerformanceSection, settings.PerformanceVisible &&
+                (!performanceWasVisible || PerformanceSection.Opacity < 0.999));
         }
 
         if (audioBecameVisible)
