@@ -53,4 +53,24 @@ public sealed class MotionPolicyTests
         Assert.IsTrue(profile.UseDecorativeEffects);
         Assert.IsTrue(profile.UseContinuousMotion);
     }
+
+    [TestMethod]
+    public void Resolve_AllProfilesStayWithinUiMotionBudget()
+    {
+        var profiles = new[]
+        {
+            MotionPolicy.Resolve(clientAreaAnimation: true, highContrast: false, lowPerformance: false),
+            MotionPolicy.Resolve(clientAreaAnimation: true, highContrast: true, lowPerformance: false),
+            MotionPolicy.Resolve(clientAreaAnimation: false, highContrast: false, lowPerformance: false)
+        };
+
+        foreach (var profile in profiles)
+        {
+            Assert.IsTrue(profile.FastDuration >= TimeSpan.Zero && profile.FastDuration <= TimeSpan.FromMilliseconds(300));
+            Assert.IsTrue(profile.StandardDuration >= TimeSpan.Zero && profile.StandardDuration <= TimeSpan.FromMilliseconds(300));
+            Assert.IsTrue(profile.PanelDuration >= TimeSpan.Zero && profile.PanelDuration <= TimeSpan.FromMilliseconds(300));
+            Assert.IsTrue(profile.PositionDuration >= TimeSpan.Zero && profile.PositionDuration <= TimeSpan.FromMilliseconds(300));
+            Assert.IsTrue(profile.ExitDuration >= TimeSpan.Zero && profile.ExitDuration <= TimeSpan.FromMilliseconds(300));
+        }
+    }
 }
