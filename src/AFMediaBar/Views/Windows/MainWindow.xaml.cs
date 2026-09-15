@@ -41,6 +41,8 @@ namespace AFMediaBar.Views.Windows
         private readonly GlobalInteractionRouter _interactionRouter;
         private readonly AudioInteractionService _audioInteractionService;
         private readonly AudioMonitorService _audioMonitorService;
+        private readonly MediaSourceActivationService _sourceActivationService;
+        private readonly SystemMetricsMonitorService _systemMetricsMonitor;
         private readonly Func<TaskbarFullPanelWindow> _fullPanelFactory;
         private readonly IDisplayMonitorService _displayMonitorService;
         private readonly TrackChangeNotificationCoordinator _trackChangeNotificationCoordinator;
@@ -84,6 +86,8 @@ namespace AFMediaBar.Views.Windows
             GlobalInteractionRouter interactionRouter,
             AudioInteractionService audioInteractionService,
             AudioMonitorService audioMonitorService,
+            MediaSourceActivationService sourceActivationService,
+            SystemMetricsMonitorService systemMetricsMonitor,
             Func<TaskbarFullPanelWindow> fullPanelFactory,
             IDisplayMonitorService displayMonitorService,
             TrackChangeNotificationCoordinator trackChangeNotificationCoordinator,
@@ -105,6 +109,8 @@ namespace AFMediaBar.Views.Windows
             _interactionRouter = interactionRouter;
             _audioInteractionService = audioInteractionService;
             _audioMonitorService = audioMonitorService;
+            _sourceActivationService = sourceActivationService;
+            _systemMetricsMonitor = systemMetricsMonitor;
             _fullPanelFactory = fullPanelFactory;
             _displayMonitorService = displayMonitorService;
             _trackChangeNotificationCoordinator = trackChangeNotificationCoordinator;
@@ -677,17 +683,23 @@ namespace AFMediaBar.Views.Windows
                 _interactionRouter,
                 _audioInteractionService,
                 _audioMonitorService,
+                _sourceActivationService,
+                _systemMetricsMonitor,
                 _screenBackgroundSampler);
-            window.AudioControlRequested += TaskbarWindow_AudioControlRequested;
+            window.OpenExtraFeaturesRequested += TaskbarWindow_OpenExtraFeaturesRequested;
             window.OpenFullPanelRequested += TaskbarWindow_OpenFullPanelRequested;
             return window;
         }
 
-        private async void TaskbarWindow_AudioControlRequested(object? sender, EventArgs e)
+        private void TaskbarWindow_OpenExtraFeaturesRequested(object? sender, EventArgs e)
         {
-            if (!_isClosing)
-                await _audioControlFlyout.ToggleAsync(
-                    sender is TaskbarWindow window ? window.GetMediaBarScreenPhysicalBounds() : null);
+            if (_isClosing) return;
+            _settingsWindow ??= _settingsWindowFactory();
+            _settingsWindow.Closed -= SettingsWindow_Closed;
+            _settingsWindow.Closed += SettingsWindow_Closed;
+            _settingsWindow.Show();
+            _settingsWindow.Activate();
+            _settingsWindow.Navigate(typeof(Views.Pages.ExtraFeaturesPage));
         }
 
         private void TaskbarWindow_OpenFullPanelRequested(object? sender, EventArgs e)

@@ -18,11 +18,11 @@ public sealed class SystemMetricsService : IDisposable
     private bool _hasPreviousCpuSample;
     private GpuUsageSampler? _gpuUsageSampler;
 
-    public SystemMetricsSnapshot Sample()
+    public SystemMetricsSnapshot Sample(bool includeGpu = true)
     {
         var systemMemoryPercent = ReadSystemMemoryPercent();
         var systemCpuPercent = ReadSystemCpuPercent();
-        var systemGpuPercent = ReadSystemGpuPercent(true);
+        var systemGpuPercent = ReadSystemGpuPercent(includeGpu);
         _currentProcess.Refresh();
         var processMemoryMegabytes = (long)Math.Round(
             _currentProcess.WorkingSet64 / 1024d / 1024d);
@@ -53,6 +53,13 @@ public sealed class SystemMetricsService : IDisposable
 
         _gpuUsageSampler ??= new GpuUsageSampler();
         return _gpuUsageSampler.Sample();
+    }
+
+    /// <summary>在没有消费者请求 GPU 时立即释放 PDH 查询。 / Releases the PDH GPU query when no consumer requests it.</summary>
+    public void ReleaseGpu()
+    {
+        _gpuUsageSampler?.Dispose();
+        _gpuUsageSampler = null;
     }
 
     private static int ReadSystemMemoryPercent()
@@ -106,7 +113,7 @@ public sealed class SystemMetricsService : IDisposable
 
     public void Dispose()
     {
-        _gpuUsageSampler?.Dispose();
+        ReleaseGpu();
         _currentProcess.Dispose();
     }
 

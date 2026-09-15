@@ -1,18 +1,32 @@
 using AFMediaBar.ViewModels.Pages;
 using Wpf.Ui.Abstractions.Controls;
+using Microsoft.Win32;
 
 namespace AFMediaBar.Views.Pages;
 
 /// <summary>额外功能设置页。/ Settings page for auxiliary features.</summary>
-public partial class ExtraFeaturesPage : INavigableView<DisplayModesViewModel>
+public partial class ExtraFeaturesPage : INavigableView<ExtraFeaturesViewModel>
 {
-    public DisplayModesViewModel ViewModel { get; }
+    public ExtraFeaturesViewModel ViewModel { get; }
 
-    public ExtraFeaturesPage(DisplayModesViewModel viewModel)
+    public ExtraFeaturesPage(ExtraFeaturesViewModel viewModel)
     {
         ViewModel = viewModel;
         DataContext = this;
         InitializeComponent();
+    }
+
+    private void BrowseQuickLaunch_Click(object sender, System.Windows.RoutedEventArgs e)
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = "选择媒体应用或快捷方式",
+            Filter = "应用和快捷方式 (*.exe;*.lnk)|*.exe;*.lnk",
+            Multiselect = false,
+            CheckFileExists = true
+        };
+        if (dialog.ShowDialog() == true)
+            ViewModel.AddQuickLaunchFile(dialog.FileName);
     }
 
     private async void ResetButton_Click(object sender, System.Windows.RoutedEventArgs e)

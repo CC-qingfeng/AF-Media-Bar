@@ -1,3 +1,6 @@
+using AFMediaBar.Classes.Models;
+using System.IO;
+
 namespace AFMediaBar.Classes.Settings;
 
 /// <summary>播放器表面的全局操作方式。 / Global interaction mode for player surfaces.</summary>
@@ -69,6 +72,88 @@ public enum LyricsTextAlignment
     Left = 0,
     Center = 1,
     Right = 2
+}
+
+/// <summary>SMTC 应用来源允许列表。 / Allow-list for SMTC application sources.</summary>
+public readonly record struct SmtcSourceFilterSettings(bool Enabled, IReadOnlyList<string>? AllowedSourceIds)
+{
+    public static SmtcSourceFilterSettings Default { get; } = new(false, []);
+
+    public SmtcSourceFilterSettings Normalize() => this with
+    {
+        AllowedSourceIds = (AllowedSourceIds ?? [])
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => value.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
+            .ToArray()
+    };
+}
+
+/// <summary>快速启动列表设置。 / Quick-launch list settings.</summary>
+public readonly record struct QuickLaunchSettings(IReadOnlyList<QuickLaunchEntry>? Entries)
+{
+    public static QuickLaunchSettings Default { get; } = new([]);
+
+    public QuickLaunchSettings Normalize()
+    {
+        var entries = new List<QuickLaunchEntry>();
+        var targets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in Entries ?? [])
+        {
+            if (string.IsNullOrWhiteSpace(entry.Target) || !Enum.IsDefined(entry.Kind))
+                continue;
+            var target = entry.Target.Trim();
+            if (!targets.Add($"{entry.Kind}:{target}"))
+                continue;
+            var id = string.IsNullOrWhiteSpace(entry.Id) ? Guid.NewGuid().ToString("N") : entry.Id.Trim();
+            var displayName = string.IsNullOrWhiteSpace(entry.DisplayName)
+                ? Path.GetFileNameWithoutExtension(target)
+                : entry.DisplayName.Trim();
+            entries.Add(entry with
+            {
+                Id = id,
+                DisplayName = displayName,
+                Target = target,
+                SourceId = string.IsNullOrWhiteSpace(entry.SourceId) ? null : entry.SourceId.Trim()
+            });
+        }
+        return new QuickLaunchSettings(entries);
+    }
+}
+
+/// <summary>任务栏频谱组件设置。 / Taskbar spectrum component settings.</summary>
+public readonly record struct SpectrumComponentSettings(int BandCount, int RefreshRateHz, int SensitivityPercent)
+{
+    public static SpectrumComponentSettings Default { get; } = new(9, 20, 100);
+    public SpectrumComponentSettings Normalize() => new(
+        Math.Clamp(BandCount, 1, 9),
+        Math.Clamp(RefreshRateHz, 5, 30),
+        Math.Clamp(SensitivityPercent, 1, 400));
+}
+
+/// <summary>任务栏性能组件设置。 / Taskbar performance component settings.</summary>
+public readonly record struct PerformanceComponentSettings(
+    IReadOnlyList<MetricKind>? Metrics,
+    int RefreshIntervalMilliseconds,
+    bool OpenTaskManagerOnClick)
+{
+    public static PerformanceComponentSettings Default { get; } = new([MetricKind.SystemMemory], 2500, false);
+
+    public PerformanceComponentSettings Normalize()
+    {
+        var metrics = (Metrics ?? [])
+            .Where(Enum.IsDefined)
+            .Distinct()
+            .OrderBy(metric => metric)
+            .ToArray();
+        if (metrics.Length == 0)
+            metrics = [MetricKind.SystemMemory];
+        return new PerformanceComponentSettings(
+            metrics,
+            Math.Clamp(RefreshIntervalMilliseconds, 250, 60000),
+            OpenTaskManagerOnClick);
+    }
 }
 
 /// <summary>曲目切换通知在目标工作区中的位置。 / Position of the track-change notification in the target work area.</summary>

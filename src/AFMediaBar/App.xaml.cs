@@ -95,6 +95,7 @@ namespace AFMediaBar
                 services.AddSingleton<GlobalInteractionRouter>();
                 services.AddSingleton<AudioMonitorService>();
                 services.AddSingleton<SystemMetricsService>();
+                services.AddSingleton<SystemMetricsMonitorService>();
                 services.AddSingleton<SpatialAudioService>();
                 // 自有 Shell 托盘图标与统一鼠标输入监听
                 // App-owned Shell tray icon and unified mouse input monitor
@@ -140,6 +141,7 @@ namespace AFMediaBar
                 services.AddSingleton<DisplayModesPage>();
                 services.AddSingleton<DisplayModesViewModel>();
                 services.AddSingleton<ExtraFeaturesPage>();
+                services.AddSingleton<ExtraFeaturesViewModel>();
 
                 services.AddSingleton<InteractionPage>();
                 services.AddSingleton<InteractionViewModel>();

@@ -45,14 +45,17 @@ public static class TaskbarExperiencePolicy
         bool progressVisible,
         TaskbarInformationDensity density,
         double maximumWidth,
-        double? componentSpacingDip = null)
+        double? componentSpacingDip = null,
+        bool performanceVisible = false,
+        double performanceWidth = 0)
     {
-        var artworkOnlyWidth = Math.Max(0, artworkRight) + Math.Max(0, trailingMargin);
+        var metrics = TaskbarDensityMetrics.From(density);
+        var sectionGap = ResolveSectionGap(metrics, componentSpacingDip);
+        var performance = performanceVisible ? sectionGap + Math.Max(0, performanceWidth) : 0;
+        var artworkOnlyWidth = Math.Max(0, artworkRight) + performance + Math.Max(0, trailingMargin);
         if (!mediaConnected)
             return ClampWidth(artworkOnlyWidth, maximumWidth);
 
-        var metrics = TaskbarDensityMetrics.From(density);
-        var sectionGap = ResolveSectionGap(metrics, componentSpacingDip);
         var hoverWidth = hoverLayerEnabled
             ? CalculateHoverLayerWidth(transportVisible, progressVisible, density, componentSpacingDip)
             : 0;
@@ -61,6 +64,7 @@ public static class TaskbarExperiencePolicy
                        sectionGap +
                        middleWidth +
                        (spectrumVisible ? sectionGap + Math.Max(0, spectrumWidth) : 0) +
+                       performance +
                       Math.Max(0, trailingMargin);
         return ClampWidth(desired, maximumWidth);
     }

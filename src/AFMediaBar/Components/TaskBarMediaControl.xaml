@@ -268,6 +268,16 @@
                     <Border Style="{StaticResource TaskbarSpectrumBar}" />
                 </StackPanel>
             </Border>
+            <Border x:Name="TaskbarPerformanceSurface"
+                    Panel.ZIndex="4" Width="74" Height="24" Margin="0,0,4,0"
+                    HorizontalAlignment="Right" VerticalAlignment="Center"
+                    CornerRadius="12" Background="#16000000"
+                    Cursor="Arrow" Visibility="Collapsed"
+                    MouseLeftButtonUp="TaskbarPerformanceSurface_MouseLeftButtonUp">
+                <TextBlock x:Name="TaskbarPerformanceText" Text="MEM —" FontSize="11"
+                           FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis" IsHitTestVisible="False"/>
+            </Border>
 
             <!-- 悬停层只覆盖中间文字区域，不替换或重新排列下方静置层。 -->
             <!-- The hover layer covers only the middle text region without replacing the rest layer below it. -->
@@ -323,14 +333,16 @@
                                         Style="{StaticResource TaskbarHoverButton}"
                                         Margin="4,0,1,0"
                                         ToolTip="切换输出设备"
-                                        Click="TaskbarDeviceButton_Click">
-                                    <ui:SymbolIcon Symbol="Speaker224" FontSize="14" />
+                                        Click="TaskbarDeviceButton_Click"
+                                        PreviewMouseWheel="TaskbarDeviceButton_PreviewMouseWheel">
+                                    <TextBlock Text="&#xE7F5;" FontFamily="{DynamicResource AppIconFontFamily}" FontSize="14" />
                                 </Button>
                                 <Button x:Name="TaskbarVolumeButton"
                                         Style="{StaticResource TaskbarHoverButton}"
                                         ToolTip="当前应用音量 / 音量合成器"
-                                        Click="TaskbarVolumeButton_Click">
-                                    <ui:SymbolIcon Symbol="Speaker224" FontSize="14" />
+                                        Click="TaskbarVolumeButton_Click"
+                                        PreviewMouseWheel="TaskbarVolumeButton_PreviewMouseWheel">
+                                    <TextBlock Text="&#xE767;" FontFamily="{DynamicResource AppIconFontFamily}" FontSize="14" />
                                 </Button>
                                 <Slider x:Name="TaskbarHoverProgress"
                                         Width="96"
@@ -386,6 +398,48 @@
                     Click="TaskbarFullPanelHandle_Click">
                 <Border Width="28" Height="4" CornerRadius="2" Background="#B8FFFFFF" />
             </Button>
+
+            <Popup x:Name="QuickLaunchPopup" PlacementTarget="{Binding ElementName=SongImageBorder}"
+                   Placement="Top" VerticalOffset="-7" AllowsTransparency="True" StaysOpen="False" PopupAnimation="Fade">
+                <Border MinWidth="220" MaxWidth="320" MaxHeight="330" Margin="4" Padding="10" CornerRadius="10"
+                        Background="{DynamicResource AppMenuBackgroundBrush}"
+                        BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}" BorderThickness="1"
+                        Effect="{DynamicResource AfFlyoutShadowEffect}">
+                    <StackPanel><TextBlock Text="快速启动" Margin="4,2,4,6" FontWeight="SemiBold"/>
+                        <TextBlock x:Name="QuickLaunchStatusText" Margin="4,0,4,4" FontSize="12" Opacity="0.72" TextWrapping="Wrap" Visibility="Collapsed"/>
+                        <TextBlock x:Name="QuickLaunchEmptyText" Text="尚未添加应用，请在额外功能中添加。" Margin="4,6" FontSize="12" Opacity="0.62" TextWrapping="Wrap"/>
+                        <ItemsControl x:Name="QuickLaunchList"><ItemsControl.ItemTemplate><DataTemplate><Button HorizontalContentAlignment="Stretch" Padding="8,6" Margin="0,1" BorderThickness="0" Background="Transparent" Click="QuickLaunchItem_Click"><TextBlock Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis"/></Button></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+                        <ui:Button x:Name="OpenExtraFeaturesButton" Content="打开额外功能设置" Margin="0,6,0,0" Click="OpenExtraFeaturesButton_Click"/>
+                    </StackPanel>
+                </Border>
+            </Popup>
+
+            <Popup x:Name="OutputDevicePopup" PlacementTarget="{Binding ElementName=TaskbarDeviceButton}"
+                   Placement="Top" VerticalOffset="-7" AllowsTransparency="True" StaysOpen="True" PopupAnimation="Fade"
+                   PreviewMouseWheel="OutputDevicePopup_PreviewMouseWheel" Closed="TransientPopup_Closed">
+                <Border Width="268" MaxHeight="360" Margin="4" Padding="10" CornerRadius="10"
+                        Background="{DynamicResource AppMenuBackgroundBrush}"
+                        BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}" BorderThickness="1"
+                        Effect="{DynamicResource AfFlyoutShadowEffect}">
+                    <StackPanel><TextBlock Text="输出设备" Margin="4,2,4,7" FontWeight="SemiBold"/>
+                        <ListBox x:Name="OutputDeviceList" MaxHeight="300" DisplayMemberPath="DisplayName" SelectionChanged="OutputDeviceList_SelectionChanged"/>
+                    </StackPanel>
+                </Border>
+            </Popup>
+
+            <Popup x:Name="VolumePopup" PlacementTarget="{Binding ElementName=TaskbarVolumeButton}"
+                   Placement="Top" VerticalOffset="-7" AllowsTransparency="True" StaysOpen="True" PopupAnimation="Fade"
+                   PreviewMouseWheel="VolumePopup_PreviewMouseWheel" Closed="TransientPopup_Closed">
+                <Border Width="110" Height="230" Margin="4" Padding="10" CornerRadius="10"
+                        Background="{DynamicResource AppMenuBackgroundBrush}"
+                        BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}" BorderThickness="1"
+                        Effect="{DynamicResource AfFlyoutShadowEffect}">
+                    <StackPanel HorizontalAlignment="Center"><TextBlock x:Name="VolumeSourceText" Width="88" Text="当前媒体" TextAlignment="Center" TextTrimming="CharacterEllipsis" FontSize="11"/>
+                        <TextBlock x:Name="VolumePercentText" Text="不可用" Margin="0,4,0,6" HorizontalAlignment="Center" FontWeight="SemiBold"/>
+                        <Slider x:Name="TaskbarVolumeSlider" Orientation="Vertical" Height="155" Minimum="0" Maximum="100" SmallChange="2" LargeChange="10" IsDirectionReversed="False" ValueChanged="TaskbarVolumeSlider_ValueChanged"/>
+                    </StackPanel>
+                </Border>
+            </Popup>
         </Grid>
     </Border>
 </UserControl>

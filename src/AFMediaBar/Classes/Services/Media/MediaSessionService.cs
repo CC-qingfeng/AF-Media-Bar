@@ -5,6 +5,7 @@ using System.Windows.Threading;
 using AFMediaBar.Classes.Abstractions;
 using AFMediaBar.Classes.Models;
 using AFMediaBar.Classes.Services.Lyrics;
+using AFMediaBar.Classes.Settings;
 using Windows.Media.Control;
 using Windows.Media;
 using WindowsMediaController;
@@ -27,6 +28,7 @@ public sealed class MediaSessionService : IDisposable
     private readonly Dispatcher _dispatcher;
     private readonly object _publishGate = new();
     private IReadOnlyList<MediaSessionOption> _lastSessionOptions = Array.Empty<MediaSessionOption>();
+    private IReadOnlyList<MediaSourceDescriptor> _lastDiscoveredSources = Array.Empty<MediaSourceDescriptor>();
     private MediaSnapshot _sessionSnapshot = MediaSnapshot.Disconnected;
     private readonly Dictionary<IMediaSourceProvider, MediaSnapshot?> _sourceSnapshots = new();
     private MediaSnapshot _lastSnapshot = MediaSnapshot.Disconnected;
@@ -40,10 +42,12 @@ public sealed class MediaSessionService : IDisposable
 
     /// <summary>会话列表变化时在 UI 线程触发。 / Raised on the UI thread when the session list changes.</summary>
     public event Action<IReadOnlyList<MediaSessionOption>>? SessionsChanged;
+    public event Action<IReadOnlyList<MediaSourceDescriptor>>? DiscoveredSourcesChanged;
 
     public string SelectedSourceId => _lastSnapshot.SourceId;
     public string SelectedSourceName => _lastSnapshot.SourceName;
     public IReadOnlyList<MediaSessionOption> CurrentSessionOptions => _lastSessionOptions;
+    public IReadOnlyList<MediaSourceDescriptor> CurrentDiscoveredSources => _lastDiscoveredSources;
 
     /// <summary>
     /// 创建媒体协调器并接管目录、选择器和来源提供器的事件订阅；释放本服务时会按相反顺序解除订阅。
@@ -71,6 +75,7 @@ public sealed class MediaSessionService : IDisposable
         _catalog.AnyTimelinePropertyChanged += OnAnyTimelinePropertyChanged;
         _selection.RefreshRequested += OnSelectionRefreshRequested;
         _snapshotBuilder.EnrichmentCompleted += OnSnapshotEnrichmentCompleted;
+        SettingsManager.SettingsChanged += OnSettingsChanged;
         foreach (var provider in _sourceProviders)
         {
             provider.SnapshotChanged += OnSourceSnapshotChanged;
@@ -109,13 +114,14 @@ public sealed class MediaSessionService : IDisposable
             return;
         }
 
-        if (!_selection.Select(key, sessions))
+        var eligible = FilterSessions(sessions);
+        if (!_selection.Select(key, eligible))
         {
             return;
         }
 
-        PublishSessions(sessions);
-        RefreshSnapshot(sessions);
+        PublishSessions(eligible);
+        RefreshSnapshot(eligible);
     }
 
     /// <summary>
@@ -204,6 +210,7 @@ public sealed class MediaSessionService : IDisposable
         _catalog.AnyTimelinePropertyChanged -= OnAnyTimelinePropertyChanged;
         _selection.RefreshRequested -= OnSelectionRefreshRequested;
         _snapshotBuilder.EnrichmentCompleted -= OnSnapshotEnrichmentCompleted;
+        SettingsManager.SettingsChanged -= OnSettingsChanged;
         foreach (var provider in _sourceProviders)
         {
             provider.SnapshotChanged -= OnSourceSnapshotChanged;
@@ -221,7 +228,7 @@ public sealed class MediaSessionService : IDisposable
             return;
         }
 
-        var selected = sessions.FirstOrDefault(session =>
+        var selected = FilterSessions(sessions).FirstOrDefault(session =>
             string.Equals(session.Id, _selection.SelectedKey, StringComparison.Ordinal));
         if (selected is null)
         {
@@ -260,6 +267,15 @@ public sealed class MediaSessionService : IDisposable
 
     private void OnSnapshotEnrichmentCompleted() => ScheduleRefresh();
 
+    private void OnSettingsChanged(object? sender, SettingsChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(AppSettings.SmtcSourceFilter) &&
+            e.ResetScope is not SettingsResetScope.ExtraFeatures and not SettingsResetScope.All)
+            return;
+        _selection.ClearSelection();
+        ScheduleSessionsRefresh();
+    }
+
     private void OnSourceSnapshotChanged(IMediaSourceProvider provider, MediaSnapshot? snapshot)
     {
         _sourceSnapshots[provider] = snapshot;
@@ -293,36 +309,39 @@ public sealed class MediaSessionService : IDisposable
             return;
         }
 
-        if (sessions.Length == 0)
+        PublishDiscoveredSources(sessions);
+        var eligible = FilterSessions(sessions);
+        if (eligible.Count == 0)
         {
             // 浏览器可能是唯一的 SMTC 会话；其重建期间空数组也必须启动恢复缓冲。
             // The browser may be the only SMTC session; an empty array must also start the recovery grace period.
-            if (_selection.TryHoldMissingSession())
+            if (sessions.Length == 0 && _selection.TryHoldMissingSession())
             {
                 return;
             }
 
             _selection.ClearSelection();
-            PublishSessions(sessions);
+            PublishSessions(eligible);
             Publish(MediaSnapshot.Disconnected);
             return;
         }
 
-        var selected = _selection.Resolve(sessions);
+        var selected = _selection.Resolve(eligible);
         if (selected is null && _selection.IsMissingSessionGraceActive)
         {
             return;
         }
 
-        PublishSessions(sessions);
-        RefreshSnapshot(sessions);
+        PublishSessions(eligible);
+        RefreshSnapshot(eligible);
     }
 
     private void RefreshSnapshot()
     {
         if (_catalog.TryGetSnapshot(out var sessions))
         {
-            RefreshSnapshot(sessions);
+            PublishDiscoveredSources(sessions);
+            RefreshSnapshot(FilterSessions(sessions));
         }
     }
 
@@ -393,6 +412,31 @@ public sealed class MediaSessionService : IDisposable
         SessionsChanged?.Invoke(options);
     }
 
+    private IReadOnlyList<MediaSession> FilterSessions(IReadOnlyList<MediaSession> sessions)
+    {
+        var settings = SettingsManager.Current.SmtcSourceFilter;
+        if (!settings.Enabled)
+            return sessions;
+        return sessions.Where(session => MediaSourceFilterPolicy.IsAllowed(
+            session.ControlSession.SourceAppUserModelId,
+            settings)).ToArray();
+    }
+
+    private void PublishDiscoveredSources(IReadOnlyList<MediaSession> sessions)
+    {
+        var sources = sessions
+            .Select(session => session.ControlSession.SourceAppUserModelId ?? string.Empty)
+            .Where(sourceId => !string.IsNullOrWhiteSpace(sourceId))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(_sourceActivator.Describe)
+            .OrderBy(source => source.DisplayName, StringComparer.CurrentCultureIgnoreCase)
+            .ToArray();
+        if (sources.SequenceEqual(_lastDiscoveredSources))
+            return;
+        _lastDiscoveredSources = sources;
+        DiscoveredSourcesChanged?.Invoke(sources);
+    }
+
     private void Publish(MediaSnapshot snapshot)
     {
         _sessionSnapshot = snapshot;
@@ -405,6 +449,11 @@ public sealed class MediaSessionService : IDisposable
 
     private MediaSnapshot ResolveSnapshot(MediaSnapshot snapshot)
     {
+        if (snapshot.IsConnected && !MediaSourceFilterPolicy.IsAllowed(
+                snapshot.SourceId,
+                SettingsManager.Current.SmtcSourceFilter))
+            return MediaSnapshot.Disconnected;
+
         MediaSnapshot? providerSnapshot;
         if (snapshot.IsConnected)
         {
@@ -417,7 +466,9 @@ public sealed class MediaSessionService : IDisposable
         {
             providerSnapshot = _sourceProviders
                 .Select(provider => _sourceSnapshots.GetValueOrDefault(provider))
-                .Where(candidate => candidate is not null)
+                .Where(candidate => candidate is not null && MediaSourceFilterPolicy.IsAllowed(
+                    candidate.SourceId,
+                    SettingsManager.Current.SmtcSourceFilter))
                 .OrderByDescending(candidate => candidate!.IsPlaying)
                 .FirstOrDefault();
         }

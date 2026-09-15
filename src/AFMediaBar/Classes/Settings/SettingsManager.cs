@@ -46,6 +46,10 @@ public sealed class AppSettings : INotifyPropertyChanged
     private ModeSurfaceSettings _dynamicIslandSurface = ModeSurfaceSettings.Default;
     private LyricsTextAlignment _lyricsTextAlignment = LyricsTextAlignment.Center;
     private TrackChangeNotificationSettings _trackChangeNotification = TrackChangeNotificationSettings.Default;
+    private SmtcSourceFilterSettings _smtcSourceFilter = SmtcSourceFilterSettings.Default;
+    private QuickLaunchSettings _quickLaunch = QuickLaunchSettings.Default;
+    private SpectrumComponentSettings _spectrumComponent = SpectrumComponentSettings.Default;
+    private PerformanceComponentSettings _performanceComponent = PerformanceComponentSettings.Default;
 
     public AppearanceSettings Appearance { get => _appearance; set => Set(ref _appearance, value.Normalize()); }
     public TrayWheelBehavior TrayWheelBehavior { get => _trayWheelBehavior; set => Set(ref _trayWheelBehavior, value); }
@@ -83,6 +87,10 @@ public sealed class AppSettings : INotifyPropertyChanged
         get => _trackChangeNotification;
         set => Set(ref _trackChangeNotification, value.Normalize());
     }
+    public SmtcSourceFilterSettings SmtcSourceFilter { get => _smtcSourceFilter; set => Set(ref _smtcSourceFilter, value.Normalize()); }
+    public QuickLaunchSettings QuickLaunch { get => _quickLaunch; set => Set(ref _quickLaunch, value.Normalize()); }
+    public SpectrumComponentSettings SpectrumComponent { get => _spectrumComponent; set => Set(ref _spectrumComponent, value.Normalize()); }
+    public PerformanceComponentSettings PerformanceComponent { get => _performanceComponent; set => Set(ref _performanceComponent, value.Normalize()); }
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -104,6 +112,10 @@ public sealed class AppSettings : INotifyPropertyChanged
         result.TaskbarSurface = result.TaskbarSurface.Normalize();
         result.DynamicIslandSurface = result.DynamicIslandSurface.Normalize();
         result.TrackChangeNotification = result.TrackChangeNotification.Normalize();
+        result.SmtcSourceFilter = result.SmtcSourceFilter.Normalize();
+        result.QuickLaunch = result.QuickLaunch.Normalize();
+        result.SpectrumComponent = result.SpectrumComponent.Normalize();
+        result.PerformanceComponent = result.PerformanceComponent.Normalize();
         result.TaskbarTargetMonitorDeviceId = string.IsNullOrWhiteSpace(result.TaskbarTargetMonitorDeviceId)
             ? null
             : result.TaskbarTargetMonitorDeviceId.Trim();
@@ -147,7 +159,11 @@ public sealed class AppSettings : INotifyPropertyChanged
         TaskbarSurface = TaskbarSurface,
         DynamicIslandSurface = DynamicIslandSurface,
         LyricsTextAlignment = LyricsTextAlignment,
-        TrackChangeNotification = TrackChangeNotification
+        TrackChangeNotification = TrackChangeNotification,
+        SmtcSourceFilter = SmtcSourceFilter,
+        QuickLaunch = QuickLaunch,
+        SpectrumComponent = SpectrumComponent,
+        PerformanceComponent = PerformanceComponent
     };
 
     private void Set<T>(ref T field, T value, [CallerMemberName] string? name = null)
@@ -159,7 +175,7 @@ public sealed class AppSettings : INotifyPropertyChanged
 }
 
 /// <summary>设置重置范围。 / Settings reset scope.</summary>
-public enum SettingsResetScope { General, Appearance, Layout, DisplayModes, Interaction, Lyrics, All }
+public enum SettingsResetScope { General, Appearance, Layout, DisplayModes, ExtraFeatures, Interaction, Lyrics, All }
 
 /// <summary>设置变更通知参数。 / Settings change notification arguments.</summary>
 public sealed class SettingsChangedEventArgs(SettingsResetScope? resetScope = null, string? propertyName = null) : EventArgs
@@ -182,6 +198,7 @@ public static class SettingsManager
     public static event EventHandler? TaskbarExperienceSettingsChanged;
     public static event EventHandler? InteractionSettingsChanged;
     public static event EventHandler? TrackChangeNotificationSettingsChanged;
+    public static event EventHandler? ExtraFeaturesSettingsChanged;
     public static event EventHandler? TaskbarTargetMonitorChanged;
 
     public static void Replace(AppSettings settings, SettingsResetScope? scope = null)
@@ -201,6 +218,10 @@ public static class SettingsManager
     public static void SetTaskbarExperienceSettings(TaskbarExperienceSettings settings) => Current.TaskbarExperience = settings;
     public static void SetInteractionSettings(GlobalInteractionSettings settings) => Current.Interaction = settings;
     public static void SetTrackChangeNotificationSettings(TrackChangeNotificationSettings settings) => Current.TrackChangeNotification = settings;
+    public static void SetSmtcSourceFilterSettings(SmtcSourceFilterSettings settings) => Current.SmtcSourceFilter = settings;
+    public static void SetQuickLaunchSettings(QuickLaunchSettings settings) => Current.QuickLaunch = settings;
+    public static void SetSpectrumComponentSettings(SpectrumComponentSettings settings) => Current.SpectrumComponent = settings;
+    public static void SetPerformanceComponentSettings(PerformanceComponentSettings settings) => Current.PerformanceComponent = settings;
     public static void RaiseLayoutSettingsChanged(WindowMode windowMode, LayoutOrientationMode orientationMode) => LayoutSettingsChanged?.Invoke(null, new LayoutSettingsChangedEventArgs(windowMode, orientationMode));
 
     public static void ResetGeneral()
@@ -221,7 +242,6 @@ public static class SettingsManager
     {
         var next = Current.Clone(); var defaults = new AppSettings();
         next.TaskbarExperience = defaults.TaskbarExperience;
-        next.TrackChangeNotification = defaults.TrackChangeNotification;
         next.WindowMode = defaults.WindowMode; next.LayoutOrientationMode = defaults.LayoutOrientationMode;
         next.TaskbarBarEnabled = defaults.TaskbarBarEnabled;
         next.TaskbarTargetMonitorDeviceId = defaults.TaskbarTargetMonitorDeviceId;
@@ -233,7 +253,11 @@ public static class SettingsManager
     {
         var next = Current.Clone();
         next.TrackChangeNotification = TrackChangeNotificationSettings.Default;
-        Replace(next, SettingsResetScope.DisplayModes);
+        next.SmtcSourceFilter = SmtcSourceFilterSettings.Default;
+        next.QuickLaunch = QuickLaunchSettings.Default;
+        next.SpectrumComponent = SpectrumComponentSettings.Default;
+        next.PerformanceComponent = PerformanceComponentSettings.Default;
+        Replace(next, SettingsResetScope.ExtraFeatures);
     }
     public static void ResetInteraction()
     {
@@ -281,6 +305,10 @@ public static class SettingsManager
             case nameof(AppSettings.TaskbarExperience): TaskbarExperienceSettingsChanged?.Invoke(null, EventArgs.Empty); break;
             case nameof(AppSettings.Interaction): InteractionSettingsChanged?.Invoke(null, EventArgs.Empty); break;
             case nameof(AppSettings.TrackChangeNotification): TrackChangeNotificationSettingsChanged?.Invoke(null, EventArgs.Empty); break;
+            case nameof(AppSettings.SmtcSourceFilter):
+            case nameof(AppSettings.QuickLaunch):
+            case nameof(AppSettings.SpectrumComponent):
+            case nameof(AppSettings.PerformanceComponent): ExtraFeaturesSettingsChanged?.Invoke(null, EventArgs.Empty); break;
             case nameof(AppSettings.TaskbarTargetMonitorDeviceId): TaskbarTargetMonitorChanged?.Invoke(null, EventArgs.Empty); break;
             case nameof(AppSettings.TaskbarSurface):
             case nameof(AppSettings.DynamicIslandSurface): AppearanceSettingsChanged?.Invoke(null, new AppearanceSettingsChangedEventArgs(Current.Appearance)); break;
@@ -293,6 +321,7 @@ public static class SettingsManager
         TrayWheelBehaviorChanged?.Invoke(null, EventArgs.Empty); LyricsSettingsChanged?.Invoke(null, EventArgs.Empty);
         TaskbarExperienceSettingsChanged?.Invoke(null, EventArgs.Empty); InteractionSettingsChanged?.Invoke(null, EventArgs.Empty);
         TrackChangeNotificationSettingsChanged?.Invoke(null, EventArgs.Empty); TaskbarTargetMonitorChanged?.Invoke(null, EventArgs.Empty);
+        ExtraFeaturesSettingsChanged?.Invoke(null, EventArgs.Empty);
         RaiseLayoutSettingsChanged(Current.WindowMode, Current.LayoutOrientationMode);
     }
 }

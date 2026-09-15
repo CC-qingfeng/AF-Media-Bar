@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.IO;
 using AFMediaBar.Classes.Interop;
+using AFMediaBar.Classes.Models;
 using AFMediaBar.Classes.Services.Audio;
 
 namespace AFMediaBar.Classes.Services;
@@ -91,6 +92,100 @@ public sealed class MediaSourceActivationService
         {
             Debug.WriteLine($"[MediaSourceActivationService] Activate source failed: {ex}");
         }
+    }
+
+    /// <summary>解析当前已发现来源的安全启动描述。 / Resolves a safe launch descriptor for a currently discovered source.</summary>
+    public MediaSourceDescriptor Describe(string sourceId)
+    {
+        var displayName = MediaSourceNameFormatter.GetDisplayName(sourceId, "未知来源");
+        if (string.IsNullOrWhiteSpace(sourceId))
+            return new MediaSourceDescriptor(string.Empty, displayName, null, null);
+        if (sourceId.Contains('!'))
+            return new MediaSourceDescriptor(sourceId, displayName, QuickLaunchTargetKind.AppUserModelId, sourceId);
+
+        foreach (var processName in _processResolver.ResolveProcessNames(sourceId))
+        {
+            foreach (var process in Process.GetProcessesByName(processName))
+            {
+                using (process)
+                {
+                    try
+                    {
+                        var path = process.MainModule?.FileName;
+                        if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
+                            return new MediaSourceDescriptor(sourceId, displayName, QuickLaunchTargetKind.Executable, Path.GetFullPath(path));
+                    }
+                    catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or NotSupportedException)
+                    {
+                        Debug.WriteLine($"[MediaSourceActivationService] Could not resolve launch path: {ex.Message}");
+                    }
+                }
+            }
+        }
+
+        return new MediaSourceDescriptor(sourceId, displayName, null, null);
+    }
+
+    /// <summary>激活或启动一个经过设置归一化的快速启动项。 / Activates or starts a normalized quick-launch entry.</summary>
+    public Task<QuickLaunchResult> LaunchAsync(QuickLaunchEntry entry)
+    {
+        if (!string.IsNullOrWhiteSpace(entry.SourceId) && TryActivateRunning(entry.SourceId))
+            return Task.FromResult(QuickLaunchResult.Success);
+
+        try
+        {
+            var target = entry.Target.Trim();
+            switch (entry.Kind)
+            {
+                case QuickLaunchTargetKind.AppUserModelId when target.Contains('!'):
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = "explorer.exe",
+                        Arguments = $"shell:AppsFolder\\{target}",
+                        UseShellExecute = true
+                    });
+                    return Task.FromResult(QuickLaunchResult.Success);
+                case QuickLaunchTargetKind.Executable
+                    when File.Exists(target) && string.Equals(Path.GetExtension(target), ".exe", StringComparison.OrdinalIgnoreCase):
+                case QuickLaunchTargetKind.Shortcut
+                    when File.Exists(target) && string.Equals(Path.GetExtension(target), ".lnk", StringComparison.OrdinalIgnoreCase):
+                    Process.Start(new ProcessStartInfo(Path.GetFullPath(target)) { UseShellExecute = true });
+                    return Task.FromResult(QuickLaunchResult.Success);
+                default:
+                    return Task.FromResult(QuickLaunchResult.InvalidTarget);
+            }
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            Debug.WriteLine($"[MediaSourceActivationService] Quick launch failed: {ex}");
+            return Task.FromResult(QuickLaunchResult.Failed);
+        }
+    }
+
+    private bool TryActivateRunning(string sourceId)
+    {
+        foreach (var processName in _processResolver.ResolveProcessNames(sourceId))
+        {
+            foreach (var process in Process.GetProcessesByName(processName))
+            {
+                using (process)
+                {
+                    try
+                    {
+                        if (process.MainWindowHandle == IntPtr.Zero)
+                            continue;
+                        NativeMethods.ShowWindow(process.MainWindowHandle, NativeMethods.SW_RESTORE);
+                        NativeMethods.SetForegroundWindow(process.MainWindowHandle);
+                        return true;
+                    }
+                    catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or NotSupportedException)
+                    {
+                        Debug.WriteLine($"[MediaSourceActivationService] Process exited while activating: {ex.Message}");
+                    }
+                }
+            }
+        }
+        return false;
     }
 
 }

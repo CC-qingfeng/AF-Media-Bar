@@ -121,8 +121,11 @@ namespace AFMediaBar.Components
         private bool _isTaskbarHoverVisible;
         private bool _isSeeking;
         private PlayerForegroundDecision? _adaptiveForegroundDecision;
+        private bool _isUpdatingAudioMenus;
+        private IReadOnlyList<QuickLaunchEntry> _quickLaunchEntries = Array.Empty<QuickLaunchEntry>();
         private DateTime _suppressArtworkClickUntilUtc;
         private const double TaskbarSpectrumWidth = 38;
+        private const double TaskbarPerformanceWidth = 74;
         private const double TaskbarTrailingMargin = 4;
         private const double TaskbarCoveredBlurRadius = 4;
         private const double TaskbarCoveredOpacity = 0.32;
@@ -132,8 +135,16 @@ namespace AFMediaBar.Components
         public event EventHandler? SkipNextRequested;
         public event EventHandler? ActivateSourceRequested;
         public event EventHandler? OpenFullPanelRequested;
-        public event EventHandler? AudioControlRequested;
-        public event EventHandler? OutputDeviceCycleRequested;
+        public event EventHandler? OutputDeviceMenuRequested;
+        public event EventHandler<PlayerSurfaceWheelEventArgs>? OutputDeviceWheelRequested;
+        public event Action<AudioDeviceOption>? OutputDeviceSelected;
+        public event EventHandler? VolumeMenuRequested;
+        public event EventHandler<PlayerSurfaceWheelEventArgs>? VolumeWheelRequested;
+        public event Action<int>? VolumeValueRequested;
+        public event Action<QuickLaunchEntry>? QuickLaunchRequested;
+        public event EventHandler<PlayerSurfaceWheelEventArgs>? QuickLaunchWheelRequested;
+        public event EventHandler? OpenExtraFeaturesRequested;
+        public event EventHandler? OpenTaskManagerRequested;
         public event Action<double>? SeekRequested;
         public event EventHandler<PlayerSurfaceWheelEventArgs>? WheelRequested;
         public event EventHandler<MediaBarSizeRequestEventArgs>? DesiredSizeChanged;
@@ -148,29 +159,121 @@ namespace AFMediaBar.Components
         public bool TryGetForegroundSampleBounds(out Int32Rect bounds)
         {
             bounds = Int32Rect.Empty;
-            if (!_isConnected || _isTaskbarHoverVisible || !SongInfoSurface.IsVisible ||
-                SongInfoSurface.ActualWidth <= 1 || SongInfoSurface.ActualHeight <= 1 ||
-                PresentationSource.FromVisual(SongInfoSurface) is null)
+            if (_isTaskbarHoverVisible)
             {
                 return false;
             }
 
             try
             {
-                var origin = SongInfoSurface.PointToScreen(new Point(0, 0));
-                var dpi = VisualTreeHelper.GetDpi(SongInfoSurface);
-                var width = (int)Math.Round(SongInfoSurface.ActualWidth * dpi.DpiScaleX);
-                var height = (int)Math.Round(SongInfoSurface.ActualHeight * dpi.DpiScaleY);
-                if (width <= 1 || height <= 1 || !double.IsFinite(origin.X) || !double.IsFinite(origin.Y))
+                var regions = new List<Int32Rect>();
+                if (_isConnected && TryGetPhysicalBounds(SongInfoSurface, out var mediaBounds))
+                    regions.Add(mediaBounds);
+                if (TaskbarPerformanceSurface.IsVisible && TryGetPhysicalBounds(TaskbarPerformanceSurface, out var metricBounds))
+                    regions.Add(metricBounds);
+                if (regions.Count == 0)
                     return false;
-
-                bounds = new Int32Rect((int)Math.Round(origin.X), (int)Math.Round(origin.Y), width, height);
+                var left = regions.Min(region => region.X);
+                var top = regions.Min(region => region.Y);
+                var right = regions.Max(region => region.X + region.Width);
+                var bottom = regions.Max(region => region.Y + region.Height);
+                bounds = new Int32Rect(left, top, right - left, bottom - top);
                 return true;
             }
             catch (InvalidOperationException)
             {
                 return false;
             }
+        }
+
+        private static bool TryGetPhysicalBounds(FrameworkElement element, out Int32Rect bounds)
+        {
+            bounds = Int32Rect.Empty;
+            if (!element.IsVisible || element.ActualWidth <= 1 || element.ActualHeight <= 1 || PresentationSource.FromVisual(element) is null)
+                return false;
+            var origin = element.PointToScreen(new Point(0, 0));
+            var dpi = VisualTreeHelper.GetDpi(element);
+            if (!double.IsFinite(origin.X) || !double.IsFinite(origin.Y)) return false;
+            bounds = new Int32Rect((int)Math.Round(origin.X), (int)Math.Round(origin.Y),
+                (int)Math.Round(element.ActualWidth * dpi.DpiScaleX),
+                (int)Math.Round(element.ActualHeight * dpi.DpiScaleY));
+            return bounds.Width > 1 && bounds.Height > 1;
+        }
+
+        public void ApplyQuickLaunchEntries(IReadOnlyList<QuickLaunchEntry> entries)
+        {
+            _quickLaunchEntries = entries.ToArray();
+            QuickLaunchList.ItemsSource = _quickLaunchEntries;
+            QuickLaunchEmptyText.Visibility = _quickLaunchEntries.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        public void SetQuickLaunchPreview(QuickLaunchEntry entry)
+        {
+            SongImageBorder.ToolTip = $"快速启动：{entry.DisplayName}";
+            QuickLaunchStatusText.Visibility = Visibility.Collapsed;
+            QuickLaunchPopup.IsOpen = true;
+        }
+
+        public void ShowQuickLaunchStatus(string message)
+        {
+            QuickLaunchStatusText.Text = message;
+            QuickLaunchStatusText.Visibility = Visibility.Visible;
+            QuickLaunchPopup.IsOpen = true;
+        }
+
+        public void ShowOutputDeviceMenu(IReadOnlyList<AudioDeviceOption> devices, AudioDeviceOption? selected)
+        {
+            _isUpdatingAudioMenus = true;
+            OutputDeviceList.ItemsSource = devices;
+            OutputDeviceList.SelectedItem = selected;
+            _isUpdatingAudioMenus = false;
+            OutputDevicePopup.IsOpen = devices.Count > 0;
+        }
+
+        /// <summary>指示紧凑输出设备菜单是否可见。/ Indicates whether the compact output-device menu is visible.</summary>
+        public bool IsOutputDeviceMenuOpen => OutputDevicePopup.IsOpen;
+
+        /// <summary>指示紧凑音量菜单是否可见。/ Indicates whether the compact volume menu is visible.</summary>
+        public bool IsVolumeMenuOpen => VolumePopup.IsOpen;
+
+        public void SetOutputDevicePreview(AudioDeviceOption device)
+        {
+            _isUpdatingAudioMenus = true;
+            OutputDeviceList.SelectedItem = device;
+            OutputDeviceList.ScrollIntoView(device);
+            _isUpdatingAudioMenus = false;
+        }
+
+        public void ShowVolumeMenu(string sourceName, int? volume)
+        {
+            _isUpdatingAudioMenus = true;
+            VolumeSourceText.Text = string.IsNullOrWhiteSpace(sourceName) ? "当前媒体" : sourceName;
+            TaskbarVolumeSlider.IsEnabled = volume is not null;
+            TaskbarVolumeSlider.Value = volume ?? 0;
+            VolumePercentText.Text = volume is int value ? $"{value}%" : "不可用";
+            _isUpdatingAudioMenus = false;
+            VolumePopup.IsOpen = true;
+        }
+
+        public void SetVolumePreview(int volume)
+        {
+            _isUpdatingAudioMenus = true;
+            TaskbarVolumeSlider.Value = volume;
+            VolumePercentText.Text = $"{volume}%";
+            _isUpdatingAudioMenus = false;
+        }
+
+        public void ApplyPerformanceText(string text, bool canOpenTaskManager)
+        {
+            TaskbarPerformanceText.Text = text;
+            TaskbarPerformanceSurface.Cursor = canOpenTaskManager ? Cursors.Hand : Cursors.Arrow;
+        }
+
+        public void CloseTransientMenus()
+        {
+            QuickLaunchPopup.IsOpen = false;
+            OutputDevicePopup.IsOpen = false;
+            VolumePopup.IsOpen = false;
         }
 
         /// <summary>
@@ -295,6 +398,7 @@ namespace AFMediaBar.Components
             var transportVisible = interaction.Mode != MediaInteractionMode.Gestures;
             var progressVisible = _snapshot.Duration > 0;
             var spectrumVisible = isHorizontalTaskbar && TaskbarExperiencePolicy.ShouldShowSpectrum(_snapshot);
+            TaskbarPerformanceSurface.Visibility = isHorizontalTaskbar ? Visibility.Visible : Visibility.Collapsed;
 
             TaskbarSpectrumHoverSurface.Visibility = spectrumVisible ? Visibility.Visible : Visibility.Collapsed;
             TaskbarSpectrumHoverSurface.IsHitTestVisible = spectrumVisible;
@@ -407,6 +511,7 @@ namespace AFMediaBar.Components
                 TaskbarExperienceSettings.MaximumComponentSpacingDip);
             var textLeft = artworkRight + (_isConnected ? sectionGap : 0);
             var reservedRight = (spectrumVisible ? sectionGap + TaskbarSpectrumWidth : 0) +
+                                sectionGap + TaskbarPerformanceWidth +
                                 TaskbarTrailingMargin;
             var textWidth = _isConnected
                 ? Math.Max(0, primaryLength - textLeft - reservedRight)
@@ -430,7 +535,9 @@ namespace AFMediaBar.Components
 
             TaskbarRestProgress.Margin = new Thickness(textLeft, 0, reservedRight, 1);
             TaskbarSpectrumHoverSurface.Width = TaskbarSpectrumWidth;
-            TaskbarSpectrumHoverSurface.Margin = new Thickness(0, 0, TaskbarTrailingMargin, 0);
+            TaskbarPerformanceSurface.Margin = new Thickness(0, 0, TaskbarTrailingMargin, 0);
+            TaskbarSpectrumHoverSurface.Margin = new Thickness(0, 0,
+                TaskbarTrailingMargin + TaskbarPerformanceWidth + sectionGap, 0);
 
             HoverRevealHost.Margin = new Thickness(textLeft, 1, 0, 1);
             HoverRevealHost.Height = Math.Max(0, MainBorder.Height - 2);
@@ -529,6 +636,7 @@ namespace AFMediaBar.Components
             SongLyricsSecondary.Foreground = foreground;
             SongLyricsSecondary.Opacity = SystemParameters.HighContrast ? 1 : 0.68;
             SongArtist.Foreground = foreground;
+            TaskbarPerformanceText.Foreground = foreground;
             SongInfoStackPanel.Background = Brushes.Transparent;
             ApplyContrastShadow(presentation.NeedsContrastShadow, presentation.UsesLightText);
 
@@ -573,6 +681,7 @@ namespace AFMediaBar.Components
             SongArtist.Effect = effect;
             SongLyrics.Effect = effect;
             SongLyricsSecondary.Effect = effect;
+            TaskbarPerformanceText.Effect = effect;
         }
 
 
@@ -788,7 +897,7 @@ namespace AFMediaBar.Components
                 ? _secondaryLyric
                 : string.Empty;
             var artist = !lyricsVisible && SongArtistContainer.Visibility == Visibility.Visible ? _actualArtist : string.Empty;
-            var fingerprint = $"{orientation}|{visibleText}|{secondaryText}|{artist}|{SongTitle.FontSize:0.##}|{SongArtist.FontSize:0.##}|{SettingsManager.Current.LayoutLengthScalePercent:0.##}|{SettingsManager.Current.LayoutThicknessScalePercent:0.##}|{SettingsManager.Current.LyricsEnabled}|{SettingsManager.Current.TwoLineLyricsEnabled}|{SettingsManager.Current.LyricsSecondaryLineMode}|{SettingsManager.Current.TaskbarExperience}|{SettingsManager.Current.Interaction.Mode}|{_snapshot.IsConnected}|{_snapshot.IsPlaying}|{_snapshot.Duration > 0}";
+            var fingerprint = $"{orientation}|{visibleText}|{secondaryText}|{artist}|{SongTitle.FontSize:0.##}|{SongArtist.FontSize:0.##}|{SettingsManager.Current.LayoutLengthScalePercent:0.##}|{SettingsManager.Current.LayoutThicknessScalePercent:0.##}|{SettingsManager.Current.LyricsEnabled}|{SettingsManager.Current.TwoLineLyricsEnabled}|{SettingsManager.Current.LyricsSecondaryLineMode}|{SettingsManager.Current.TaskbarExperience}|{SettingsManager.Current.Interaction.Mode}|{SettingsManager.Current.SpectrumComponent}|{SettingsManager.Current.PerformanceComponent}|{_snapshot.IsConnected}|{_snapshot.IsPlaying}|{_snapshot.Duration > 0}";
             if (!isResetToPreset && fingerprint == _lastSizeFingerprint)
                 return;
 
@@ -824,7 +933,9 @@ namespace AFMediaBar.Components
                     progressVisible,
                     experience.Density,
                     double.PositiveInfinity,
-                    experience.ComponentSpacingDip);
+                    experience.ComponentSpacingDip,
+                    performanceVisible: true,
+                    performanceWidth: TaskbarPerformanceWidth);
                 _minimumPrimaryLength = TaskbarExperiencePolicy.CalculateWidth(
                     0,
                     GetTaskbarArtworkRight(),
@@ -837,7 +948,9 @@ namespace AFMediaBar.Components
                     progressVisible,
                     experience.Density,
                     double.PositiveInfinity,
-                    experience.ComponentSpacingDip);
+                    experience.ComponentSpacingDip,
+                    performanceVisible: true,
+                    performanceWidth: TaskbarPerformanceWidth);
                 request = request with
                 {
                     Width = _snapshot.IsConnected
@@ -855,8 +968,21 @@ namespace AFMediaBar.Components
 
         private void SongImageBorder_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
         {
-            if (!_isConnected || !_canPlayPause || e.ChangedButton != MouseButton.Left ||
+            if (e.ChangedButton != MouseButton.Left ||
                 DateTime.UtcNow < _suppressArtworkClickUntilUtc)
+                return;
+
+            if (!_isConnected)
+            {
+                if (_currentMode == WindowMode.Taskbar && !_isVertical)
+                {
+                    QuickLaunchPopup.IsOpen = !QuickLaunchPopup.IsOpen;
+                    e.Handled = true;
+                }
+                return;
+            }
+
+            if (!_canPlayPause)
                 return;
 
             if (_currentMode == WindowMode.Taskbar &&
@@ -870,7 +996,14 @@ namespace AFMediaBar.Components
         private void InteractionSurface_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
         {
             if (!_isConnected)
+            {
+                if (_currentMode == WindowMode.Taskbar && !_isVertical && SongImageBorder.IsMouseOver && _quickLaunchEntries.Count > 0)
+                {
+                    QuickLaunchWheelRequested?.Invoke(this, new PlayerSurfaceWheelEventArgs(e.Delta, false, false));
+                    e.Handled = true;
+                }
                 return;
+            }
 
             if (_currentMode == WindowMode.Taskbar)
             {
@@ -903,10 +1036,75 @@ namespace AFMediaBar.Components
             SkipNextRequested?.Invoke(this, EventArgs.Empty);
 
         private void TaskbarDeviceButton_Click(object sender, RoutedEventArgs e) =>
-            OutputDeviceCycleRequested?.Invoke(this, EventArgs.Empty);
+            OutputDeviceMenuRequested?.Invoke(this, EventArgs.Empty);
 
         private void TaskbarVolumeButton_Click(object sender, RoutedEventArgs e) =>
-            AudioControlRequested?.Invoke(this, EventArgs.Empty);
+            VolumeMenuRequested?.Invoke(this, EventArgs.Empty);
+
+        private void TaskbarDeviceButton_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+        {
+            OutputDeviceWheelRequested?.Invoke(this, new PlayerSurfaceWheelEventArgs(e.Delta, false, false));
+            e.Handled = true;
+        }
+
+        private void TaskbarVolumeButton_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+        {
+            VolumeWheelRequested?.Invoke(this, new PlayerSurfaceWheelEventArgs(e.Delta, false, false));
+            e.Handled = true;
+        }
+
+        private void OutputDevicePopup_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+        {
+            OutputDeviceWheelRequested?.Invoke(this, new PlayerSurfaceWheelEventArgs(e.Delta, false, false));
+            e.Handled = true;
+        }
+
+        private void VolumePopup_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+        {
+            VolumeWheelRequested?.Invoke(this, new PlayerSurfaceWheelEventArgs(e.Delta, false, false));
+            e.Handled = true;
+        }
+
+        private void OutputDeviceList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_isUpdatingAudioMenus || OutputDeviceList.SelectedItem is not AudioDeviceOption device)
+                return;
+            OutputDeviceSelected?.Invoke(device);
+            OutputDevicePopup.IsOpen = false;
+        }
+
+        private void TaskbarVolumeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (_isUpdatingAudioMenus || !TaskbarVolumeSlider.IsEnabled)
+                return;
+            var value = Math.Clamp((int)Math.Round(e.NewValue), 0, 100);
+            VolumePercentText.Text = $"{value}%";
+            VolumeValueRequested?.Invoke(value);
+        }
+
+        private void QuickLaunchItem_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is System.Windows.Controls.Button { DataContext: QuickLaunchEntry entry })
+            {
+                QuickLaunchPopup.IsOpen = false;
+                QuickLaunchRequested?.Invoke(entry);
+            }
+        }
+
+        private void OpenExtraFeaturesButton_Click(object sender, RoutedEventArgs e)
+        {
+            QuickLaunchPopup.IsOpen = false;
+            OpenExtraFeaturesRequested?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void TaskbarPerformanceSurface_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            if (SettingsManager.Current.PerformanceComponent.OpenTaskManagerOnClick && e.ChangedButton == MouseButton.Left)
+            {
+                OpenTaskManagerRequested?.Invoke(this, EventArgs.Empty);
+                e.Handled = true;
+            }
+        }
 
         private void TaskbarFullPanelHandle_Click(object sender, RoutedEventArgs e) =>
             OpenFullPanelRequested?.Invoke(this, EventArgs.Empty);

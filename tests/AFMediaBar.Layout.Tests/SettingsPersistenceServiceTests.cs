@@ -70,7 +70,13 @@ public sealed class SettingsPersistenceServiceTests
                 7000,
                 TrackChangeNotificationPosition.TopRight,
                 NotificationTargetMode.ForegroundWindow,
-                @"\\.\DISPLAY3")
+                @"\\.\DISPLAY3"),
+            SmtcSourceFilter = new SmtcSourceFilterSettings(true, ["PLAYER.ONE", "player.two"]),
+            QuickLaunch = new QuickLaunchSettings([
+                new QuickLaunchEntry("player", "Player", QuickLaunchTargetKind.Executable, @"C:\Apps\Player.exe", "Player.One")]),
+            SpectrumComponent = new SpectrumComponentSettings(7, 25, 180),
+            PerformanceComponent = new PerformanceComponentSettings(
+                [MetricKind.SystemCpu, MetricKind.ProcessMemory], 1800, true)
         };
         using (var writer = new SettingsPersistenceService(_directory)) { writer.Initialize(); SettingsManager.Replace(settings); writer.Flush(); }
         SettingsManager.ResetAll();
@@ -97,8 +103,19 @@ public sealed class SettingsPersistenceServiceTests
         Assert.AreEqual(TrackChangeNotificationPosition.TopRight, SettingsManager.Current.TrackChangeNotification.Position);
         Assert.AreEqual(NotificationTargetMode.ForegroundWindow, SettingsManager.Current.TrackChangeNotification.TargetMode);
         Assert.AreEqual(@"\\.\DISPLAY3", SettingsManager.Current.TrackChangeNotification.FixedMonitorDeviceId);
+        Assert.IsTrue(SettingsManager.Current.SmtcSourceFilter.Enabled);
+        CollectionAssert.AreEquivalent(
+            new[] { "PLAYER.ONE", "player.two" },
+            SettingsManager.Current.SmtcSourceFilter.AllowedSourceIds!.ToArray());
+        Assert.AreEqual("Player", SettingsManager.Current.QuickLaunch.Entries!.Single().DisplayName);
+        Assert.AreEqual(new SpectrumComponentSettings(7, 25, 180), SettingsManager.Current.SpectrumComponent);
+        CollectionAssert.AreEqual(
+            new[] { MetricKind.SystemCpu, MetricKind.ProcessMemory },
+            SettingsManager.Current.PerformanceComponent.Metrics!.ToArray());
+        Assert.AreEqual(1800, SettingsManager.Current.PerformanceComponent.RefreshIntervalMilliseconds);
+        Assert.IsTrue(SettingsManager.Current.PerformanceComponent.OpenTaskManagerOnClick);
         var persisted = File.ReadAllText(reader.SettingsPath);
-        StringAssert.Contains(persisted, "\"schemaVersion\": 5");
+        StringAssert.Contains(persisted, "\"schemaVersion\": 6");
         StringAssert.Contains(persisted, "\"Disabled\"");
     }
 
@@ -147,7 +164,7 @@ public sealed class SettingsPersistenceServiceTests
 
         Assert.IsTrue(SettingsManager.Current.LyricsEnabled);
         Assert.IsTrue(Directory.GetFiles(_directory, "settings.json.unsupported-*").Length == 1);
-        StringAssert.Contains(File.ReadAllText(main), "\"schemaVersion\": 5");
+        StringAssert.Contains(File.ReadAllText(main), "\"schemaVersion\": 6");
     }
 
     [TestMethod]
@@ -215,7 +232,7 @@ public sealed class SettingsPersistenceServiceTests
         Assert.AreEqual("DISPLAY2", SettingsManager.Current.TrackChangeNotification.FixedMonitorDeviceId);
         Assert.AreEqual(TaskbarLengthMode.FollowContent, SettingsManager.Current.TaskbarExperience.LengthMode);
         Assert.AreEqual(TaskbarExperienceSettings.Default.FixedLengthDip, SettingsManager.Current.TaskbarExperience.FixedLengthDip);
-        StringAssert.Contains(File.ReadAllText(service.SettingsPath), "\"schemaVersion\": 5");
+        StringAssert.Contains(File.ReadAllText(service.SettingsPath), "\"schemaVersion\": 6");
     }
 
     [TestMethod]
@@ -249,6 +266,12 @@ public sealed class SettingsPersistenceServiceTests
 
         Assert.AreEqual(TaskbarLengthMode.FollowContent, SettingsManager.Current.TaskbarExperience.LengthMode);
         Assert.AreEqual(TaskbarExperienceSettings.Default.FixedLengthDip, SettingsManager.Current.TaskbarExperience.FixedLengthDip);
+        Assert.AreEqual(SmtcSourceFilterSettings.Default, SettingsManager.Current.SmtcSourceFilter);
+        Assert.AreEqual(SpectrumComponentSettings.Default, SettingsManager.Current.SpectrumComponent);
+        CollectionAssert.AreEqual(
+            PerformanceComponentSettings.Default.Metrics!.ToArray(),
+            SettingsManager.Current.PerformanceComponent.Metrics!.ToArray());
+        Assert.AreEqual(2500, SettingsManager.Current.PerformanceComponent.RefreshIntervalMilliseconds);
     }
 
     [TestMethod]
@@ -363,8 +386,23 @@ public sealed class SettingsPersistenceServiceTests
         SettingsManager.Current.TaskbarTargetMonitorDeviceId = "DISPLAY2";
         SettingsManager.ResetDisplayModes();
         Assert.AreEqual(TaskbarFullPanelSettings.Full, SettingsManager.Current.TaskbarExperience.FullPanel);
-        Assert.AreEqual(TrackChangeNotificationSettings.Default, SettingsManager.Current.TrackChangeNotification);
+        Assert.IsTrue(SettingsManager.Current.TrackChangeNotification.Enabled);
         Assert.IsNull(SettingsManager.Current.TaskbarTargetMonitorDeviceId);
+        SettingsManager.Current.SmtcSourceFilter = new SmtcSourceFilterSettings(true, ["player"]);
+        SettingsManager.Current.QuickLaunch = new QuickLaunchSettings([
+            new QuickLaunchEntry("player", "Player", QuickLaunchTargetKind.AppUserModelId, "Player.App!App")]);
+        SettingsManager.Current.SpectrumComponent = new SpectrumComponentSettings(3, 8, 250);
+        SettingsManager.Current.PerformanceComponent = new PerformanceComponentSettings([MetricKind.SystemGpu], 900, true);
+        SettingsManager.ResetExtraFeatures();
+        Assert.AreEqual(TrackChangeNotificationSettings.Default, SettingsManager.Current.TrackChangeNotification);
+        Assert.AreEqual(SmtcSourceFilterSettings.Default, SettingsManager.Current.SmtcSourceFilter);
+        Assert.AreEqual(0, SettingsManager.Current.QuickLaunch.Entries!.Count);
+        Assert.AreEqual(SpectrumComponentSettings.Default, SettingsManager.Current.SpectrumComponent);
+        CollectionAssert.AreEqual(
+            PerformanceComponentSettings.Default.Metrics!.ToArray(),
+            SettingsManager.Current.PerformanceComponent.Metrics!.ToArray());
+        Assert.AreEqual(2500, SettingsManager.Current.PerformanceComponent.RefreshIntervalMilliseconds);
+        Assert.IsFalse(SettingsManager.Current.PerformanceComponent.OpenTaskManagerOnClick);
     }
 
     [TestMethod]

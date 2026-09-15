@@ -11,7 +11,7 @@ namespace AFMediaBar.Classes.Services;
 /// <summary>负责用户设置 JSON 的加载、恢复、原子保存和防抖。 / Owns loading, recovery, atomic saving and debouncing of user settings JSON.</summary>
 public sealed class SettingsPersistenceService : IDisposable
 {
-    public const int CurrentSchemaVersion = 5;
+    public const int CurrentSchemaVersion = 6;
     private readonly string _directoryPath;
     private readonly string _settingsPath;
     private readonly string _backupPath;
@@ -191,6 +191,15 @@ public sealed class SettingsPersistenceService : IDisposable
                 LengthMode = TaskbarLengthMode.FollowContent,
                 FixedLengthDip = TaskbarExperienceSettings.Default.FixedLengthDip
             };
+        }
+        if (envelope.SchemaVersion <= 5)
+        {
+            // Schema 6 adds opt-in source filtering, an explicit quick-launch list, and
+            // always-on taskbar spectrum/performance component parameters.
+            result.SmtcSourceFilter = SmtcSourceFilterSettings.Default;
+            result.QuickLaunch = QuickLaunchSettings.Default;
+            result.SpectrumComponent = SpectrumComponentSettings.Default;
+            result.PerformanceComponent = PerformanceComponentSettings.Default;
         }
         return result.Normalize();
     }

@@ -21,7 +21,8 @@ public partial class TaskbarFullPanelWindow : FluentWindow
         TimeSpan.FromMilliseconds(AudioApplyPolicy.ApplicationVolumeDelayMilliseconds);
     private readonly MediaSessionService _mediaSessionService;
     private readonly AudioInteractionService _audioInteractionService;
-    private readonly SystemMetricsService _metricsService;
+    private readonly SystemMetricsMonitorService _metricsMonitor;
+    private IDisposable? _metricsSubscription;
     private readonly IDisplayMonitorService _displayMonitorService;
     private readonly DispatcherTimer _timer;
     private MediaSnapshot _snapshot = MediaSnapshot.Disconnected;
@@ -39,7 +40,7 @@ public partial class TaskbarFullPanelWindow : FluentWindow
     public TaskbarFullPanelWindow(
         MediaSessionService mediaSessionService,
         AudioInteractionService audioInteractionService,
-        SystemMetricsService metricsService,
+        SystemMetricsMonitorService metricsMonitor,
         WindowAppearanceService appearanceService,
         IDisplayMonitorService displayMonitorService)
     {
@@ -47,7 +48,7 @@ public partial class TaskbarFullPanelWindow : FluentWindow
         ApplyMotionEffects();
         _mediaSessionService = mediaSessionService;
         _audioInteractionService = audioInteractionService;
-        _metricsService = metricsService;
+        _metricsMonitor = metricsMonitor;
         _displayMonitorService = displayMonitorService;
         appearanceService.Attach(this);
         _mediaSessionService.SnapshotChanged += OnSnapshotChanged;
@@ -267,6 +268,13 @@ public partial class TaskbarFullPanelWindow : FluentWindow
         MediaControlsSection.Visibility = settings.MediaControlsVisible ? Visibility.Visible : Visibility.Collapsed;
         AudioControlsSection.Visibility = settings.AudioControlsVisible ? Visibility.Visible : Visibility.Collapsed;
         PerformanceSection.Visibility = settings.PerformanceVisible ? Visibility.Visible : Visibility.Collapsed;
+        _metricsSubscription?.Dispose();
+        _metricsSubscription = settings.PerformanceVisible
+            ? _metricsMonitor.Subscribe(
+                Enum.GetValues<MetricKind>(),
+                TimeSpan.FromMilliseconds(500),
+                ApplyMetricsSnapshot)
+            : null;
 
         if (animate)
         {
@@ -347,14 +355,15 @@ public partial class TaskbarFullPanelWindow : FluentWindow
     {
         if (MediaControlsSection.Visibility == Visibility.Visible)
             UpdateProgress();
-        if (_performanceVisible)
-        {
-            var metrics = _metricsService.Sample();
-            RamMetric.Text = $"{metrics.SystemMemoryPercent}%";
-            CpuMetric.Text = metrics.SystemCpuPercent is int cpu ? $"{cpu}%" : "—";
-            GpuMetric.Text = metrics.SystemGpuPercent is int gpu ? $"{gpu}%" : "—";
-            ProcessMetric.Text = $"{metrics.ProcessMemoryMegabytes} MB";
-        }
+    }
+
+    private void ApplyMetricsSnapshot(SystemMetricsSnapshot metrics)
+    {
+        if (_isClosing || !_performanceVisible) return;
+        RamMetric.Text = $"{metrics.SystemMemoryPercent}%";
+        CpuMetric.Text = metrics.SystemCpuPercent is int cpu ? $"{cpu}%" : "—";
+        GpuMetric.Text = metrics.SystemGpuPercent is int gpu ? $"{gpu}%" : "—";
+        ProcessMetric.Text = $"{metrics.ProcessMemoryMegabytes} MB";
     }
 
     private void UpdateProgress()
@@ -526,6 +535,8 @@ public partial class TaskbarFullPanelWindow : FluentWindow
         _deviceApplyVersion++;
         _volumeApplyVersion++;
         _timer.Stop();
+        _metricsSubscription?.Dispose();
+        _metricsSubscription = null;
         _mediaSessionService.SnapshotChanged -= OnSnapshotChanged;
         SettingsManager.TaskbarExperienceSettingsChanged -= OnTaskbarExperienceSettingsChanged;
         Closed -= OnClosed;

@@ -4,9 +4,43 @@
       xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
       xmlns:settings="clr-namespace:AFMediaBar.Classes.Settings"
       Foreground="{DynamicResource TextFillColorPrimaryBrush}">
+
     <StackPanel MaxWidth="1000" Margin="16,16,24,32">
         <TextBlock Text="额外功能" FontSize="32" FontWeight="{DynamicResource AppTextStrongFontWeight}"/>
-        <ui:TextBlock Text="管理不属于固定显示模式的通知与辅助体验" Appearance="Secondary" Margin="0,8,0,24"/>
+        <ui:TextBlock Text="管理媒体来源、任务栏附加组件与通知体验" Appearance="Secondary" Margin="0,8,0,24"/>
+
+        <TextBlock Text="媒体来源" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,10"/>
+        <ui:CardControl Margin="0,0,0,8" Icon="{ui:SymbolIcon Filter24}">
+            <ui:CardControl.Header><StackPanel><TextBlock Text="SMTC 来源过滤" FontWeight="SemiBold"/><TextBlock Text="开启后只接收下方允许的应用；同一浏览器的多个会话使用同一个来源规则" Opacity="0.62" FontSize="12"/></StackPanel></ui:CardControl.Header>
+            <ui:ToggleSwitch Content="启用允许列表" IsChecked="{Binding ViewModel.SmtcFilterEnabled, Mode=TwoWay}"/>
+        </ui:CardControl>
+        <ui:CardControl Margin="0,0,0,16" Icon="{ui:SymbolIcon AppsList24}">
+            <ui:CardControl.Header><StackPanel><TextBlock Text="已检测来源" FontWeight="SemiBold"/><TextBlock Text="先运行一次播放器即可在这里允许来源或加入快速启动" Opacity="0.62" FontSize="12"/></StackPanel></ui:CardControl.Header>
+            <ItemsControl ItemsSource="{Binding ViewModel.Sources}" MinWidth="470">
+                <ItemsControl.ItemTemplate><DataTemplate><Grid Margin="0,3"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><StackPanel><TextBlock Text="{Binding Descriptor.DisplayName}" FontWeight="SemiBold"/><TextBlock Text="{Binding Descriptor.SourceId}" FontSize="10" Opacity="0.55" TextTrimming="CharacterEllipsis"/></StackPanel><CheckBox Grid.Column="1" Margin="12,0" VerticalAlignment="Center" Content="允许" IsChecked="{Binding IsAllowed, Mode=TwoWay}"/><ui:Button Grid.Column="2" Content="加入快速启动" IsEnabled="{Binding Descriptor.CanQuickLaunch}" Command="{Binding DataContext.ViewModel.AddDetectedSourceCommand, RelativeSource={RelativeSource AncestorType=Page}}" CommandParameter="{Binding}"/></Grid></DataTemplate></ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ui:CardControl>
+
+        <TextBlock Text="快速启动" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,10"/>
+        <ui:CardControl Margin="0,0,0,16" Icon="{ui:SymbolIcon Rocket24}">
+            <ui:CardControl.Header><StackPanel><TextBlock Text="无媒体时从音符启动播放器" FontWeight="SemiBold"/><TextBlock Text="单击音符打开列表；滚轮停止 1.2 秒后启动最后预览项" Opacity="0.62" FontSize="12"/></StackPanel></ui:CardControl.Header>
+            <StackPanel MinWidth="470">
+                <ui:Button Content="浏览 EXE 或 LNK" Icon="{ui:SymbolIcon FolderOpen24}" HorizontalAlignment="Left" Click="BrowseQuickLaunch_Click"/>
+                <ItemsControl ItemsSource="{Binding ViewModel.QuickLaunchEntries}" Margin="0,8,0,0"><ItemsControl.ItemTemplate><DataTemplate><Grid Margin="0,3"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><StackPanel><TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold"/><TextBlock Text="{Binding Target}" FontSize="10" Opacity="0.55" TextTrimming="CharacterEllipsis"/></StackPanel><ui:Button Grid.Column="1" Width="30" Padding="0" Icon="{ui:SymbolIcon ArrowUp24}" Command="{Binding DataContext.ViewModel.MoveQuickLaunchUpCommand, RelativeSource={RelativeSource AncestorType=Page}}" CommandParameter="{Binding}"/><ui:Button Grid.Column="2" Width="30" Margin="4,0,0,0" Padding="0" Icon="{ui:SymbolIcon ArrowDown24}" Command="{Binding DataContext.ViewModel.MoveQuickLaunchDownCommand, RelativeSource={RelativeSource AncestorType=Page}}" CommandParameter="{Binding}"/><ui:Button Grid.Column="3" Width="30" Margin="4,0,0,0" Padding="0" Icon="{ui:SymbolIcon Delete24}" Command="{Binding DataContext.ViewModel.RemoveQuickLaunchCommand, RelativeSource={RelativeSource AncestorType=Page}}" CommandParameter="{Binding}"/></Grid></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+                <TextBlock Text="{Binding ViewModel.StatusText}" Margin="0,6,0,0" FontSize="12" Opacity="0.62" TextWrapping="Wrap"/>
+            </StackPanel>
+        </ui:CardControl>
+
+        <TextBlock Text="任务栏附加组件" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,10"/>
+        <ui:CardControl Margin="0,0,0,8" Icon="{ui:SymbolIcon DataHistogram24}">
+            <ui:CardControl.Header><StackPanel><TextBlock Text="频谱" FontWeight="SemiBold"/><TextBlock Text="频谱默认启用，仅在媒体播放时显示" Opacity="0.62" FontSize="12"/></StackPanel></ui:CardControl.Header>
+            <StackPanel MinWidth="470"><TextBlock Text="柱数"/><Slider Minimum="1" Maximum="9" TickFrequency="1" IsSnapToTickEnabled="True" Value="{Binding ViewModel.SpectrumBandCount, Mode=TwoWay}"/><TextBlock Text="刷新率（Hz）" Margin="0,8,0,0"/><Slider Minimum="5" Maximum="30" TickFrequency="1" IsSnapToTickEnabled="True" Value="{Binding ViewModel.SpectrumRefreshRateHz, Mode=TwoWay}"/><TextBlock Text="灵敏度（%）" Margin="0,8,0,0"/><Slider Minimum="1" Maximum="400" TickFrequency="1" Value="{Binding ViewModel.SpectrumSensitivityPercent, Mode=TwoWay}"/></StackPanel>
+        </ui:CardControl>
+        <ui:CardControl Margin="0,0,0,16" Icon="{ui:SymbolIcon Gauge24}">
+            <ui:CardControl.Header><StackPanel><TextBlock Text="性能" FontWeight="SemiBold"/><TextBlock Text="组件默认启用，每三个采样周期轮换一次选中指标" Opacity="0.62" FontSize="12"/></StackPanel></ui:CardControl.Header>
+            <StackPanel MinWidth="470"><WrapPanel><CheckBox Content="系统内存" Margin="0,0,14,0" IsChecked="{Binding ViewModel.ShowSystemMemory, Mode=TwoWay}"/><CheckBox Content="CPU" Margin="0,0,14,0" IsChecked="{Binding ViewModel.ShowSystemCpu, Mode=TwoWay}"/><CheckBox Content="GPU" Margin="0,0,14,0" IsChecked="{Binding ViewModel.ShowSystemGpu, Mode=TwoWay}"/><CheckBox Content="本程序内存" IsChecked="{Binding ViewModel.ShowProcessMemory, Mode=TwoWay}"/></WrapPanel><TextBlock Text="刷新间隔（毫秒）" Margin="0,10,0,0"/><Slider Minimum="250" Maximum="60000" TickFrequency="250" IsSnapToTickEnabled="True" Value="{Binding ViewModel.PerformanceRefreshIntervalMilliseconds, Mode=TwoWay}"/><ui:ToggleSwitch Margin="0,10,0,0" Content="点击性能组件打开任务管理器" IsChecked="{Binding ViewModel.OpenTaskManagerOnMetricsClick, Mode=TwoWay}"/></StackPanel>
+        </ui:CardControl>
+
         <TextBlock Text="曲目切换通知" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,10"/>
         <ui:CardControl Margin="0,0,0,8" Icon="{ui:SymbolIcon MusicNote220}">
             <ui:CardControl.Header><StackPanel><TextBlock Text="显示刚切换到的当前曲目" FontWeight="SemiBold"/><TextBlock Text="这不是播放队列或下一首预览；首个快照只建立基线" Opacity="0.62" FontSize="12"/></StackPanel></ui:CardControl.Header>
@@ -19,4 +53,5 @@
         </StackPanel>
         <ui:Button Content="恢复本页默认设置" Icon="{ui:SymbolIcon ArrowReset24}" HorizontalAlignment="Left" Click="ResetButton_Click"/>
     </StackPanel>
+
 </Page>
