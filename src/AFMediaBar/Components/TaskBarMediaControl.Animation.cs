@@ -481,8 +481,6 @@ public partial class TaskBarMediaControl
     {
         _hoverOpenTimer.Stop();
         _hoverCloseTimer.Stop();
-        if (!immediate && (OutputDevicePopup.IsOpen || VolumePopup.IsOpen))
-            return;
         if (!immediate && _isSeeking)
             return;
         if (immediate || HoverRevealHost.Visibility != Visibility.Visible)
@@ -535,9 +533,4 @@ public partial class TaskBarMediaControl
         HoverRevealClip.BeginAnimation(RectangleGeometry.RectProperty, hide, HandoffBehavior.SnapshotAndReplace);
     }
 
-    private void TransientPopup_Closed(object? sender, EventArgs e)
-    {
-        if (!SongInfoStackPanel.IsMouseOver && !HoverRevealHost.IsMouseOver)
-            HideTaskbarHoverLayer();
-    }
 }

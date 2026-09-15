@@ -22,16 +22,15 @@ public readonly record struct TaskbarDensityMetrics(
 public static class TaskbarExperiencePolicy
 {
     /// <summary>
-    /// 仅在媒体源已连接且正在播放时显示任务栏频谱。
-    /// Shows the taskbar spectrum only while a connected media source is playing.
+    /// 媒体源连接期间始终为任务栏频谱保留位置；暂停时由采样器清零，避免文字区跳动。
+    /// Reserves taskbar spectrum space while media is connected; sampling clears paused bars without shifting text.
     /// </summary>
     public static bool ShouldShowSpectrum(MediaSnapshot snapshot) =>
-        snapshot.IsConnected && snapshot.IsPlaying;
+        snapshot.IsConnected;
 
     /// <summary>
-    /// 计算横向任务栏媒体条宽度；断开时只保留封面占位和尾部边距，暂停时不预留频谱空间。
-    /// Calculates horizontal taskbar media-bar width; disconnected state retains only the artwork
-    /// placeholder and trailing margin, while paused media does not reserve spectrum space.
+    /// 计算横向任务栏媒体条宽度；连接期间固定预留频谱位置，断开时移除该位置。
+    /// Calculates horizontal taskbar media-bar width, reserving spectrum space for every connected state.
     /// </summary>
     public static double CalculateWidth(
         double measuredTextWidth,

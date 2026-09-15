@@ -51,6 +51,7 @@ public partial class TaskbarWindow : Window
     private readonly AudioInteractionService _audioInteractionService;
     private readonly MediaSourceActivationService _sourceActivationService;
     private readonly SystemMetricsMonitorService _metricsMonitor;
+    private readonly TaskbarCompactFlyoutWindow _compactFlyout;
     private IDisposable? _metricsSubscription;
 
     private IntPtr _lastTaskbarHandle;
@@ -90,7 +91,6 @@ public partial class TaskbarWindow : Window
     private int _metricSampleCount;
 
     public event EventHandler? OpenFullPanelRequested;
-    public event EventHandler? OpenExtraFeaturesRequested;
 
     /// <summary>
     /// 创建任务栏媒体宿主并连接其基础设施动作。
@@ -116,6 +116,12 @@ public partial class TaskbarWindow : Window
         DataContext = viewModel;
         ContextMenuHelper.AttachOutsideClickDismissal(PlayerMenu);
         appearanceService.Attach(PlayerMenu, this);
+        _compactFlyout = new TaskbarCompactFlyoutWindow(appearanceService);
+        _compactFlyout.QuickLaunchSelected += MediaControl_QuickLaunchRequested;
+        _compactFlyout.OutputDeviceSelected += MediaControl_OutputDeviceSelected;
+        _compactFlyout.OutputDeviceWheelRequested += CompactFlyout_OutputDeviceWheelRequested;
+        _compactFlyout.VolumeWheelRequested += CompactFlyout_VolumeWheelRequested;
+        _compactFlyout.VolumeValueRequested += MediaControl_VolumeValueRequested;
         MediaControl.TogglePlayPauseRequested += MediaControl_TogglePlayPauseRequested;
         MediaControl.SkipPreviousRequested += MediaControl_SkipPreviousRequested;
         MediaControl.SkipNextRequested += MediaControl_SkipNextRequested;
@@ -123,13 +129,10 @@ public partial class TaskbarWindow : Window
         MediaControl.OpenFullPanelRequested += MediaControl_OpenFullPanelRequested;
         MediaControl.OutputDeviceMenuRequested += MediaControl_OutputDeviceMenuRequested;
         MediaControl.OutputDeviceWheelRequested += MediaControl_OutputDeviceWheelRequested;
-        MediaControl.OutputDeviceSelected += MediaControl_OutputDeviceSelected;
         MediaControl.VolumeMenuRequested += MediaControl_VolumeMenuRequested;
         MediaControl.VolumeWheelRequested += MediaControl_VolumeWheelRequested;
-        MediaControl.VolumeValueRequested += MediaControl_VolumeValueRequested;
-        MediaControl.QuickLaunchRequested += MediaControl_QuickLaunchRequested;
+        MediaControl.QuickLaunchMenuRequested += MediaControl_QuickLaunchMenuRequested;
         MediaControl.QuickLaunchWheelRequested += MediaControl_QuickLaunchWheelRequested;
-        MediaControl.OpenExtraFeaturesRequested += MediaControl_OpenExtraFeaturesRequested;
         MediaControl.OpenTaskManagerRequested += MediaControl_OpenTaskManagerRequested;
         MediaControl.SeekRequested += MediaControl_SeekRequested;
         MediaControl.WheelRequested += MediaControl_WheelRequested;
@@ -187,7 +190,8 @@ public partial class TaskbarWindow : Window
             if (pending is not null && !_isClosing)
             {
                 await _audioInteractionService.SetOutputDeviceAsync(pending);
-                MediaControl.CloseTransientMenus();
+                if (_compactFlyout.IsShowing(TaskbarCompactFlyoutMode.OutputDevice))
+                    _compactFlyout.Dismiss();
             }
         };
         _quickLaunchApplyTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(AudioApplyPolicy.OutputDevicePreviewDelayMilliseconds) };
@@ -198,7 +202,8 @@ public partial class TaskbarWindow : Window
             _pendingQuickLaunch = null;
             if (pending is not null && !_isClosing && !_lastSnapshot.IsConnected)
             {
-                MediaControl.CloseTransientMenus();
+                if (_compactFlyout.IsShowing(TaskbarCompactFlyoutMode.QuickLaunch))
+                    _compactFlyout.Dismiss();
                 var result = await _sourceActivationService.LaunchAsync(pending);
                 ShowQuickLaunchResult(result);
             }
@@ -250,7 +255,7 @@ public partial class TaskbarWindow : Window
             _outputDeviceApplyTimer.Stop();
             _quickLaunchApplyTimer.Stop();
             _volumeApplyTimer.Stop();
-            MediaControl.CloseTransientMenus();
+            _compactFlyout.Dismiss();
             _foregroundSamplingSession.Invalidate(clearDecision: false);
             return IntPtr.Zero;
         }
@@ -536,7 +541,7 @@ public partial class TaskbarWindow : Window
         {
             _quickLaunchApplyTimer.Stop();
             _pendingQuickLaunch = null;
-            MediaControl.CloseTransientMenus();
+            _compactFlyout.Dismiss();
         }
 
         if (!_timer.IsEnabled)
@@ -789,7 +794,7 @@ public partial class TaskbarWindow : Window
         _foregroundSamplingSession.Invalidate(clearDecision: false);
         _pendingSizeRequest = null;
         PlayerMenu.IsOpen = false;
-        MediaControl.CloseTransientMenus();
+        _compactFlyout.Dismiss();
     }
 
     internal void ResumeAfterEnvironmentRecovery()
@@ -851,26 +856,37 @@ public partial class TaskbarWindow : Window
 
     private async void MediaControl_OutputDeviceMenuRequested(object? sender, EventArgs e)
     {
-        if (MediaControl.IsOutputDeviceMenuOpen)
+        if (_compactFlyout.IsShowing(TaskbarCompactFlyoutMode.OutputDevice))
         {
-            MediaControl.CloseTransientMenus();
+            _compactFlyout.Dismiss();
             return;
         }
         _outputDevices = await _audioInteractionService.GetOutputDevicesAsync();
-        MediaControl.ShowOutputDeviceMenu(_outputDevices, _outputDevices.FirstOrDefault(device => device.IsDefault));
+        if (_isClosing) return;
+        _compactFlyout.ShowOutputDevices(
+            _outputDevices,
+            _outputDevices.FirstOrDefault(device => device.IsDefault),
+            MediaControl.GetOutputDeviceAnchor());
     }
 
     private async void MediaControl_OutputDeviceWheelRequested(object? sender, PlayerSurfaceWheelEventArgs e)
+        => await PreviewOutputDeviceAsync(e.Delta, updateFlyout: false);
+
+    private async void CompactFlyout_OutputDeviceWheelRequested(int delta)
+        => await PreviewOutputDeviceAsync(delta, updateFlyout: true);
+
+    private async Task PreviewOutputDeviceAsync(int delta, bool updateFlyout)
     {
         if (_outputDevices.Count == 0) _outputDevices = await _audioInteractionService.GetOutputDevicesAsync();
-        if (_outputDevices.Count == 0) return;
+        if (_outputDevices.Count == 0) { MediaControl.SetOutputDeviceUnavailable(); return; }
         var current = _pendingOutputDevice is null
             ? _outputDevices.ToList().FindIndex(device => device.IsDefault)
             : _outputDevices.ToList().FindIndex(device => device.Id == _pendingOutputDevice.Id);
-        var index = DeferredCircularSelection.Move(current, e.Delta, _outputDevices.Count);
+        var index = DeferredCircularSelection.Move(current, delta, _outputDevices.Count);
         if (index < 0) return;
         _pendingOutputDevice = _outputDevices[index];
-        MediaControl.ShowOutputDeviceMenu(_outputDevices, _pendingOutputDevice);
+        MediaControl.SetOutputDevicePreview(_pendingOutputDevice);
+        if (updateFlyout) _compactFlyout.SetOutputDevicePreview(_pendingOutputDevice);
         _outputDeviceApplyTimer.Stop();
         _outputDeviceApplyTimer.Start();
     }
@@ -884,23 +900,34 @@ public partial class TaskbarWindow : Window
 
     private async void MediaControl_VolumeMenuRequested(object? sender, EventArgs e)
     {
-        if (MediaControl.IsVolumeMenuOpen)
+        if (_compactFlyout.IsShowing(TaskbarCompactFlyoutMode.Volume))
         {
-            MediaControl.CloseTransientMenus();
+            _compactFlyout.Dismiss();
             return;
         }
         _currentVolume = await Task.Run(_audioInteractionService.GetCurrentMediaVolume);
-        MediaControl.ShowVolumeMenu(_lastSnapshot.SourceName, _currentVolume?.VolumePercent);
+        if (_isClosing) return;
+        _compactFlyout.ShowVolume(
+            _lastSnapshot.SourceName,
+            _currentVolume?.VolumePercent,
+            MediaControl.GetVolumeAnchor());
     }
 
     private async void MediaControl_VolumeWheelRequested(object? sender, PlayerSurfaceWheelEventArgs e)
+        => await PreviewVolumeAsync(e.Delta, updateFlyout: false);
+
+    private async void CompactFlyout_VolumeWheelRequested(int delta)
+        => await PreviewVolumeAsync(delta, updateFlyout: true);
+
+    private async Task PreviewVolumeAsync(int delta, bool updateFlyout)
     {
         _currentVolume ??= await Task.Run(_audioInteractionService.GetCurrentMediaVolume);
-        if (_currentVolume is null) { MediaControl.ShowVolumeMenu(_lastSnapshot.SourceName, null); return; }
-        var steps = Math.Max(1, Math.Abs(e.Delta) / Mouse.MouseWheelDeltaForOneLine) * (e.Delta > 0 ? 1 : -1);
+        if (_currentVolume is null) { MediaControl.SetVolumeUnavailable(); return; }
+        var steps = Math.Max(1, Math.Abs(delta) / Mouse.MouseWheelDeltaForOneLine) * (delta > 0 ? 1 : -1);
         var value = Math.Clamp((_pendingVolume ?? _currentVolume.VolumePercent) + steps * 2, 0, 100);
         QueueVolume(value);
-        MediaControl.ShowVolumeMenu(_lastSnapshot.SourceName, value);
+        MediaControl.SetVolumePreview(value);
+        if (updateFlyout) _compactFlyout.SetVolumePreview(value);
     }
 
     private void MediaControl_VolumeValueRequested(int value) => QueueVolume(value);
@@ -924,9 +951,24 @@ public partial class TaskbarWindow : Window
     private void ShowQuickLaunchResult(QuickLaunchResult result)
     {
         if (_isClosing || result == QuickLaunchResult.Success) return;
-        MediaControl.ShowQuickLaunchStatus(result == QuickLaunchResult.InvalidTarget
+        _compactFlyout.ShowQuickLaunch(
+            SettingsManager.Current.QuickLaunch.Entries ?? [],
+            MediaControl.GetQuickLaunchAnchor());
+        _compactFlyout.ShowQuickLaunchStatus(result == QuickLaunchResult.InvalidTarget
             ? "启动目标已失效，请在额外功能中重新添加。"
             : "无法启动此应用，请检查应用是否仍可用。");
+    }
+
+    private void MediaControl_QuickLaunchMenuRequested(object? sender, EventArgs e)
+    {
+        if (_compactFlyout.IsShowing(TaskbarCompactFlyoutMode.QuickLaunch))
+        {
+            _compactFlyout.Dismiss();
+            return;
+        }
+        _compactFlyout.ShowQuickLaunch(
+            SettingsManager.Current.QuickLaunch.Entries ?? [],
+            MediaControl.GetQuickLaunchAnchor());
     }
 
     private void MediaControl_QuickLaunchWheelRequested(object? sender, PlayerSurfaceWheelEventArgs e)
@@ -941,8 +983,6 @@ public partial class TaskbarWindow : Window
         _quickLaunchApplyTimer.Stop();
         _quickLaunchApplyTimer.Start();
     }
-
-    private void MediaControl_OpenExtraFeaturesRequested(object? sender, EventArgs e) => OpenExtraFeaturesRequested?.Invoke(this, EventArgs.Empty);
 
     private void MediaControl_OpenTaskManagerRequested(object? sender, EventArgs e)
     {
@@ -1260,17 +1300,15 @@ public partial class TaskbarWindow : Window
         MediaControl.OpenFullPanelRequested -= MediaControl_OpenFullPanelRequested;
         MediaControl.OutputDeviceMenuRequested -= MediaControl_OutputDeviceMenuRequested;
         MediaControl.OutputDeviceWheelRequested -= MediaControl_OutputDeviceWheelRequested;
-        MediaControl.OutputDeviceSelected -= MediaControl_OutputDeviceSelected;
         MediaControl.VolumeMenuRequested -= MediaControl_VolumeMenuRequested;
         MediaControl.VolumeWheelRequested -= MediaControl_VolumeWheelRequested;
-        MediaControl.VolumeValueRequested -= MediaControl_VolumeValueRequested;
-        MediaControl.QuickLaunchRequested -= MediaControl_QuickLaunchRequested;
+        MediaControl.QuickLaunchMenuRequested -= MediaControl_QuickLaunchMenuRequested;
         MediaControl.QuickLaunchWheelRequested -= MediaControl_QuickLaunchWheelRequested;
-        MediaControl.OpenExtraFeaturesRequested -= MediaControl_OpenExtraFeaturesRequested;
         MediaControl.OpenTaskManagerRequested -= MediaControl_OpenTaskManagerRequested;
         MediaControl.SeekRequested -= MediaControl_SeekRequested;
         MediaControl.WheelRequested -= MediaControl_WheelRequested;
         MediaControl.DesiredSizeChanged -= MediaControl_DesiredSizeChanged;
+        _compactFlyout.Dispose();
         base.OnClosed(e);
     }
 

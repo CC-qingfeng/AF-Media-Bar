@@ -86,10 +86,10 @@ public sealed class TaskbarExperiencePolicyTests
     }
 
     [TestMethod]
-    public void SpectrumRequiresConnectedPlayingMedia()
+    public void SpectrumReservesSpaceForConnectedPausedMedia()
     {
         Assert.IsFalse(TaskbarExperiencePolicy.ShouldShowSpectrum(MediaSnapshot.Disconnected));
-        Assert.IsFalse(TaskbarExperiencePolicy.ShouldShowSpectrum(MediaSnapshot.Disconnected with
+        Assert.IsTrue(TaskbarExperiencePolicy.ShouldShowSpectrum(MediaSnapshot.Disconnected with
         {
             IsConnected = true,
             IsPlaying = false

@@ -121,7 +121,6 @@ namespace AFMediaBar.Components
         private bool _isTaskbarHoverVisible;
         private bool _isSeeking;
         private PlayerForegroundDecision? _adaptiveForegroundDecision;
-        private bool _isUpdatingAudioMenus;
         private IReadOnlyList<QuickLaunchEntry> _quickLaunchEntries = Array.Empty<QuickLaunchEntry>();
         private DateTime _suppressArtworkClickUntilUtc;
         private const double TaskbarSpectrumWidth = 38;
@@ -137,13 +136,10 @@ namespace AFMediaBar.Components
         public event EventHandler? OpenFullPanelRequested;
         public event EventHandler? OutputDeviceMenuRequested;
         public event EventHandler<PlayerSurfaceWheelEventArgs>? OutputDeviceWheelRequested;
-        public event Action<AudioDeviceOption>? OutputDeviceSelected;
         public event EventHandler? VolumeMenuRequested;
         public event EventHandler<PlayerSurfaceWheelEventArgs>? VolumeWheelRequested;
-        public event Action<int>? VolumeValueRequested;
-        public event Action<QuickLaunchEntry>? QuickLaunchRequested;
+        public event EventHandler? QuickLaunchMenuRequested;
         public event EventHandler<PlayerSurfaceWheelEventArgs>? QuickLaunchWheelRequested;
-        public event EventHandler? OpenExtraFeaturesRequested;
         public event EventHandler? OpenTaskManagerRequested;
         public event Action<double>? SeekRequested;
         public event EventHandler<PlayerSurfaceWheelEventArgs>? WheelRequested;
@@ -203,77 +199,47 @@ namespace AFMediaBar.Components
         public void ApplyQuickLaunchEntries(IReadOnlyList<QuickLaunchEntry> entries)
         {
             _quickLaunchEntries = entries.ToArray();
-            QuickLaunchList.ItemsSource = _quickLaunchEntries;
-            QuickLaunchEmptyText.Visibility = _quickLaunchEntries.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         }
 
-        public void SetQuickLaunchPreview(QuickLaunchEntry entry)
+        /// <summary>更新音符的快速启动预览提示。 / Updates the note tooltip with the quick-launch preview.</summary>
+        public void SetQuickLaunchPreview(QuickLaunchEntry entry) => SongImageBorder.ToolTip = $"快速启动：{entry.DisplayName}";
+
+        /// <summary>更新输出设备按钮的即时预览提示。 / Updates the output-device button tooltip with the immediate preview.</summary>
+        public void SetOutputDevicePreview(AudioDeviceOption device) => TaskbarDeviceButton.ToolTip = $"输出设备：{device.DisplayName}";
+
+        /// <summary>提示当前没有可用输出设备。 / Indicates that no output device is available.</summary>
+        public void SetOutputDeviceUnavailable() => TaskbarDeviceButton.ToolTip = "输出设备：不可用";
+
+        /// <summary>更新当前媒体音量按钮的即时提示。 / Updates the current-media volume button tooltip.</summary>
+        public void SetVolumePreview(int volume) => TaskbarVolumeButton.ToolTip = $"当前媒体音量：{volume}%";
+
+        /// <summary>提示当前媒体没有可匹配音频会话。 / Indicates that the current media has no matching audio session.</summary>
+        public void SetVolumeUnavailable() => TaskbarVolumeButton.ToolTip = "当前媒体音量：不可用";
+
+        /// <summary>返回快速启动菜单的物理屏幕锚点。 / Returns the physical screen anchor for the quick-launch menu.</summary>
+        public TrayIconBounds GetQuickLaunchAnchor() => GetScreenBounds(SongImageBorder);
+
+        /// <summary>返回输出设备菜单的物理屏幕锚点。 / Returns the physical screen anchor for the output-device menu.</summary>
+        public TrayIconBounds GetOutputDeviceAnchor() => GetScreenBounds(TaskbarDeviceButton);
+
+        /// <summary>返回音量菜单的物理屏幕锚点。 / Returns the physical screen anchor for the volume menu.</summary>
+        public TrayIconBounds GetVolumeAnchor() => GetScreenBounds(TaskbarVolumeButton);
+
+        private static TrayIconBounds GetScreenBounds(FrameworkElement element)
         {
-            SongImageBorder.ToolTip = $"快速启动：{entry.DisplayName}";
-            QuickLaunchStatusText.Visibility = Visibility.Collapsed;
-            QuickLaunchPopup.IsOpen = true;
-        }
-
-        public void ShowQuickLaunchStatus(string message)
-        {
-            QuickLaunchStatusText.Text = message;
-            QuickLaunchStatusText.Visibility = Visibility.Visible;
-            QuickLaunchPopup.IsOpen = true;
-        }
-
-        public void ShowOutputDeviceMenu(IReadOnlyList<AudioDeviceOption> devices, AudioDeviceOption? selected)
-        {
-            _isUpdatingAudioMenus = true;
-            OutputDeviceList.ItemsSource = devices;
-            OutputDeviceList.SelectedItem = selected;
-            _isUpdatingAudioMenus = false;
-            OutputDevicePopup.IsOpen = devices.Count > 0;
-        }
-
-        /// <summary>指示紧凑输出设备菜单是否可见。/ Indicates whether the compact output-device menu is visible.</summary>
-        public bool IsOutputDeviceMenuOpen => OutputDevicePopup.IsOpen;
-
-        /// <summary>指示紧凑音量菜单是否可见。/ Indicates whether the compact volume menu is visible.</summary>
-        public bool IsVolumeMenuOpen => VolumePopup.IsOpen;
-
-        public void SetOutputDevicePreview(AudioDeviceOption device)
-        {
-            _isUpdatingAudioMenus = true;
-            OutputDeviceList.SelectedItem = device;
-            OutputDeviceList.ScrollIntoView(device);
-            _isUpdatingAudioMenus = false;
-        }
-
-        public void ShowVolumeMenu(string sourceName, int? volume)
-        {
-            _isUpdatingAudioMenus = true;
-            VolumeSourceText.Text = string.IsNullOrWhiteSpace(sourceName) ? "当前媒体" : sourceName;
-            TaskbarVolumeSlider.IsEnabled = volume is not null;
-            TaskbarVolumeSlider.Value = volume ?? 0;
-            VolumePercentText.Text = volume is int value ? $"{value}%" : "不可用";
-            _isUpdatingAudioMenus = false;
-            VolumePopup.IsOpen = true;
-        }
-
-        public void SetVolumePreview(int volume)
-        {
-            _isUpdatingAudioMenus = true;
-            TaskbarVolumeSlider.Value = volume;
-            VolumePercentText.Text = $"{volume}%";
-            _isUpdatingAudioMenus = false;
+            var point = element.PointToScreen(new Point(0, 0));
+            var dpi = VisualTreeHelper.GetDpi(element);
+            return new TrayIconBounds(
+                (int)Math.Round(point.X),
+                (int)Math.Round(point.Y),
+                (int)Math.Round(point.X + element.ActualWidth * dpi.DpiScaleX),
+                (int)Math.Round(point.Y + element.ActualHeight * dpi.DpiScaleY));
         }
 
         public void ApplyPerformanceText(string text, bool canOpenTaskManager)
         {
             TaskbarPerformanceText.Text = text;
             TaskbarPerformanceSurface.Cursor = canOpenTaskManager ? Cursors.Hand : Cursors.Arrow;
-        }
-
-        public void CloseTransientMenus()
-        {
-            QuickLaunchPopup.IsOpen = false;
-            OutputDevicePopup.IsOpen = false;
-            VolumePopup.IsOpen = false;
         }
 
         /// <summary>
@@ -897,7 +863,10 @@ namespace AFMediaBar.Components
                 ? _secondaryLyric
                 : string.Empty;
             var artist = !lyricsVisible && SongArtistContainer.Visibility == Visibility.Visible ? _actualArtist : string.Empty;
-            var fingerprint = $"{orientation}|{visibleText}|{secondaryText}|{artist}|{SongTitle.FontSize:0.##}|{SongArtist.FontSize:0.##}|{SettingsManager.Current.LayoutLengthScalePercent:0.##}|{SettingsManager.Current.LayoutThicknessScalePercent:0.##}|{SettingsManager.Current.LyricsEnabled}|{SettingsManager.Current.TwoLineLyricsEnabled}|{SettingsManager.Current.LyricsSecondaryLineMode}|{SettingsManager.Current.TaskbarExperience}|{SettingsManager.Current.Interaction.Mode}|{SettingsManager.Current.SpectrumComponent}|{SettingsManager.Current.PerformanceComponent}|{_snapshot.IsConnected}|{_snapshot.IsPlaying}|{_snapshot.Duration > 0}";
+            // Spectrum tuning and metric selection never change their reserved widths. Keeping
+            // those values (or play/pause) in the fingerprint causes redundant host size
+            // animations and visibly nudges title/artist/lyrics while sliders are adjusted.
+            var fingerprint = $"{orientation}|{visibleText}|{secondaryText}|{artist}|{SongTitle.FontSize:0.##}|{SongArtist.FontSize:0.##}|{SettingsManager.Current.LayoutLengthScalePercent:0.##}|{SettingsManager.Current.LayoutThicknessScalePercent:0.##}|{SettingsManager.Current.LyricsEnabled}|{SettingsManager.Current.TwoLineLyricsEnabled}|{SettingsManager.Current.LyricsSecondaryLineMode}|{SettingsManager.Current.TaskbarExperience}|{SettingsManager.Current.Interaction.Mode}|{_snapshot.IsConnected}|{_snapshot.Duration > 0}";
             if (!isResetToPreset && fingerprint == _lastSizeFingerprint)
                 return;
 
@@ -976,7 +945,7 @@ namespace AFMediaBar.Components
             {
                 if (_currentMode == WindowMode.Taskbar && !_isVertical)
                 {
-                    QuickLaunchPopup.IsOpen = !QuickLaunchPopup.IsOpen;
+                    QuickLaunchMenuRequested?.Invoke(this, EventArgs.Empty);
                     e.Handled = true;
                 }
                 return;
@@ -995,6 +964,11 @@ namespace AFMediaBar.Components
 
         private void InteractionSurface_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
         {
+            // Preview events tunnel through this parent before the button handlers.
+            // Leave both audio buttons in control so their wheel input never becomes a media gesture.
+            if (TaskbarDeviceButton.IsMouseOver || TaskbarVolumeButton.IsMouseOver)
+                return;
+
             if (!_isConnected)
             {
                 if (_currentMode == WindowMode.Taskbar && !_isVertical && SongImageBorder.IsMouseOver && _quickLaunchEntries.Count > 0)
@@ -1051,50 +1025,6 @@ namespace AFMediaBar.Components
         {
             VolumeWheelRequested?.Invoke(this, new PlayerSurfaceWheelEventArgs(e.Delta, false, false));
             e.Handled = true;
-        }
-
-        private void OutputDevicePopup_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
-        {
-            OutputDeviceWheelRequested?.Invoke(this, new PlayerSurfaceWheelEventArgs(e.Delta, false, false));
-            e.Handled = true;
-        }
-
-        private void VolumePopup_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
-        {
-            VolumeWheelRequested?.Invoke(this, new PlayerSurfaceWheelEventArgs(e.Delta, false, false));
-            e.Handled = true;
-        }
-
-        private void OutputDeviceList_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-            if (_isUpdatingAudioMenus || OutputDeviceList.SelectedItem is not AudioDeviceOption device)
-                return;
-            OutputDeviceSelected?.Invoke(device);
-            OutputDevicePopup.IsOpen = false;
-        }
-
-        private void TaskbarVolumeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
-        {
-            if (_isUpdatingAudioMenus || !TaskbarVolumeSlider.IsEnabled)
-                return;
-            var value = Math.Clamp((int)Math.Round(e.NewValue), 0, 100);
-            VolumePercentText.Text = $"{value}%";
-            VolumeValueRequested?.Invoke(value);
-        }
-
-        private void QuickLaunchItem_Click(object sender, RoutedEventArgs e)
-        {
-            if (sender is System.Windows.Controls.Button { DataContext: QuickLaunchEntry entry })
-            {
-                QuickLaunchPopup.IsOpen = false;
-                QuickLaunchRequested?.Invoke(entry);
-            }
-        }
-
-        private void OpenExtraFeaturesButton_Click(object sender, RoutedEventArgs e)
-        {
-            QuickLaunchPopup.IsOpen = false;
-            OpenExtraFeaturesRequested?.Invoke(this, EventArgs.Empty);
         }
 
         private void TaskbarPerformanceSurface_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)

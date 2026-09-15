@@ -686,20 +686,8 @@ namespace AFMediaBar.Views.Windows
                 _sourceActivationService,
                 _systemMetricsMonitor,
                 _screenBackgroundSampler);
-            window.OpenExtraFeaturesRequested += TaskbarWindow_OpenExtraFeaturesRequested;
             window.OpenFullPanelRequested += TaskbarWindow_OpenFullPanelRequested;
             return window;
-        }
-
-        private void TaskbarWindow_OpenExtraFeaturesRequested(object? sender, EventArgs e)
-        {
-            if (_isClosing) return;
-            _settingsWindow ??= _settingsWindowFactory();
-            _settingsWindow.Closed -= SettingsWindow_Closed;
-            _settingsWindow.Closed += SettingsWindow_Closed;
-            _settingsWindow.Show();
-            _settingsWindow.Activate();
-            _settingsWindow.Navigate(typeof(Views.Pages.ExtraFeaturesPage));
         }
 
         private void TaskbarWindow_OpenFullPanelRequested(object? sender, EventArgs e)
