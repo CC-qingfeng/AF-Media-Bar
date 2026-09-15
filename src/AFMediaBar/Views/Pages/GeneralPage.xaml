@@ -1,11 +1,143 @@
-<Page x:Class="AFMediaBar.Views.Pages.GeneralPage" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml" Foreground="{DynamicResource TextFillColorPrimaryBrush}">
-<StackPanel MaxWidth="1000" Margin="16,16,24,32">
-  <TextBlock Text="常规" FontSize="32" FontWeight="{DynamicResource AppTextStrongFontWeight}"/><ui:TextBlock Text="应用生命周期、语言、更新和设置文件" Appearance="Secondary" Margin="0,8,0,24"/>
-  <TextBlock Text="应用" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,10"/>
-  <ui:CardControl Margin="0,0,0,8" Icon="{ui:SymbolIcon ShareScreenStart24}"><ui:CardControl.Header><StackPanel><TextBlock Text="开机自动启动" FontWeight="SemiBold"/><TextBlock Text="登录 Windows 后自动运行 AF Media Bar（功能预留）" Opacity="0.62" FontSize="12"/></StackPanel></ui:CardControl.Header><ui:ToggleSwitch IsEnabled="False"/></ui:CardControl>
-  <ui:CardControl Margin="0,0,0,8" Icon="{ui:SymbolIcon Globe24}"><ui:CardControl.Header><StackPanel><TextBlock Text="界面语言" FontWeight="SemiBold"/><TextBlock Text="当前版本使用简体中文" Opacity="0.62" FontSize="12"/></StackPanel></ui:CardControl.Header><ComboBox MinWidth="180" SelectedIndex="0" IsEnabled="False"><ComboBoxItem Content="简体中文"/></ComboBox></ui:CardControl>
-  <ui:CardControl Margin="0,0,0,20" Icon="{ui:SymbolIcon ArrowSync24}"><ui:CardControl.Header><StackPanel><TextBlock Text="检查更新" FontWeight="SemiBold"/><TextBlock Text="自动更新服务尚未接入" Opacity="0.62" FontSize="12"/></StackPanel></ui:CardControl.Header><ui:Button Content="检查更新" IsEnabled="False"/></ui:CardControl>
-  <TextBlock Text="设置文件" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,10"/>
-  <ui:CardControl Icon="{ui:SymbolIcon FolderOpen24}"><ui:CardControl.Header><StackPanel><TextBlock Text="本地设置" FontWeight="SemiBold"/><TextBlock Text="打开 settings.json 所在文件夹，或恢复本页默认设置" Opacity="0.62" FontSize="12"/></StackPanel></ui:CardControl.Header><StackPanel Orientation="Horizontal"><ui:Button Content="打开设置文件夹" Icon="{ui:SymbolIcon FolderOpen24}" Click="OpenSettingsFolder_Click" Margin="0,0,10,0"/><ui:Button Content="恢复本页默认" Icon="{ui:SymbolIcon ArrowReset24}" Click="ResetButton_Click"/></StackPanel></ui:CardControl>
- </StackPanel>
+<Page
+    x:Class="AFMediaBar.Views.Pages.GeneralPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+    Foreground="{DynamicResource TextFillColorPrimaryBrush}">
+
+    <!--
+        常规页 / General page
+
+        结构、选项和绑定保持不变：同样的三张“应用”卡片、同样的两张“设置文件”卡片。
+        变化集中在四件事：统一的文本角色、间距令牌、主色图标底片（由 AfSettingsCardStyle 提供），
+        以及给两张禁用卡片一个明确的“即将推出”标记，让禁用状态看起来是刻意的而不是坏的。
+        Structure, options, and bindings are unchanged: the same three application cards and two settings-file
+        cards. The changes are the shared text roles, the spacing tokens, the accent icon chip (supplied by
+        AfSettingsCardStyle), and an explicit "coming soon" marker so the disabled cards read as intentional
+        rather than broken.
+    -->
+    <StackPanel
+        x:Name="PageRoot"
+        MaxWidth="{StaticResource AfSettingsContentMaxWidth}"
+        Margin="{StaticResource AfSettingsPageMargin}"
+        Loaded="OnPageLoaded">
+
+        <TextBlock Style="{StaticResource AfSettingsPageTitleStyle}" Text="常规" />
+        <TextBlock Style="{StaticResource AfSettingsPageSubtitleStyle}" Text="应用生命周期、语言、更新和设置文件" />
+
+        <ContentControl
+            Margin="0,0,0,24"
+            ContentTemplate="{StaticResource AfDiagramLifecycle}" />
+
+        <ContentControl
+            Margin="0,0,0,12"
+            Content="应用"
+            ContentTemplate="{StaticResource AfSettingsSectionHeaderTemplate}" />
+
+        <ui:CardControl Margin="{StaticResource AfSettingsCardGap}">
+            <ui:CardControl.Icon>
+                <ui:SymbolIcon Symbol="ShareScreenStart24" />
+            </ui:CardControl.Icon>
+            <ui:CardControl.Header>
+                <StackPanel>
+                    <DockPanel>
+                        <Border
+                            DockPanel.Dock="Right"
+                            Padding="6,1"
+                            Background="{DynamicResource SubtleFillColorSecondaryBrush}"
+                            CornerRadius="4">
+                            <TextBlock
+                                FontSize="10"
+                                Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                Text="即将推出" />
+                        </Border>
+                        <TextBlock Style="{StaticResource AfSettingsCardTitleStyle}" Text="开机自动启动" />
+                    </DockPanel>
+                    <TextBlock
+                        Style="{StaticResource AfSettingsCardDescriptionStyle}"
+                        Text="登录 Windows 后自动运行 AF Media Bar（功能预留）" />
+                </StackPanel>
+            </ui:CardControl.Header>
+            <ui:ToggleSwitch IsEnabled="False" />
+        </ui:CardControl>
+
+        <ui:CardControl Margin="{StaticResource AfSettingsCardGap}">
+            <ui:CardControl.Icon>
+                <ui:SymbolIcon Symbol="Globe24" />
+            </ui:CardControl.Icon>
+            <ui:CardControl.Header>
+                <StackPanel>
+                    <TextBlock Style="{StaticResource AfSettingsCardTitleStyle}" Text="界面语言" />
+                    <TextBlock
+                        Style="{StaticResource AfSettingsCardDescriptionStyle}"
+                        Text="当前版本使用简体中文" />
+                </StackPanel>
+            </ui:CardControl.Header>
+            <ComboBox MinWidth="180" IsEnabled="False" SelectedIndex="0">
+                <ComboBoxItem Content="简体中文" />
+            </ComboBox>
+        </ui:CardControl>
+
+        <ui:CardControl Margin="{StaticResource AfSettingsCardGapLast}">
+            <ui:CardControl.Icon>
+                <ui:SymbolIcon Symbol="ArrowSync24" />
+            </ui:CardControl.Icon>
+            <ui:CardControl.Header>
+                <StackPanel>
+                    <DockPanel>
+                        <Border
+                            DockPanel.Dock="Right"
+                            Padding="6,1"
+                            Background="{DynamicResource SubtleFillColorSecondaryBrush}"
+                            CornerRadius="4">
+                            <TextBlock
+                                FontSize="10"
+                                Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                Text="即将推出" />
+                        </Border>
+                        <TextBlock Style="{StaticResource AfSettingsCardTitleStyle}" Text="检查更新" />
+                    </DockPanel>
+                    <TextBlock
+                        Style="{StaticResource AfSettingsCardDescriptionStyle}"
+                        Text="自动更新服务尚未接入" />
+                </StackPanel>
+            </ui:CardControl.Header>
+            <ui:Button
+                Content="检查更新"
+                IsEnabled="False"
+                Style="{StaticResource AfSettingsButtonStyle}" />
+        </ui:CardControl>
+
+        <ContentControl
+            Margin="0,0,0,12"
+            Content="设置文件"
+            ContentTemplate="{StaticResource AfSettingsSectionHeaderTemplate}" />
+
+        <ui:CardControl Margin="0,0,0,0">
+            <ui:CardControl.Icon>
+                <ui:SymbolIcon Symbol="FolderOpen24" />
+            </ui:CardControl.Icon>
+            <ui:CardControl.Header>
+                <StackPanel>
+                    <TextBlock Style="{StaticResource AfSettingsCardTitleStyle}" Text="本地设置" />
+                    <TextBlock
+                        Style="{StaticResource AfSettingsCardDescriptionStyle}"
+                        Text="打开 settings.json 所在文件夹，或恢复本页默认设置" />
+                </StackPanel>
+            </ui:CardControl.Header>
+            <StackPanel Orientation="Horizontal">
+                <ui:Button
+                    Margin="0,0,10,0"
+                    Click="OpenSettingsFolder_Click"
+                    Content="打开设置文件夹"
+                    Icon="{ui:SymbolIcon FolderOpen24}"
+                    Style="{StaticResource AfSettingsButtonStyle}" />
+                <ui:Button
+                    Click="ResetButton_Click"
+                    Content="恢复本页默认"
+                    Icon="{ui:SymbolIcon ArrowReset24}"
+                    Style="{StaticResource AfSettingsButtonStyle}" />
+            </StackPanel>
+        </ui:CardControl>
+    </StackPanel>
 </Page>

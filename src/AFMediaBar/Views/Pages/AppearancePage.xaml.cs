@@ -1,11 +1,14 @@
 using System;
+using System.Windows.Controls;
+using AFMediaBar.Classes.Utils;
 using AFMediaBar.ViewModels.Pages;
 using Wpf.Ui.Abstractions.Controls;
 
 namespace AFMediaBar.Views.Pages
 {
     /// <summary>
-    /// AppearancePage.xaml 的交互逻辑
+    /// 全局外观设置页：字体、文字颜色、窗口材质和当前模式表面。
+    /// Global appearance settings page covering fonts, player text colour, window materials, and the current surface.
     /// </summary>
     public partial class AppearancePage : INavigableView<AppearanceViewModel>
     {
@@ -18,6 +21,9 @@ namespace AFMediaBar.Views.Pages
 
             InitializeComponent();
         }
+
+        /// <summary>页面首次加载时执行入场揭示。/ Reveals the page on first load.</summary>
+        private void OnPageLoaded(object sender, RoutedEventArgs e) => SettingsRevealAnimator.Play(sender as Panel);
 
         private async void ResetButton_Click(object sender, RoutedEventArgs e)
         {

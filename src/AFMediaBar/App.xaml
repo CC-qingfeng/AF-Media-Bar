@@ -13,6 +13,8 @@
         <ui:ThemesDictionary Theme="Light" />
         <ui:ControlsDictionary />
         <ResourceDictionary Source="/AFMediaBar;component/Resources/MotionResources.xaml" />
+        <ResourceDictionary Source="/AFMediaBar;component/Resources/SettingsAppearanceResources.xaml" />
+        <ResourceDictionary Source="/AFMediaBar;component/Resources/SettingsDiagrams.xaml" />
       </ResourceDictionary.MergedDictionaries>
       <FontFamily x:Key="AppTextFontFamily">Segoe UI Variable Text, Segoe UI</FontFamily>
       <FontFamily x:Key="AppIconFontFamily">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>

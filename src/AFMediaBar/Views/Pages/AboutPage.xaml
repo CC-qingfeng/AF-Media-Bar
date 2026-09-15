@@ -1,8 +1,74 @@
-<Page x:Class="AFMediaBar.Views.Pages.AboutPage" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml" Foreground="{DynamicResource TextFillColorPrimaryBrush}">
- <StackPanel MaxWidth="1000" Margin="16">
-  <TextBlock Text="关于" FontSize="32" FontWeight="{DynamicResource AppTextStrongFontWeight}"/><ui:TextBlock Text="项目信息与支持入口" Appearance="Secondary" Margin="0,8,0,24"/>
-  <ui:CardControl Margin="0,0,0,18" Icon="{ui:SymbolIcon Info24}"><ui:CardControl.Header><StackPanel><ui:TextBlock Text="AF Media Bar" FontWeight="{DynamicResource AppTextStrongFontWeight}"/><ui:TextBlock Text="Windows 任务栏媒体体验 · 版本 1.0.0" Appearance="Secondary" FontSize="12"/></StackPanel></ui:CardControl.Header><StackPanel Orientation="Horizontal"><ui:Anchor Content="在 GitHub 点 Star" Icon="{ui:SymbolIcon Star24}" NavigateUri="https://github.com/Fervent-Tempo/AF-Media-Bar" Margin="0,0,10,0"/><ui:Anchor Content="问题反馈" Icon="{ui:SymbolIcon Bug24}" NavigateUri="https://github.com/Fervent-Tempo/AF-Media-Bar/issues"/></StackPanel></ui:CardControl>
-  <TextBlock Text="赞助支持" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,10"/>
-  <Border Padding="18" CornerRadius="8" Background="#0CFFFFFF" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}" BorderThickness="1"><StackPanel HorizontalAlignment="Center"><ui:SymbolIcon Symbol="Heart24" FontSize="28" Opacity="0.55"/><TextBlock Text="暂无赞助者" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,8,0,0"/><TextBlock Text="赞助目录为随版本发布的静态清单，不会在后台联网读取。" Opacity="0.6" Margin="0,4,0,0"/></StackPanel></Border>
- </StackPanel>
+<Page
+    x:Class="AFMediaBar.Views.Pages.AboutPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+    Foreground="{DynamicResource TextFillColorPrimaryBrush}">
+
+    <!--
+        关于页 / About page
+
+        文案、链接目标和命令全部保持不变。改动是：赞助空态从写死的 #0CFFFFFF 换成主色底片的心形图标块
+        （写死的白色在浅色主题下等于不可见），并把两张卡片统一到共享卡片外观，让这一页也有主色元素。
+        Copy, link targets, and commands are unchanged. The sponsorship empty state moves off hardcoded #0CFFFFFF
+        (which is invisible on the light theme) to an accent-tinted heart badge, and both cards adopt the shared
+        card appearance so the page carries accent colour too.
+    -->
+    <StackPanel
+        x:Name="PageRoot"
+        MaxWidth="{StaticResource AfSettingsContentMaxWidth}"
+        Margin="{StaticResource AfSettingsPageMargin}"
+        Loaded="OnPageLoaded">
+
+        <TextBlock Style="{StaticResource AfSettingsPageTitleStyle}" Text="关于" />
+        <TextBlock Style="{StaticResource AfSettingsPageSubtitleStyle}" Text="项目信息与支持入口" />
+
+        <ui:CardControl Margin="{StaticResource AfSettingsCardGapLast}">
+            <ui:CardControl.Icon>
+                <ui:SymbolIcon Symbol="Info24" />
+            </ui:CardControl.Icon>
+            <ui:CardControl.Header>
+                <StackPanel>
+                    <TextBlock FontSize="14" Style="{StaticResource AfSettingsCardTitleStyle}" Text="AF Media Bar" />
+                    <TextBlock
+                        Style="{StaticResource AfSettingsCardDescriptionStyle}"
+                        Text="Windows 任务栏媒体体验 · 版本 1.0.0" />
+                </StackPanel>
+            </ui:CardControl.Header>
+            <StackPanel Orientation="Horizontal">
+                <ui:Anchor
+                    Margin="0,0,10,0"
+                    Content="在 GitHub 点 Star"
+                    Icon="{ui:SymbolIcon Star24}"
+                    NavigateUri="https://github.com/Fervent-Tempo/AF-Media-Bar" />
+                <ui:Anchor
+                    Content="问题反馈"
+                    Icon="{ui:SymbolIcon Bug24}"
+                    NavigateUri="https://github.com/Fervent-Tempo/AF-Media-Bar/issues" />
+            </StackPanel>
+        </ui:CardControl>
+
+        <ContentControl
+            Margin="0,0,0,12"
+            Content="赞助支持"
+            ContentTemplate="{StaticResource AfSettingsSectionHeaderTemplate}" />
+
+        <ui:CardControl Margin="0,0,0,0">
+            <ui:CardControl.Icon>
+                <ui:SymbolIcon Symbol="Heart24" />
+            </ui:CardControl.Icon>
+            <ui:CardControl.Header>
+                <StackPanel>
+                    <TextBlock Style="{StaticResource AfSettingsCardTitleStyle}" Text="暂无赞助者" />
+                    <TextBlock
+                        Style="{StaticResource AfSettingsCardDescriptionStyle}"
+                        Text="赞助目录为随版本发布的静态清单，不会在后台联网读取。" />
+                </StackPanel>
+            </ui:CardControl.Header>
+            <TextBlock
+                FontSize="12"
+                Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                Text="成为第一位支持者" />
+        </ui:CardControl>
+    </StackPanel>
 </Page>

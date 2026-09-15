@@ -1,3 +1,4 @@
+using AFMediaBar.Classes.Utils;
 using AFMediaBar.ViewModels.Pages;
 using Wpf.Ui.Abstractions.Controls;
 using Microsoft.Win32;
@@ -15,6 +16,10 @@ public partial class ExtraFeaturesPage : INavigableView<ExtraFeaturesViewModel>
         DataContext = this;
         InitializeComponent();
     }
+
+    /// <summary>页面首次加载时执行入场揭示。/ Reveals the page on first load.</summary>
+    private void OnPageLoaded(object sender, System.Windows.RoutedEventArgs e) =>
+        SettingsRevealAnimator.Play(sender as System.Windows.Controls.Panel);
 
     private void BrowseQuickLaunch_Click(object sender, System.Windows.RoutedEventArgs e)
     {
