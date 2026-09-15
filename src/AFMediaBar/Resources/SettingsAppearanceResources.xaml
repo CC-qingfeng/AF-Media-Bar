@@ -27,6 +27,18 @@
     <Thickness x:Key="AfSettingsCardGapLast">0,0,0,24</Thickness>
     <Thickness x:Key="AfSettingsSectionGap">0,24,0,0</Thickness>
     <Thickness x:Key="AfSettingsFieldLabelGap">0,0,0,6</Thickness>
+    <!--
+        固定页头与滚动区域各自的外边距。页头在滚动容器之外，因此它自己带上下留白；
+        以前这两组值分别写在六个页面里，改一处就要改六处。
+        Margins for the pinned header and the scroll area. The header sits outside the scroll container, so it
+        carries its own vertical padding; these values used to be repeated in all six pages.
+    -->
+    <Thickness x:Key="AfSettingsHeaderMargin">28,20,28,0</Thickness>
+    <Thickness x:Key="AfSettingsScrollMargin">28,14,28,0</Thickness>
+
+    <!-- 字段标签列宽：以前交互页在 8 处各写 MinWidth="190"，读起来像随机值。 -->
+    <!-- Field label column width; the interaction page previously repeated MinWidth="190" in eight places. -->
+    <sys:Double x:Key="AfSettingsSelectLabelWidth">190</sys:Double>
 
     <!--
         动效曲线：0.23,1 0.32,1 是强 ease-out，用于入场揭示与选择过渡。
@@ -250,13 +262,128 @@
     <!--  Implicit application: settings cards declare no style, and the legacy LayoutPage shares the look.  -->
     <Style BasedOn="{StaticResource AfSettingsCardStyle}" TargetType="{x:Type ui:CardControl}" />
 
-    <!--  禁用卡片：用于功能预留和当前模式不可用的分组，让禁用状态看起来是刻意的。  -->
-    <!--  Disabled card: reserved features and unavailable surface groups, so "disabled" reads as intentional.  -->
+    <!--
+        纵向卡片 / Stacked card
+
+        默认卡片把标题与控件左右并排，适合“一个开关放右边”这类单行卡片。
+        但一张卡片里同时有滑杆、开关、图示和按钮时，控件列被压到 380 DIP，标题列同时被挤成三行——两边都难受。
+        纵向卡片把标题放上、控件放下并占满整行，用于多控件卡片。
+        The default card puts title and control side by side, which suits a one-row card with a single switch on
+        the right. Once a card holds a slider, switches, a diagram, and a button, the control column is squeezed
+        to 380 DIP while the title column wraps to three lines and both sides suffer. The stacked card puts the
+        title on top and the controls below at full width, and is meant for multi-control cards.
+    -->
+    <Style
+        x:Key="AfSettingsCardStackedStyle"
+        BasedOn="{StaticResource AfSettingsCardStyle}"
+        TargetType="{x:Type ui:CardControl}">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type ui:CardControl}">
+                    <Border
+                        x:Name="CardBorder"
+                        Padding="{TemplateBinding Padding}"
+                        Background="{TemplateBinding Background}"
+                        BorderBrush="{TemplateBinding BorderBrush}"
+                        BorderThickness="{TemplateBinding BorderThickness}"
+                        CornerRadius="{TemplateBinding CornerRadius}"
+                        SnapsToDevicePixels="True">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <Grid
+                                x:Name="IconChip"
+                                Grid.Row="0"
+                                Grid.Column="0"
+                                Width="32"
+                                Height="32"
+                                Margin="0,0,14,0"
+                                VerticalAlignment="Top"
+                                TextElement.Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}">
+                                <Border
+                                    Background="{DynamicResource AccentFillColorDefaultBrush}"
+                                    CornerRadius="8"
+                                    Opacity="0.14" />
+                                <ContentControl
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    Content="{TemplateBinding Icon}"
+                                    Focusable="False"
+                                    KeyboardNavigation.IsTabStop="False" />
+                            </Grid>
+
+                            <ContentPresenter
+                                x:Name="HeaderHost"
+                                Grid.Row="0"
+                                Grid.Column="1"
+                                VerticalAlignment="Top"
+                                Content="{TemplateBinding Header}"
+                                TextElement.Foreground="{TemplateBinding Foreground}" />
+
+                            <ContentPresenter
+                                x:Name="ContentHost"
+                                Grid.Row="1"
+                                Grid.Column="0"
+                                Grid.ColumnSpan="2"
+                                Margin="0,14,0,0"
+                                HorizontalAlignment="Stretch"
+                                Content="{TemplateBinding Content}"
+                                TextElement.Foreground="{TemplateBinding Foreground}" />
+                        </Grid>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="Icon" Value="{x:Null}">
+                            <Setter TargetName="IconChip" Property="Margin" Value="0" />
+                            <Setter TargetName="IconChip" Property="Visibility" Value="Collapsed" />
+                        </Trigger>
+                        <Trigger Property="Header" Value="{x:Null}">
+                            <Setter TargetName="IconChip" Property="Margin" Value="0" />
+                        </Trigger>
+                        <Trigger Property="Header" Value="">
+                            <Setter TargetName="IconChip" Property="Margin" Value="0" />
+                        </Trigger>
+                        <Trigger Property="Content" Value="{x:Null}">
+                            <Setter TargetName="ContentHost" Property="Margin" Value="0" />
+                        </Trigger>
+                        <Trigger Property="Content" Value="">
+                            <Setter TargetName="ContentHost" Property="Margin" Value="0" />
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="CardBorder" Property="BorderBrush" Value="{DynamicResource ControlStrokeColorSecondaryBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="CardBorder" Property="BorderBrush" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!--
+        禁用卡片：用于功能预留和当前模式不可用的分组，让禁用状态看起来是刻意的。
+        只有真的处于禁用状态才降透明度——原实现无条件写死 0.62，于是可交互时也显灰，
+        让这些卡片读起来像坏掉了。
+        Disabled card for reserved features and groups unavailable in the current mode. The dimming applies
+        only while the card really is disabled: the previous version set 0.62 unconditionally, so an
+        interactive card still looked grey and read as broken.
+    -->
     <Style
         x:Key="AfSettingsCardDisabledStyle"
         BasedOn="{StaticResource AfSettingsCardStyle}"
         TargetType="{x:Type ui:CardControl}">
-        <Setter Property="Opacity" Value="0.62" />
+        <Style.Triggers>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Opacity" Value="0.62" />
+            </Trigger>
+        </Style.Triggers>
     </Style>
 
     <!--

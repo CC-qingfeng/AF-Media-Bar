@@ -68,9 +68,9 @@ namespace AFMediaBar.Classes.Services
                 )!;
                 _navigationWindow!.ShowWindow();
 
-                // 导航到默认页面（通用设置页）
-                // Navigate to the default page (General settings page)
-                _navigationWindow.Navigate(typeof(Views.Pages.GeneralPage));
+                // 导航到默认页面（显示模式页，它承载任务栏的承载与三层配置）
+                // Navigate to the default page (display modes, which owns the taskbar hosting configuration)
+                _navigationWindow.Navigate(typeof(Views.Pages.DisplayModesPage));
             }
 
             await Task.CompletedTask;

@@ -140,7 +140,7 @@ The Windows 10/11 media card is an internal Explorer/Shell surface rather than a
 2. Download `AFMediaBar-vX.Y.Z-win-x64.zip`. Do not download GitHub's automatically generated source archives.
 3. Extract the package to get one self-contained `AFMediaBar.exe`; the archive no longer contains hundreds of .NET runtime files.
 4. Place it in a permanent writable directory, such as `D:\AFMediaBar`, and run it.
-5. Right-click the player or tray icon and use Display Modes, Interaction, Lyrics, and Global Appearance for light customization.
+5. Right-click the player or tray icon and use Display Modes, Media &amp; Notifications, Interaction, Lyrics, Appearance, and App &amp; About for light customization.
 
 AF Media Bar is not commercially code-signed, so Windows SmartScreen may show an unknown publisher warning on first launch.
 
@@ -155,7 +155,7 @@ AF Media Bar is not commercially code-signed, so Windows SmartScreen may show an
 | Open the Lyrics page | Toggle live lyrics, secondary content, and alignment |
 | Scroll up/down over the media area | Bind plain and modified wheel gestures to previous/next, media-source cycling, output-device cycling, or current-media volume; defaults are previous/next and Shift + source cycling |
 | Right-click the bar and choose “Switch media source” | Switch between available media sessions |
-| Enable Track-change notification under Extra Features | Show the current track only after an observable track change begins playing; configure placement, duration, fullscreen policy, and fixed/foreground display targeting |
+| Enable Track-change notification under Media &amp; Notifications | Show the current track only after an observable track change begins playing; configure placement, duration, fullscreen policy, and fixed/foreground display targeting |
 | Choose the taskbar target display under Display Modes | Close an open Full panel and rebuild the taskbar host through its safe reload path; a disconnected target temporarily falls back to the primary display without discarding the preference |
 | Disable content-length following under Display Modes | Choose a fixed value between the live Hover minimum and available taskbar length; overflowing title, artist, and lyric text scrolls within its clipped region |
 | Click the AF Media Bar tray icon | Open output-device, spatial-audio status, and application-volume controls |
@@ -178,7 +178,9 @@ Track-change notification does not read the playback queue and is not a “next 
 
 ### Updating
 
-The app checks its version manifest shortly after startup, at most once per day. Automatic checks can be disabled under **Detailed settings → General → Get updates**. You can also check immediately and open any configured GitHub, Quark, Baidu, or Lanzou download channel there.
+The app checks its version manifest shortly after startup, at most once per day. You can also check immediately and open any configured GitHub, Quark, Baidu, or Lanzou download channel there.
+
+> Note: `src` contains no update-check implementation at all (there is no `UpdateService` and `docs/latest.json` is never read), and the settings pages expose no update switch. This section describes the release side, not a feature of the current program.
 
 This version only retrieves update information and opens download links. It does not silently replace the running executable. To install an update:
 
@@ -186,7 +188,7 @@ This version only retrieves update information and opens download links. It does
 2. Download and extract the new version.
 3. Replace the old `AFMediaBar.exe` with the new one, then restart the app.
 
-User preferences and window state are stored in `%LOCALAPPDATA%\AFMediaBar\settings.json` using versioned JSON, atomic writes, and backup recovery. Layout profiles and component properties remain in `%LOCALAPPDATA%\AFMediaBar\profiles\layout.json`. Replacing the program file will not remove settings; the General page can open the settings folder.
+User preferences and window state are stored in `%LOCALAPPDATA%\AFMediaBar\settings.json` using versioned JSON, atomic writes, and backup recovery. Layout profiles and component properties remain in `%LOCALAPPDATA%\AFMediaBar\profiles\layout.json`. Replacing the program file will not remove settings; the App &amp; About page can open the settings folder.
 
 ### Uninstalling
 

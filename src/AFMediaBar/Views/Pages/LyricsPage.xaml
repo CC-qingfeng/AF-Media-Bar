@@ -5,123 +5,183 @@
     xmlns:components="clr-namespace:AFMediaBar.Components"
     xmlns:settings="clr-namespace:AFMediaBar.Classes.Settings"
     xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
-    Foreground="{DynamicResource TextFillColorPrimaryBrush}">
+    Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+    ScrollViewer.CanContentScroll="False">
 
     <!--
         歌词页 / Lyrics page
 
-        五张卡片的选项和绑定保持不变。原来的说明条写死 #0D4CC2FF 和 #304CC2FF，
-        深色主题下偏亮、浅色主题下偏脏，而且永远不跟随系统主色；现在改用 SettingsCallout 的主题化主色语气。
-        The five cards keep their options and bindings. The old note hardcoded #0D4CC2FF and #304CC2FF, which read
-        too bright in dark and muddy in light and never followed the system accent; it is now the accent tone of
-        the themed SettingsCallout.
+        两个分组：显示（开关、双行、第二行内容）与对齐（歌词对齐）。
+        结构上的三个修正：
+
+        1. ”第二行内容“嵌在”双行歌词“内部，并且它的芯片说明依赖关系。以前它是一张平级卡片，
+           只在父项关闭时静默变灰，用户看不出为什么点不动。
+        2. 对齐卡片原先写“应用于任务栏静置歌词和媒体文字”，但源码里歌词对齐只作用于歌词；
+           标题与歌手的对齐是显示模式页的另一项设置。文案改为与行为一致，并指明那项设置在哪里。
+        3. 说明图拆成两张，各自贴着自己解释的控件：双行图进第二行子区域，对齐图进对齐卡片。
+           原先顶部一张图同时讲两件事，且离两张卡片都很远。
+
+        Two groups: display (switch, two lines, second line content) and alignment. Three structural fixes: the
+        second-line control is nested inside the two-line card with a chip stating the dependency instead of being
+        a sibling card that silently greys out; the alignment card no longer claims to affect media text, which
+        the source does not do; and the single top-of-page diagram is split into two that each sit with the
+        control they explain.
     -->
-    <StackPanel
-        x:Name="PageRoot"
-        MaxWidth="{StaticResource AfSettingsContentMaxWidth}"
-        Margin="{StaticResource AfSettingsPageMargin}"
-        Loaded="OnPageLoaded">
 
-        <TextBlock Style="{StaticResource AfSettingsPageTitleStyle}" Text="歌词" />
-        <TextBlock Style="{StaticResource AfSettingsPageSubtitleStyle}" Text="歌词是媒体内容，而不是显示模式组件" />
+    <Page.Resources>
+        <!--
+            前置条件芯片：只在依赖未满足时出现。用触发器而不是取反转换器，是为了避免为一个提示
+            新增一个转换器类型，也避免在 XAML 里出现“双重否定”的绑定。
+            Precondition chip, shown only while the dependency is unmet. A trigger is used rather than an inverse
+            converter so a chip does not justify a new converter type, and so the binding never reads as a double
+            negative.
+        -->
+        <Style
+            x:Key="LyricsGateChipStyle"
+            BasedOn="{StaticResource AfSettingsChipAttentionStyle}"
+            TargetType="{x:Type ContentControl}">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding ViewModel.CanConfigureTwoLine}" Value="True">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </Page.Resources>
 
-        <components:SettingsCallout
-            Margin="0,0,0,24"
-            IsAccent="True"
-            Symbol="TextQuote24"
-            Text="歌词仅显示在静置层。当前歌词可用并启用时，会自动隐藏标题和歌手/来源；悬停层与完整层始终显示媒体信息。" />
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
 
-        <ContentControl
-            Margin="0,0,0,24"
-            ContentTemplate="{StaticResource AfDiagramLyricsLines}" />
+        <components:SettingsGroupStrip
+            Grid.Row="0"
+            Margin="{StaticResource AfSettingsHeaderMargin}"
+            MaxWidth="{StaticResource AfSettingsContentMaxWidth}"
+            PageIcon="{ui:SymbolIcon TextQuote24}"
+            Subtitle="在任务栏静置层用歌词替换标题与歌手"
+            Target="{Binding ElementName=PageScroll}"
+            Title="歌词" />
 
-        <ContentControl
-            Margin="0,0,0,12"
-            Content="显示"
-            ContentTemplate="{StaticResource AfSettingsSectionHeaderTemplate}" />
+        <ScrollViewer
+            x:Name="PageScroll"
+            Grid.Row="1"
+            Margin="{StaticResource AfSettingsScrollMargin}"
+            HorizontalScrollBarVisibility="Disabled"
+            VerticalScrollBarVisibility="Auto">
+            <StackPanel
+                x:Name="PageRoot"
+                MaxWidth="{StaticResource AfSettingsContentMaxWidth}"
+                Loaded="OnPageLoaded">
 
-        <ui:CardControl Margin="{StaticResource AfSettingsCardGap}">
-            <ui:CardControl.Icon>
-                <ui:SymbolIcon Symbol="TextQuote24" />
-            </ui:CardControl.Icon>
-            <ui:CardControl.Header>
-                <StackPanel>
-                    <TextBlock Style="{StaticResource AfSettingsCardTitleStyle}" Text="显示实时歌词" />
-                    <TextBlock
-                        Style="{StaticResource AfSettingsCardDescriptionStyle}"
-                        Text="没有歌词时自动回退为标题与歌手，歌手为空时显示来源" />
-                </StackPanel>
-            </ui:CardControl.Header>
-            <ui:ToggleSwitch IsChecked="{Binding ViewModel.LyricsEnabled, Mode=TwoWay}" />
-        </ui:CardControl>
+                <components:SettingsGroup Header="显示" Icon="{ui:SymbolIcon TextQuote24}">
+                    <StackPanel>
+                        <components:SettingsCallout
+                            Margin="0,0,0,12"
+                            IsAccent="True"
+                            Symbol="TextQuote24"
+                            Text="歌词只显示在静置层：歌词可用时替换标题与歌手，没有歌词时自动回退；悬停层与完整层始终显示媒体信息。" />
 
-        <ui:CardControl Margin="{StaticResource AfSettingsCardGap}">
-            <ui:CardControl.Icon>
-                <ui:SymbolIcon Symbol="TextAlignJustify24" />
-            </ui:CardControl.Icon>
-            <ui:CardControl.Header>
-                <StackPanel>
-                    <TextBlock Style="{StaticResource AfSettingsCardTitleStyle}" Text="双行歌词" />
-                    <TextBlock
-                        Style="{StaticResource AfSettingsCardDescriptionStyle}"
-                        Text="静置层空间允许时显示下一句或当前句翻译" />
-                </StackPanel>
-            </ui:CardControl.Header>
-            <ui:ToggleSwitch
-                IsChecked="{Binding ViewModel.TwoLineLyricsEnabled, Mode=TwoWay}"
-                IsEnabled="{Binding ViewModel.CanConfigureTwoLine}" />
-        </ui:CardControl>
+                        <ui:CardControl Margin="{StaticResource AfSettingsCardGap}">
+                            <ui:CardControl.Icon>
+                                <ui:SymbolIcon Symbol="TextQuote24" />
+                            </ui:CardControl.Icon>
+                            <ui:CardControl.Header>
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource AfSettingsCardTitleStyle}" Text="显示实时歌词" />
+                                    <TextBlock
+                                        Style="{StaticResource AfSettingsCardDescriptionStyle}"
+                                        Text="按播放进度同步显示当前句；关闭后静置层只显示标题与歌手。" />
+                                </StackPanel>
+                            </ui:CardControl.Header>
+                            <ui:ToggleSwitch IsChecked="{Binding ViewModel.LyricsEnabled, Mode=TwoWay}" />
+                        </ui:CardControl>
 
-        <ui:CardControl Margin="{StaticResource AfSettingsCardGap}">
-            <ui:CardControl.Icon>
-                <ui:SymbolIcon Symbol="TextBulletListSquare24" />
-            </ui:CardControl.Icon>
-            <ui:CardControl.Header>
-                <StackPanel>
-                    <TextBlock Style="{StaticResource AfSettingsCardTitleStyle}" Text="第二行内容" />
-                    <TextBlock
-                        Style="{StaticResource AfSettingsCardDescriptionStyle}"
-                        Text="翻译不存在时不会显示空白占位" />
-                </StackPanel>
-            </ui:CardControl.Header>
-            <ComboBox
-                MinWidth="{StaticResource AfSettingsSelectMinWidth}"
-                IsEnabled="{Binding ViewModel.CanConfigureSecondary}"
-                SelectedValue="{Binding ViewModel.SecondaryLineMode, Mode=TwoWay}"
-                SelectedValuePath="Tag">
-                <ComboBoxItem Content="下一句歌词" Tag="{x:Static settings:LyricsSecondaryLineMode.NextLine}" />
-                <ComboBoxItem Content="当前句翻译" Tag="{x:Static settings:LyricsSecondaryLineMode.Translation}" />
-            </ComboBox>
-        </ui:CardControl>
+                        <ui:CardControl Margin="{StaticResource AfSettingsCardGap}" Style="{StaticResource AfSettingsCardStackedStyle}">
+                            <ui:CardControl.Icon>
+                                <ui:SymbolIcon Symbol="TextAlignJustify24" />
+                            </ui:CardControl.Icon>
+                            <ui:CardControl.Header>
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource AfSettingsCardTitleStyle}" Text="双行歌词" />
+                                    <TextBlock
+                                        Style="{StaticResource AfSettingsCardDescriptionStyle}"
+                                        Text="在第一行下面再显示一行，用于下一句或当前句翻译。" />
+                                </StackPanel>
+                            </ui:CardControl.Header>
+                            <StackPanel>
+                                <WrapPanel>
+                                    <ui:ToggleSwitch
+                                        Margin="0,0,16,0"
+                                        Content="显示第二行"
+                                        IsChecked="{Binding ViewModel.TwoLineLyricsEnabled, Mode=TwoWay}"
+                                        IsEnabled="{Binding ViewModel.CanConfigureTwoLine}" />
+                                    <ContentControl
+                                        Content="需先启用歌词"
+                                        Style="{StaticResource LyricsGateChipStyle}" />
+                                </WrapPanel>
 
-        <ui:CardControl Margin="{StaticResource AfSettingsCardGapLast}">
-            <ui:CardControl.Icon>
-                <ui:SymbolIcon Symbol="TextAlignLeft24" />
-            </ui:CardControl.Icon>
-            <ui:CardControl.Header>
-                <StackPanel>
-                    <TextBlock Style="{StaticResource AfSettingsCardTitleStyle}" Text="文字对齐" />
-                    <TextBlock
-                        Style="{StaticResource AfSettingsCardDescriptionStyle}"
-                        Text="应用于任务栏静置歌词和媒体文字" />
-                </StackPanel>
-            </ui:CardControl.Header>
-            <ComboBox
-                MinWidth="{StaticResource AfSettingsSelectMinWidth}"
-                SelectedValue="{Binding ViewModel.TextAlignment, Mode=TwoWay}"
-                SelectedValuePath="Tag">
-                <ComboBoxItem Content="左对齐" Tag="{x:Static settings:LyricsTextAlignment.Left}" />
-                <ComboBoxItem Content="居中" Tag="{x:Static settings:LyricsTextAlignment.Center}" />
-                <ComboBoxItem Content="右对齐" Tag="{x:Static settings:LyricsTextAlignment.Right}" />
-            </ComboBox>
-        </ui:CardControl>
+                                <components:SettingsSubRegion
+                                    Description="选择第二行显示什么；翻译不存在时不会留下空白占位。"
+                                    Header="第二行内容"
+                                    IsSubRegionEnabled="{Binding ViewModel.CanConfigureSecondary}"
+                                    StatusText="需先启用双行歌词"
+                                    StatusTone="Attention">
+                                    <StackPanel>
+                                        <components:SettingsDiagram Margin="0,0,0,12" Kind="LyricsTwoLine" />
+                                        <ComboBox
+                                            HorizontalAlignment="Left"
+                                            MinWidth="{StaticResource AfSettingsSelectMinWidth}"
+                                            SelectedValue="{Binding ViewModel.SecondaryLineMode, Mode=TwoWay}"
+                                            SelectedValuePath="Tag">
+                                            <ComboBoxItem Content="下一句歌词" Tag="{x:Static settings:LyricsSecondaryLineMode.NextLine}" />
+                                            <ComboBoxItem Content="当前句翻译" Tag="{x:Static settings:LyricsSecondaryLineMode.Translation}" />
+                                        </ComboBox>
+                                    </StackPanel>
+                                </components:SettingsSubRegion>
+                            </StackPanel>
+                        </ui:CardControl>
+                    </StackPanel>
+                </components:SettingsGroup>
 
-        <ui:Button
-            Margin="0,18,0,0"
-            HorizontalAlignment="Left"
-            Click="ResetButton_Click"
-            Content="恢复本页默认设置"
-            Icon="{ui:SymbolIcon ArrowReset24}"
-            Style="{StaticResource AfSettingsButtonStyle}" />
-    </StackPanel>
+                <components:SettingsGroup Header="对齐" Icon="{ui:SymbolIcon TextAlignLeft24}">
+                    <StackPanel>
+                        <ui:CardControl Margin="{StaticResource AfSettingsCardGap}" Style="{StaticResource AfSettingsCardStackedStyle}">
+                            <ui:CardControl.Icon>
+                                <ui:SymbolIcon Symbol="TextAlignLeft24" />
+                            </ui:CardControl.Icon>
+                            <ui:CardControl.Header>
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource AfSettingsCardTitleStyle}" Text="歌词对齐" />
+                                    <TextBlock
+                                        Style="{StaticResource AfSettingsCardDescriptionStyle}"
+                                        Text="只决定歌词贴在静置层的哪一侧；标题与歌手的对齐是显示模式页的另一项设置。" />
+                                </StackPanel>
+                            </ui:CardControl.Header>
+                            <StackPanel>
+                                <components:SettingsDiagram Margin="0,0,0,12" Kind="LyricsAlignment" />
+                                <ComboBox
+                                    HorizontalAlignment="Left"
+                                    MinWidth="{StaticResource AfSettingsSelectMinWidth}"
+                                    SelectedValue="{Binding ViewModel.TextAlignment, Mode=TwoWay}"
+                                    SelectedValuePath="Tag">
+                                    <ComboBoxItem Content="左对齐" Tag="{x:Static settings:LyricsTextAlignment.Left}" />
+                                    <ComboBoxItem Content="居中" Tag="{x:Static settings:LyricsTextAlignment.Center}" />
+                                    <ComboBoxItem Content="右对齐" Tag="{x:Static settings:LyricsTextAlignment.Right}" />
+                                </ComboBox>
+                            </StackPanel>
+                        </ui:CardControl>
+                    </StackPanel>
+                </components:SettingsGroup>
+
+                <ui:Button
+                    Margin="0,20,0,40"
+                    HorizontalAlignment="Left"
+                    Click="ResetButton_Click"
+                    Content="恢复本页默认设置"
+                    Icon="{ui:SymbolIcon ArrowReset24}"
+                    Style="{StaticResource AfSettingsButtonStyle}" />
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
 </Page>

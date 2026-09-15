@@ -5,258 +5,274 @@
     xmlns:components="clr-namespace:AFMediaBar.Components"
     xmlns:settings="clr-namespace:AFMediaBar.Classes.Settings"
     xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
-    Foreground="{DynamicResource TextFillColorPrimaryBrush}">
+    Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+    ScrollViewer.CanContentScroll="False">
 
     <!--
         交互页 / Interaction page
 
-        八个下拉框的绑定、分组和取值全部保持不变。改动集中在三处：
-        字段标签换成语义化角色（以前和卡片说明长得一样，这正是“选项主体文字不突出”的来源之一）；
-        加三张矢量说明图解释点击区域、滚轮方向和托盘溢出区；
-        末尾的说明条从写死的 #0CFFFFFF（浅色主题下完全不可见）换成主题化的 SettingsCallout。
-        All eight selects keep their bindings, groups, and values. Three things change: field labels become a
-        semantic role (they looked identical to card descriptions, which is one source of "option text does not
-        stand out"), three vector diagrams explain the click zones, wheel directions, and tray overflow area, and
-        the trailing note moves from hardcoded #0CFFFFFF (invisible on the light theme) to a themed callout.
+        按“先选修饰键，再分别配置两个表面”排列，共三个分组。
+
+        结构上的修正：
+
+        1. 组合滚轮修饰键移到最前面的“共用修饰键”分组。它原先放在“程序内”分组里，
+           却在描述里写着“程序内与托盘共用”——位置和它自己的说明互相矛盾。
+        2. 卡片标题去重。原先同页有两条“点击操作”、两条“滚轮操作”、两组“普通滚轮/按键 + 滚轮”，
+           同一个标题指向四个不同绑定；现在标题带上表面名，字段标签带上前缀。
+        3. 程序内的点击与滚轮并排成两列，行与行可以直接对照；窄窗口下两列等比收缩。
+        4. 托盘溢出的说明与图合并到一处。原先图在分组顶部、建议在页尾，中间隔着两张卡片。
+        5. 滚轮方向说明覆盖全部四种可选动作；原先只描述了“上一项/增大”这一种。
+
+        Laid out as "pick the modifier first, then configure each surface", across three groups. The structural
+        fixes: the shared modifier moved out of the program-in group that contradicted its own description; card
+        titles no longer repeat within the page; the program-in click and wheel cards sit side by side for
+        row-by-row comparison; the tray overflow explanation is merged with its diagram; and the wheel direction
+        text covers all four bindable actions instead of only one.
     -->
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
 
-        <StackPanel
-            x:Name="PageRoot"
+        <components:SettingsGroupStrip
+            Grid.Row="0"
+            Margin="{StaticResource AfSettingsHeaderMargin}"
             MaxWidth="{StaticResource AfSettingsContentMaxWidth}"
-            Margin="{StaticResource AfSettingsPageMargin}"
-            Loaded="OnPageLoaded">
+            PageIcon="{ui:SymbolIcon HandDraw24}"
+            Subtitle="为任务栏静置层与托盘的七种操作各选一个结果"
+            Target="{Binding ElementName=PageScroll}"
+            Title="交互" />
 
-            <TextBlock Style="{StaticResource AfSettingsPageTitleStyle}" Text="交互" />
-            <TextBlock Style="{StaticResource AfSettingsPageSubtitleStyle}" Text="像按键绑定一样，为任务栏和托盘的每种操作选择一个结果" />
+        <ScrollViewer
+            x:Name="PageScroll"
+            Grid.Row="1"
+            Margin="{StaticResource AfSettingsScrollMargin}"
+            HorizontalScrollBarVisibility="Disabled"
+            VerticalScrollBarVisibility="Auto">
+            <StackPanel
+                x:Name="PageRoot"
+                MaxWidth="{StaticResource AfSettingsContentMaxWidth}"
+                Loaded="OnPageLoaded">
 
-            <ContentControl
-                Margin="0,0,0,24"
-                ContentTemplate="{StaticResource AfDiagramInputGestures}" />
-
-            <ContentControl
-                Margin="0,0,0,12"
-                Content="程序内"
-                ContentTemplate="{StaticResource AfSettingsSectionHeaderTemplate}" />
-
-            <ui:CardControl Margin="{StaticResource AfSettingsCardGap}">
-                <ui:CardControl.Icon>
-                    <ui:SymbolIcon Symbol="CursorClick24" />
-                </ui:CardControl.Icon>
-                <ui:CardControl.Header>
+                <components:SettingsGroup Header="共用修饰键" Icon="{ui:SymbolIcon Keyboard24}">
                     <StackPanel>
-                        <TextBlock Style="{StaticResource AfSettingsCardTitleStyle}" Text="点击操作" />
-                        <TextBlock
-                            Style="{StaticResource AfSettingsCardDescriptionStyle}"
-                            Text="仅作用于任务栏静置层；完整层保持固定控制" />
+                        <ui:CardControl Margin="{StaticResource AfSettingsCardGap}" Style="{StaticResource AfSettingsCardStackedStyle}">
+                            <ui:CardControl.Icon>
+                                <ui:SymbolIcon Symbol="Keyboard24" />
+                            </ui:CardControl.Icon>
+                            <ui:CardControl.Header>
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource AfSettingsCardTitleStyle}" Text="组合滚轮修饰键" />
+                                    <TextBlock
+                                        Style="{StaticResource AfSettingsCardDescriptionStyle}"
+                                        Text="程序内与托盘共用同一个修饰键；用它加滚轮才触发下面各自的“组合滚轮”。" />
+                                </StackPanel>
+                            </ui:CardControl.Header>
+                            <StackPanel>
+                                <components:SettingsDiagram Margin="0,0,0,14" Kind="WheelGestures" />
+                                <ComboBox
+                                    HorizontalAlignment="Left"
+                                    MinWidth="{StaticResource AfSettingsSelectMinWidth}"
+                                    SelectedValue="{Binding ViewModel.Modifier, Mode=TwoWay}"
+                                    SelectedValuePath="Tag">
+                                    <ComboBoxItem Content="Shift" Tag="{x:Static settings:InteractionModifier.Shift}" />
+                                    <ComboBoxItem Content="鼠标左键" Tag="{x:Static settings:InteractionModifier.LeftMouseButton}" />
+                                    <ComboBoxItem Content="鼠标右键" Tag="{x:Static settings:InteractionModifier.RightMouseButton}" />
+                                </ComboBox>
+                                <TextBlock
+                                    Margin="0,8,0,0"
+                                    Style="{StaticResource AfSettingsHintTextStyle}"
+                                    Text="用鼠标左键或右键作修饰键时，滚轮后产生的点击或菜单会在短时间内被抑制。" />
+                            </StackPanel>
+                        </ui:CardControl>
                     </StackPanel>
-                </ui:CardControl.Header>
-                <StackPanel>
-                    <Grid Margin="0,0,0,10">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition MinWidth="190" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Style="{StaticResource AfSettingsFieldLabelStyle}" Text="点击封面" />
-                        <ComboBox
-                            Grid.Column="1"
-                            Width="{StaticResource AfSettingsSelectMinWidth}"
-                            SelectedValue="{Binding ViewModel.ArtworkClickAction, Mode=TwoWay}"
-                            SelectedValuePath="Tag">
-                            <ComboBoxItem Content="播放 / 暂停" Tag="{x:Static settings:PlayerClickAction.TogglePlayPause}" />
-                            <ComboBoxItem Content="打开播放中的程序" Tag="{x:Static settings:PlayerClickAction.ActivateSource}" />
-                        </ComboBox>
-                    </Grid>
+                </components:SettingsGroup>
+
+                <components:SettingsGroup Header="程序内（任务栏静置层）" Icon="{ui:SymbolIcon CursorClick24}">
                     <Grid>
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition MinWidth="190" />
-                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="16" />
+                            <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
-                        <TextBlock Style="{StaticResource AfSettingsFieldLabelStyle}" Text="点击标题或歌词" />
-                        <ComboBox
-                            Grid.Column="1"
-                            Width="{StaticResource AfSettingsSelectMinWidth}"
-                            SelectedValue="{Binding ViewModel.TextClickAction, Mode=TwoWay}"
-                            SelectedValuePath="Tag">
-                            <ComboBoxItem Content="打开播放中的程序" Tag="{x:Static settings:PlayerClickAction.ActivateSource}" />
-                            <ComboBoxItem Content="播放 / 暂停" Tag="{x:Static settings:PlayerClickAction.TogglePlayPause}" />
-                        </ComboBox>
-                    </Grid>
-                </StackPanel>
-            </ui:CardControl>
 
-            <ui:CardControl Margin="{StaticResource AfSettingsCardGap}">
-                <ui:CardControl.Icon>
-                    <ui:SymbolIcon Symbol="Keyboard24" />
-                </ui:CardControl.Icon>
-                <ui:CardControl.Header>
+                        <ui:CardControl
+                            Grid.Column="0"
+                            Margin="{StaticResource AfSettingsCardGap}"
+                            Style="{StaticResource AfSettingsCardStackedStyle}">
+                            <ui:CardControl.Icon>
+                                <ui:SymbolIcon Symbol="CursorClick24" />
+                            </ui:CardControl.Icon>
+                            <ui:CardControl.Header>
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource AfSettingsCardTitleStyle}" Text="静置层点击" />
+                                    <TextBlock
+                                        Style="{StaticResource AfSettingsCardDescriptionStyle}"
+                                        Text="两个区域各自绑定；完整层的按钮保持固定行为。" />
+                                </StackPanel>
+                            </ui:CardControl.Header>
+                            <StackPanel>
+                                <components:SettingsDiagram Margin="0,0,0,14" Kind="InputGestures" />
+
+                                <TextBlock
+                                    Margin="{StaticResource AfSettingsFieldLabelGap}"
+                                    Style="{StaticResource AfSettingsFieldLabelStyle}"
+                                    Text="点击封面" />
+                                <ComboBox
+                                    HorizontalAlignment="Stretch"
+                                    SelectedValue="{Binding ViewModel.ArtworkClickAction, Mode=TwoWay}"
+                                    SelectedValuePath="Tag">
+                                    <ComboBoxItem Content="播放 / 暂停" Tag="{x:Static settings:PlayerClickAction.TogglePlayPause}" />
+                                    <ComboBoxItem Content="打开播放中的程序" Tag="{x:Static settings:PlayerClickAction.ActivateSource}" />
+                                </ComboBox>
+
+                                <TextBlock
+                                    Margin="0,10,0,6"
+                                    Style="{StaticResource AfSettingsFieldLabelStyle}"
+                                    Text="点击标题或歌词" />
+                                <ComboBox
+                                    HorizontalAlignment="Stretch"
+                                    SelectedValue="{Binding ViewModel.TextClickAction, Mode=TwoWay}"
+                                    SelectedValuePath="Tag">
+                                    <ComboBoxItem Content="打开播放中的程序" Tag="{x:Static settings:PlayerClickAction.ActivateSource}" />
+                                    <ComboBoxItem Content="播放 / 暂停" Tag="{x:Static settings:PlayerClickAction.TogglePlayPause}" />
+                                </ComboBox>
+                            </StackPanel>
+                        </ui:CardControl>
+
+                        <ui:CardControl
+                            Grid.Column="2"
+                            Margin="{StaticResource AfSettingsCardGap}"
+                            Style="{StaticResource AfSettingsCardStackedStyle}">
+                            <ui:CardControl.Icon>
+                                <ui:SymbolIcon Symbol="Cursor24" />
+                            </ui:CardControl.Icon>
+                            <ui:CardControl.Header>
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource AfSettingsCardTitleStyle}" Text="静置层滚轮" />
+                                    <TextBlock
+                                        Style="{StaticResource AfSettingsCardDescriptionStyle}"
+                                        Text="普通滚轮与组合滚轮可以指向同一个结果，但那样组合滚轮就失去意义。" />
+                                </StackPanel>
+                            </ui:CardControl.Header>
+                            <StackPanel>
+                                <TextBlock
+                                    Margin="{StaticResource AfSettingsFieldLabelGap}"
+                                    Style="{StaticResource AfSettingsFieldLabelStyle}"
+                                    Text="普通滚轮" />
+                                <ComboBox
+                                    HorizontalAlignment="Stretch"
+                                    SelectedValue="{Binding ViewModel.PrimaryWheelAction, Mode=TwoWay}"
+                                    SelectedValuePath="Tag">
+                                    <ComboBoxItem Content="上一首 / 下一首" Tag="{x:Static settings:WheelAction.PreviousNext}" />
+                                    <ComboBoxItem Content="切换输出设备" Tag="{x:Static settings:WheelAction.OutputDevice}" />
+                                    <ComboBoxItem Content="调节当前媒体音量" Tag="{x:Static settings:WheelAction.CurrentApplicationVolume}" />
+                                    <ComboBoxItem Content="切换可用媒体源" Tag="{x:Static settings:WheelAction.SwitchMediaSource}" />
+                                </ComboBox>
+
+                                <TextBlock
+                                    Margin="0,10,0,6"
+                                    Style="{StaticResource AfSettingsFieldLabelStyle}"
+                                    Text="组合滚轮（加修饰键）" />
+                                <ComboBox
+                                    HorizontalAlignment="Stretch"
+                                    SelectedValue="{Binding ViewModel.ChordWheelAction, Mode=TwoWay}"
+                                    SelectedValuePath="Tag">
+                                    <ComboBoxItem Content="切换可用媒体源" Tag="{x:Static settings:WheelAction.SwitchMediaSource}" />
+                                    <ComboBoxItem Content="调节当前媒体音量" Tag="{x:Static settings:WheelAction.CurrentApplicationVolume}" />
+                                    <ComboBoxItem Content="切换输出设备" Tag="{x:Static settings:WheelAction.OutputDevice}" />
+                                    <ComboBoxItem Content="上一首 / 下一首" Tag="{x:Static settings:WheelAction.PreviousNext}" />
+                                </ComboBox>
+                            </StackPanel>
+                        </ui:CardControl>
+                    </Grid>
+                </components:SettingsGroup>
+
+                <components:SettingsGroup Header="托盘图标" Icon="{ui:SymbolIcon Apps24}">
                     <StackPanel>
-                        <TextBlock Style="{StaticResource AfSettingsCardTitleStyle}" Text="组合滚轮修饰键" />
-                        <TextBlock
-                            Style="{StaticResource AfSettingsCardDescriptionStyle}"
-                            Text="程序内与托盘共用；鼠标按键滚轮会抑制随后产生的点击或菜单" />
+                        <components:SettingsDiagram Margin="0,0,0,12" Kind="TrayOverflow" />
+
+                        <ui:CardControl Margin="{StaticResource AfSettingsCardGap}" Style="{StaticResource AfSettingsCardStackedStyle}">
+                            <ui:CardControl.Icon>
+                                <ui:SymbolIcon Symbol="Settings24" />
+                            </ui:CardControl.Icon>
+                            <ui:CardControl.Header>
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource AfSettingsCardTitleStyle}" Text="托盘点击" />
+                                    <TextBlock
+                                        Style="{StaticResource AfSettingsCardDescriptionStyle}"
+                                        Text="右键始终打开菜单；这里决定左键单击托盘图标做什么。" />
+                                </StackPanel>
+                            </ui:CardControl.Header>
+                            <StackPanel>
+                                <TextBlock
+                                    Margin="{StaticResource AfSettingsFieldLabelGap}"
+                                    Style="{StaticResource AfSettingsFieldLabelStyle}"
+                                    Text="单击托盘图标" />
+                                <ComboBox
+                                    HorizontalAlignment="Left"
+                                    MinWidth="{StaticResource AfSettingsSelectMinWidth}"
+                                    SelectedValue="{Binding ViewModel.TrayClickAction, Mode=TwoWay}"
+                                    SelectedValuePath="Tag">
+                                    <ComboBoxItem Content="打开音频控制菜单" Tag="{x:Static settings:TrayClickAction.OpenAudioControl}" />
+                                    <ComboBoxItem Content="打开设置页" Tag="{x:Static settings:TrayClickAction.OpenSettings}" />
+                                    <ComboBoxItem Content="打开右键菜单" Tag="{x:Static settings:TrayClickAction.OpenContextMenu}" />
+                                </ComboBox>
+                            </StackPanel>
+                        </ui:CardControl>
+
+                        <ui:CardControl Margin="{StaticResource AfSettingsCardGapLast}" Style="{StaticResource AfSettingsCardStackedStyle}">
+                            <ui:CardControl.Icon>
+                                <ui:SymbolIcon Symbol="Settings24" />
+                            </ui:CardControl.Icon>
+                            <ui:CardControl.Header>
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource AfSettingsCardTitleStyle}" Text="托盘滚轮" />
+                                    <TextBlock
+                                        Style="{StaticResource AfSettingsCardDescriptionStyle}"
+                                        Text="滚轮只在托盘图标范围内生效；切换设备时先显示候选，停止滚动约 1.2 秒后才应用。" />
+                                </StackPanel>
+                            </ui:CardControl.Header>
+                            <StackPanel>
+                                <TextBlock
+                                    Margin="{StaticResource AfSettingsFieldLabelGap}"
+                                    Style="{StaticResource AfSettingsFieldLabelStyle}"
+                                    Text="普通滚轮" />
+                                <ComboBox
+                                    HorizontalAlignment="Left"
+                                    MinWidth="{StaticResource AfSettingsSelectMinWidth}"
+                                    SelectedValue="{Binding ViewModel.TrayPrimaryWheelAction, Mode=TwoWay}"
+                                    SelectedValuePath="Tag">
+                                    <ComboBoxItem Content="切换输出设备" Tag="{x:Static settings:TrayWheelBehavior.SwitchOutputDevice}" />
+                                    <ComboBoxItem Content="调节当前媒体音量" Tag="{x:Static settings:TrayWheelBehavior.AdjustVolume}" />
+                                </ComboBox>
+
+                                <TextBlock
+                                    Margin="0,10,0,6"
+                                    Style="{StaticResource AfSettingsFieldLabelStyle}"
+                                    Text="组合滚轮（加修饰键）" />
+                                <ComboBox
+                                    HorizontalAlignment="Left"
+                                    MinWidth="{StaticResource AfSettingsSelectMinWidth}"
+                                    SelectedValue="{Binding ViewModel.TrayChordWheelAction, Mode=TwoWay}"
+                                    SelectedValuePath="Tag">
+                                    <ComboBoxItem Content="调节当前媒体音量" Tag="{x:Static settings:TrayWheelBehavior.AdjustVolume}" />
+                                    <ComboBoxItem Content="切换输出设备" Tag="{x:Static settings:TrayWheelBehavior.SwitchOutputDevice}" />
+                                </ComboBox>
+                            </StackPanel>
+                        </ui:CardControl>
                     </StackPanel>
-                </ui:CardControl.Header>
-                <ComboBox
-                    Width="{StaticResource AfSettingsSelectMinWidth}"
-                    SelectedValue="{Binding ViewModel.Modifier, Mode=TwoWay}"
-                    SelectedValuePath="Tag">
-                    <ComboBoxItem Content="Shift" Tag="{x:Static settings:InteractionModifier.Shift}" />
-                    <ComboBoxItem Content="鼠标左键" Tag="{x:Static settings:InteractionModifier.LeftMouseButton}" />
-                    <ComboBoxItem Content="鼠标右键" Tag="{x:Static settings:InteractionModifier.RightMouseButton}" />
-                </ComboBox>
-            </ui:CardControl>
+                </components:SettingsGroup>
 
-            <ContentControl
-                Margin="0,0,0,8"
-                ContentTemplate="{StaticResource AfDiagramWheelGestures}" />
-
-            <ui:CardControl Margin="{StaticResource AfSettingsCardGapLast}">
-                <ui:CardControl.Icon>
-                    <ui:SymbolIcon Symbol="Cursor24" />
-                </ui:CardControl.Icon>
-                <ui:CardControl.Header>
-                    <StackPanel>
-                        <TextBlock Style="{StaticResource AfSettingsCardTitleStyle}" Text="滚轮操作" />
-                        <TextBlock
-                            Style="{StaticResource AfSettingsCardDescriptionStyle}"
-                            Text="向上为上一项、增大音量，向下为下一项、减小音量" />
-                    </StackPanel>
-                </ui:CardControl.Header>
-                <StackPanel>
-                    <Grid Margin="0,0,0,10">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition MinWidth="190" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Style="{StaticResource AfSettingsFieldLabelStyle}" Text="普通滚轮" />
-                        <ComboBox
-                            Grid.Column="1"
-                            Width="{StaticResource AfSettingsSelectMinWidth}"
-                            SelectedValue="{Binding ViewModel.PrimaryWheelAction, Mode=TwoWay}"
-                            SelectedValuePath="Tag">
-                            <ComboBoxItem Content="上一首 / 下一首" Tag="{x:Static settings:WheelAction.PreviousNext}" />
-                            <ComboBoxItem Content="切换输出设备" Tag="{x:Static settings:WheelAction.OutputDevice}" />
-                            <ComboBoxItem Content="当前媒体音量" Tag="{x:Static settings:WheelAction.CurrentApplicationVolume}" />
-                            <ComboBoxItem Content="切换可用媒体源" Tag="{x:Static settings:WheelAction.SwitchMediaSource}" />
-                        </ComboBox>
-                    </Grid>
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition MinWidth="190" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Style="{StaticResource AfSettingsFieldLabelStyle}" Text="按键 + 滚轮" />
-                        <ComboBox
-                            Grid.Column="1"
-                            Width="{StaticResource AfSettingsSelectMinWidth}"
-                            SelectedValue="{Binding ViewModel.ChordWheelAction, Mode=TwoWay}"
-                            SelectedValuePath="Tag">
-                            <ComboBoxItem Content="切换可用媒体源" Tag="{x:Static settings:WheelAction.SwitchMediaSource}" />
-                            <ComboBoxItem Content="当前媒体音量" Tag="{x:Static settings:WheelAction.CurrentApplicationVolume}" />
-                            <ComboBoxItem Content="切换输出设备" Tag="{x:Static settings:WheelAction.OutputDevice}" />
-                            <ComboBoxItem Content="上一首 / 下一首" Tag="{x:Static settings:WheelAction.PreviousNext}" />
-                        </ComboBox>
-                    </Grid>
-                </StackPanel>
-            </ui:CardControl>
-
-            <ContentControl
-                Margin="0,0,0,12"
-                Content="托盘图标"
-                ContentTemplate="{StaticResource AfSettingsSectionHeaderTemplate}" />
-
-            <ContentControl
-                Margin="0,0,0,8"
-                ContentTemplate="{StaticResource AfDiagramTrayOverflow}" />
-
-            <ui:CardControl Margin="{StaticResource AfSettingsCardGap}">
-                <ui:CardControl.Icon>
-                    <ui:SymbolIcon Symbol="Apps24" />
-                </ui:CardControl.Icon>
-                <ui:CardControl.Header>
-                    <StackPanel>
-                        <TextBlock Style="{StaticResource AfSettingsCardTitleStyle}" Text="点击操作" />
-                        <TextBlock
-                            Style="{StaticResource AfSettingsCardDescriptionStyle}"
-                            Text="右键始终可打开菜单；左键也可以绑定到同一菜单" />
-                    </StackPanel>
-                </ui:CardControl.Header>
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition MinWidth="190" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Style="{StaticResource AfSettingsFieldLabelStyle}" Text="点击托盘图标" />
-                    <ComboBox
-                        Grid.Column="1"
-                        Width="{StaticResource AfSettingsSelectMinWidth}"
-                        SelectedValue="{Binding ViewModel.TrayClickAction, Mode=TwoWay}"
-                        SelectedValuePath="Tag">
-                        <ComboBoxItem Content="打开音频控制菜单" Tag="{x:Static settings:TrayClickAction.OpenAudioControl}" />
-                        <ComboBoxItem Content="打开设置页" Tag="{x:Static settings:TrayClickAction.OpenSettings}" />
-                        <ComboBoxItem Content="打开右键菜单" Tag="{x:Static settings:TrayClickAction.OpenContextMenu}" />
-                    </ComboBox>
-                </Grid>
-            </ui:CardControl>
-
-            <ui:CardControl Margin="{StaticResource AfSettingsCardGapLast}">
-                <ui:CardControl.Icon>
-                    <ui:SymbolIcon Symbol="Settings24" />
-                </ui:CardControl.Icon>
-                <ui:CardControl.Header>
-                    <StackPanel>
-                        <TextBlock Style="{StaticResource AfSettingsCardTitleStyle}" Text="滚轮操作" />
-                        <TextBlock
-                            Style="{StaticResource AfSettingsCardDescriptionStyle}"
-                            Text="设备候选会立即显示，停止滚动约 1.2 秒后应用" />
-                    </StackPanel>
-                </ui:CardControl.Header>
-                <StackPanel>
-                    <Grid Margin="0,0,0,10">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition MinWidth="190" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Style="{StaticResource AfSettingsFieldLabelStyle}" Text="普通滚轮" />
-                        <ComboBox
-                            Grid.Column="1"
-                            Width="{StaticResource AfSettingsSelectMinWidth}"
-                            SelectedValue="{Binding ViewModel.TrayPrimaryWheelAction, Mode=TwoWay}"
-                            SelectedValuePath="Tag">
-                            <ComboBoxItem Content="切换输出设备" Tag="{x:Static settings:TrayWheelBehavior.SwitchOutputDevice}" />
-                            <ComboBoxItem Content="调节当前媒体音量" Tag="{x:Static settings:TrayWheelBehavior.AdjustVolume}" />
-                        </ComboBox>
-                    </Grid>
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition MinWidth="190" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Style="{StaticResource AfSettingsFieldLabelStyle}" Text="按键 + 滚轮" />
-                        <ComboBox
-                            Grid.Column="1"
-                            Width="{StaticResource AfSettingsSelectMinWidth}"
-                            SelectedValue="{Binding ViewModel.TrayChordWheelAction, Mode=TwoWay}"
-                            SelectedValuePath="Tag">
-                            <ComboBoxItem Content="调节当前媒体音量" Tag="{x:Static settings:TrayWheelBehavior.AdjustVolume}" />
-                            <ComboBoxItem Content="切换输出设备" Tag="{x:Static settings:TrayWheelBehavior.SwitchOutputDevice}" />
-                        </ComboBox>
-                    </Grid>
-                </StackPanel>
-            </ui:CardControl>
-
-            <components:SettingsCallout
-                Margin="0,14,0,0"
-                Symbol="Info24"
-                Text="建议在 Windows 的任务栏设置中，将 AF Media Bar 图标从隐藏的小箭头区域拖到任务栏，以便直接点击和滚动。" />
-
-            <ui:Button
-                Margin="0,18,0,0"
-                HorizontalAlignment="Left"
-                Click="ResetButton_Click"
-                Content="恢复本页默认设置"
-                Icon="{ui:SymbolIcon ArrowReset24}"
-                Style="{StaticResource AfSettingsButtonStyle}" />
-        </StackPanel>
-
+                <ui:Button
+                    Margin="0,20,0,40"
+                    HorizontalAlignment="Left"
+                    Click="ResetButton_Click"
+                    Content="恢复本页默认设置"
+                    Icon="{ui:SymbolIcon ArrowReset24}"
+                    Style="{StaticResource AfSettingsButtonStyle}" />
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
 </Page>

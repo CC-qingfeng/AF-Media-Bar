@@ -75,6 +75,53 @@ public partial class ExtraFeaturesViewModel : ObservableObject
     public bool ShowSystemGpu { get => HasMetric(MetricKind.SystemGpu); set => SetMetric(MetricKind.SystemGpu, value); }
     public bool ShowProcessMemory { get => HasMetric(MetricKind.ProcessMemory); set => SetMetric(MetricKind.ProcessMemory, value); }
 
+    /// <summary>
+    /// 该指标当前能否取消勾选。性能组件至少需要一个指标，因此最后一个勾选项的复选框必须禁用；
+    /// 原实现只是静默忽略取消操作、复选框却照常可点，用户会以为界面失灵。
+    /// Whether a metric may currently be unchecked. The performance component needs at least one metric, so the
+    /// last checked box must be disabled; the previous behaviour silently ignored the click while leaving the
+    /// box enabled, which read as a broken control.
+    /// </summary>
+    public bool CanUncheckSystemMemory => CanUncheck(MetricKind.SystemMemory);
+
+    /// <inheritdoc cref="CanUncheckSystemMemory" />
+    public bool CanUncheckSystemCpu => CanUncheck(MetricKind.SystemCpu);
+
+    /// <inheritdoc cref="CanUncheckSystemMemory" />
+    public bool CanUncheckSystemGpu => CanUncheck(MetricKind.SystemGpu);
+
+    /// <inheritdoc cref="CanUncheckSystemMemory" />
+    public bool CanUncheckProcessMemory => CanUncheck(MetricKind.ProcessMemory);
+
+    /// <summary>
+    /// 频谱组件是否显示在静置层。它和参数放在同一页，这样“这个组件要不要用”和“它怎么表现”
+    /// 不会分处两个页面。
+    /// Whether the spectrum component shows on the rest layer. It lives on the same page as its parameters so
+    /// "should this component exist" and "how does it behave" are never split across two pages.
+    /// </summary>
+    public bool SpectrumVisible
+    {
+        get => SettingsManager.Current.TaskbarExperience.SpectrumVisible;
+        set
+        {
+            SettingsManager.SetTaskbarExperienceSettings(
+                SettingsManager.Current.TaskbarExperience with { SpectrumVisible = value });
+            OnPropertyChanged();
+        }
+    }
+
+    /// <inheritdoc cref="SpectrumVisible" />
+    public bool PerformanceVisible
+    {
+        get => SettingsManager.Current.TaskbarExperience.PerformanceVisible;
+        set
+        {
+            SettingsManager.SetTaskbarExperienceSettings(
+                SettingsManager.Current.TaskbarExperience with { PerformanceVisible = value });
+            OnPropertyChanged();
+        }
+    }
+
     public bool TrackChangeNotificationEnabled { get => Notification.Enabled; set => UpdateNotification(Notification with { Enabled = value }); }
     public bool ShowTrackChangeNotificationWhenFullscreen { get => Notification.ShowWhenFullscreen; set => UpdateNotification(Notification with { ShowWhenFullscreen = value }); }
     public int TrackChangeNotificationDurationSeconds { get => Notification.DurationMilliseconds / 1000; set => UpdateNotification(Notification with { DurationMilliseconds = value * 1000 }); }
@@ -139,8 +186,17 @@ public partial class ExtraFeaturesViewModel : ObservableObject
         if (entry is null) return;
         var items = QuickLaunchEntries.ToList();
         var index = items.FindIndex(candidate => candidate.Id == entry.Id);
+        if (index < 0) return;
         var target = index + offset;
-        if (index < 0 || target < 0 || target >= items.Count) return;
+        if (target < 0 || target >= items.Count)
+        {
+            // 以前这里直接返回，按钮看起来像坏了。现在把原因说出来，用户才知道是到底了而不是没生效。
+            // This used to return silently and the button read as broken. Saying why tells the user the list
+            // end was reached rather than that the click did nothing.
+            StatusText = offset < 0 ? "已经在列表最前面。" : "已经在列表最后面。";
+            return;
+        }
+
         (items[index], items[target]) = (items[target], items[index]);
         SaveQuickLaunch(items);
     }
@@ -149,6 +205,9 @@ public partial class ExtraFeaturesViewModel : ObservableObject
         SettingsManager.SetQuickLaunchSettings(new QuickLaunchSettings(entries.ToArray()));
 
     private bool HasMetric(MetricKind metric) => SettingsManager.Current.PerformanceComponent.Metrics!.Contains(metric);
+
+    private bool CanUncheck(MetricKind metric) =>
+        !HasMetric(metric) || SettingsManager.Current.PerformanceComponent.Metrics!.Count > 1;
 
     private void SetMetric(MetricKind metric, bool enabled)
     {
@@ -190,6 +249,8 @@ public partial class ExtraFeaturesViewModel : ObservableObject
             OnPropertyChanged(nameof(SpectrumSensitivityPercent));
             OnPropertyChanged(nameof(PerformanceRefreshIntervalMilliseconds));
             OnPropertyChanged(nameof(OpenTaskManagerOnMetricsClick));
+            OnPropertyChanged(nameof(SpectrumVisible));
+            OnPropertyChanged(nameof(PerformanceVisible));
             RaiseMetricProperties();
             UpdateNotification(Notification);
         }
@@ -231,6 +292,10 @@ public partial class ExtraFeaturesViewModel : ObservableObject
         OnPropertyChanged(nameof(ShowSystemCpu));
         OnPropertyChanged(nameof(ShowSystemGpu));
         OnPropertyChanged(nameof(ShowProcessMemory));
+        OnPropertyChanged(nameof(CanUncheckSystemMemory));
+        OnPropertyChanged(nameof(CanUncheckSystemCpu));
+        OnPropertyChanged(nameof(CanUncheckSystemGpu));
+        OnPropertyChanged(nameof(CanUncheckProcessMemory));
     }
 }
 

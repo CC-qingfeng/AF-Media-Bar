@@ -32,6 +32,23 @@ public partial class DisplayModesViewModel : ObservableObject
     public bool IsFloatingBallMode => SelectedMode == DisplayModeSelection.FloatingBall;
     public bool IsUnimplementedMode => !IsTaskbarMode;
 
+    /// <summary>
+    /// 实际承载模式的文本，供页头状态芯片显示。它读的是真实 <see cref="WindowMode"/>，
+    /// 而不是本页的预览选择——页内选择只改变高亮，从不切换窗口，两者不能混为一谈。
+    /// Text for the header status chip. It reads the real <see cref="WindowMode"/> rather than this page's
+    /// preview selection, because the in-page selection only changes the highlight and never switches the
+    /// window; the two must not be conflated.
+    /// </summary>
+    public string HostingModeText => CurrentWindowMode == WindowMode.Taskbar ? "当前承载：任务栏" : "当前承载：灵动岛";
+
+    /// <summary>
+    /// 任务栏是否就是当前运行模式。模式卡片用它决定“当前模式”芯片是否显示，
+    /// 取代以前写死在任务栏卡片上的那个芯片。
+    /// Whether the taskbar really is the running mode. The mode cards use it to decide whether the
+    /// "current mode" chip shows, replacing the chip that used to be hardcoded on the taskbar card.
+    /// </summary>
+    public bool IsTaskbarHostingActive => CurrentWindowMode == WindowMode.Taskbar;
+
     /// <summary>灵动岛背景方案。/ Dynamic-island background scheme.</summary>
     public DynamicIslandBackgroundMode DynamicIslandBackgroundMode
     {
@@ -353,6 +370,12 @@ public partial class DisplayModesViewModel : ObservableObject
 
     private void UpdateExperience(TaskbarExperienceSettings value)
     {
+        // 页面上高亮一个未实现的承载模式时，任务栏专属设置不接受写入——这是既有且受测试保护的不变量。
+        // 代价是那些控件会“看着能改、实际不保存”，因此页面在同一状态下会显示一条明确的只读提示，
+        // 而不是让用户自己猜。提示由 DisplayModesPage 绑定 IsUnimplementedMode 呈现。
+        // While an unimplemented hosting mode is highlighted, taskbar-only settings refuse writes: that is an
+        // existing invariant guarded by a test. The cost is controls that look editable without saving, so the
+        // page shows an explicit read-only notice in that state instead of leaving the user to guess.
         if (_isRefreshing || !IsTaskbarMode) return;
         SettingsManager.SetTaskbarExperienceSettings(value.Normalize());
         RaiseExperience();
@@ -464,6 +487,7 @@ public partial class DisplayModesViewModel : ObservableObject
         {
             OnPropertyChanged(nameof(CurrentWindowMode)); OnPropertyChanged(nameof(IsTaskbarMode)); OnPropertyChanged(nameof(IsDynamicIslandMode));
             OnPropertyChanged(nameof(IsDesktopCardMode)); OnPropertyChanged(nameof(IsFloatingBallMode)); OnPropertyChanged(nameof(IsUnimplementedMode));
+            OnPropertyChanged(nameof(HostingModeText)); OnPropertyChanged(nameof(IsTaskbarHostingActive));
             OnPropertyChanged(nameof(DynamicIslandBackgroundMode)); OnPropertyChanged(nameof(DynamicIslandEdge));
             RaiseExperience(); OnPropertyChanged(nameof(Orientation)); OnPropertyChanged(nameof(IsTaskbarPositionLocked));
             OnPropertyChanged(nameof(IsTaskbarAvoidingIcons)); OnPropertyChanged(nameof(TaskbarCrossAxisOffsetDip));

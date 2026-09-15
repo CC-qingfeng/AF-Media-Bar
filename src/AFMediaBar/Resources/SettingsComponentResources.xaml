@@ -1,0 +1,497 @@
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:components="clr-namespace:AFMediaBar.Components"
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml">
+
+    <!--
+        设置页结构组件 / Settings structure components
+
+        分组容器、分组标签条、子区域和说明图宿主。它们把“分组”和“父子依赖”从每页各自重复的
+        ContentControl + 卡片堆叠，变成可以一次改动、六页一致的控件。
+
+        Group container, group strip, sub-region, and diagram host. They turn "a group" and "a parent-child
+        dependency" from markup repeated per page into controls that change once and stay consistent across all
+        six pages.
+
+        这里显式合并两个字典，是为了让本文件里的 StaticResource 能够解析：
+        ResourceDictionary 在解析时看不到 Application 的合并列表，只能看到自己合并进来的字典。
+        The two dictionaries are merged here explicitly so this file's StaticResource lookups can resolve:
+        a ResourceDictionary cannot see the application's merge list while it is being parsed, only the
+        dictionaries it merges itself.
+    -->
+    <ResourceDictionary.MergedDictionaries>
+        <ResourceDictionary Source="/AFMediaBar;component/Resources/SettingsAppearanceResources.xaml" />
+        <ResourceDictionary Source="/AFMediaBar;component/Resources/SettingsDiagrams.xaml" />
+    </ResourceDictionary.MergedDictionaries>
+
+    <!--
+        状态芯片 / Status chips
+
+        芯片承担“当前 / 未实现 / 需先启用”这类状态。以前这些状态写在卡片描述的句子里，
+        读起来像解释而不是状态，用户得读完一整句才知道这个选项现在能不能用。
+        Chips carry states such as "current / not implemented / needs enabling". These used to live inside
+        description sentences, where they read as explanation rather than state and forced the user to finish a
+        sentence before learning whether an option could be used at all.
+    -->
+
+    <Style x:Key="AfSettingsChipBaseStyle" TargetType="{x:Type ContentControl}">
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type ContentControl}">
+                    <Border
+                        Padding="8,2"
+                        Background="{TemplateBinding Background}"
+                        CornerRadius="9">
+                        <ContentPresenter
+                            VerticalAlignment="Center"
+                            TextElement.Foreground="{TemplateBinding Foreground}" />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style
+        x:Key="AfSettingsChipAccentStyle"
+        BasedOn="{StaticResource AfSettingsChipBaseStyle}"
+        TargetType="{x:Type ContentControl}">
+        <Setter Property="Background" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
+    </Style>
+
+    <Style
+        x:Key="AfSettingsChipNeutralStyle"
+        BasedOn="{StaticResource AfSettingsChipBaseStyle}"
+        TargetType="{x:Type ContentControl}">
+        <Setter Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+    </Style>
+
+    <Style
+        x:Key="AfSettingsChipAttentionStyle"
+        BasedOn="{StaticResource AfSettingsChipBaseStyle}"
+        TargetType="{x:Type ContentControl}">
+        <Setter Property="Background" Value="{DynamicResource SystemFillColorCautionBackgroundBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
+    </Style>
+
+    <!--
+        分组容器 / Group container
+
+        分组标题带一个主色底片图标，让分组在滚动时也能被一眼认出；分组标题仍然是分组标签条的唯一来源，
+        因为标签条读的就是这个 Header。
+        The group header carries an accent-tinted icon chip so the group stays recognisable while scrolling.
+        The header remains the single source for the group strip, which reads this very Header.
+    -->
+
+    <Style TargetType="{x:Type components:SettingsGroup}">
+        <Setter Property="Margin" Value="{StaticResource AfSettingsSectionGap}" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type components:SettingsGroup}">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <Grid
+                                x:Name="GroupIcon"
+                                Width="26"
+                                Height="26"
+                                Margin="0,0,10,0"
+                                VerticalAlignment="Center"
+                                TextElement.Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}">
+                                <Border
+                                    Background="{DynamicResource AccentFillColorDefaultBrush}"
+                                    CornerRadius="7"
+                                    Opacity="0.16" />
+                                <ContentControl
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    Content="{TemplateBinding Icon}"
+                                    Focusable="False"
+                                    KeyboardNavigation.IsTabStop="False" />
+                            </Grid>
+
+                            <TextBlock
+                                Grid.Column="1"
+                                Style="{StaticResource AfSettingsSectionTitleStyle}"
+                                Text="{TemplateBinding Header}" />
+
+                            <ContentControl
+                                x:Name="GroupStatus"
+                                Grid.Column="2"
+                                Margin="12,0,0,0"
+                                Style="{StaticResource AfSettingsChipNeutralStyle}"
+                                Content="{TemplateBinding StatusText}" />
+                        </Grid>
+
+                        <ContentPresenter HorizontalAlignment="Stretch" />
+                    </StackPanel>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="Icon" Value="{x:Null}">
+                            <Setter TargetName="GroupIcon" Property="Visibility" Value="Collapsed" />
+                        </Trigger>
+                        <Trigger Property="StatusText" Value="">
+                            <Setter TargetName="GroupStatus" Property="Visibility" Value="Collapsed" />
+                        </Trigger>
+                        <Trigger Property="StatusTone" Value="Accent">
+                            <Setter TargetName="GroupStatus" Property="Style" Value="{StaticResource AfSettingsChipAccentStyle}" />
+                        </Trigger>
+                        <Trigger Property="StatusTone" Value="Attention">
+                            <Setter TargetName="GroupStatus" Property="Style" Value="{StaticResource AfSettingsChipAttentionStyle}" />
+                        </Trigger>
+                        <!--
+                            未实现的分组弱化图标底片而不是整块降低透明度：整块变暗会让其中的文字跌破对比度，
+                            而底片的强弱变化已经足够说明“这块还不是正式功能”。
+                            A muted group dims its icon plate rather than the whole block, because dimming the block
+                            would push its text below the contrast floor, and a weaker plate already reads as
+                            "not a shipped feature yet".
+                        -->
+                        <Trigger Property="Tint" Value="Muted">
+                            <Setter TargetName="GroupIcon" Property="TextElement.Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}" />
+                            <Setter TargetName="GroupStatus" Property="Style" Value="{StaticResource AfSettingsChipNeutralStyle}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!--
+        子区域 / Sub-region
+
+        子区域是“父项关掉就没有意义”的选项的家。它比卡片低一层：更小的圆角、更弱的底色、左侧不再有图标，
+        因此它读起来是父卡片的一部分，而不是又一张卡片。
+        A sub-region is home to options that mean nothing while their parent is off. It sits one level below a
+        card: smaller radius, weaker fill, no leading icon, so it reads as part of its parent card rather than as
+        another card.
+    -->
+
+    <Style TargetType="{x:Type components:SettingsSubRegion}">
+        <Setter Property="Margin" Value="0,14,0,0" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type components:SettingsSubRegion}">
+                    <Border
+                        x:Name="RegionRoot"
+                        Padding="14,12"
+                        Background="{DynamicResource SubtleFillColorSecondaryBrush}"
+                        BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
+                        BorderThickness="1"
+                        CornerRadius="6">
+                        <StackPanel>
+                            <Grid Margin="0,0,0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock
+                                    FontSize="13"
+                                    FontWeight="{DynamicResource AppTextMediumFontWeight}"
+                                    Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                    Text="{TemplateBinding Header}" />
+                                <ContentControl
+                                    x:Name="RegionStatus"
+                                    Grid.Column="1"
+                                    Margin="12,0,0,0"
+                                    Visibility="Collapsed"
+                                    Style="{StaticResource AfSettingsChipNeutralStyle}"
+                                    Content="{TemplateBinding StatusText}" />
+                            </Grid>
+                            <TextBlock
+                                x:Name="RegionDescription"
+                                Style="{StaticResource AfSettingsHintTextStyle}"
+                                Text="{TemplateBinding Description}" />
+                            <ContentPresenter
+                                x:Name="PART_Content"
+                                Margin="0,12,0,0"
+                                HorizontalAlignment="Stretch" />
+                        </StackPanel>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="Description" Value="">
+                            <Setter TargetName="RegionDescription" Property="Visibility" Value="Collapsed" />
+                        </Trigger>
+                        <!--
+                            StatusText 是“依赖未满足时”的提示，因此它只在子区域关闭时出现。
+                            原先它在非空时始终可见，于是父项已经打开、子区域可用时，芯片还在说“需先启用”。
+                            StatusText is the unmet-dependency notice, so it appears only while the region is
+                            disabled. It used to be visible whenever it was non-empty, so an enabled region still
+                            claimed it needed enabling first.
+                        -->
+                        <Trigger Property="StatusText" Value="">
+                            <Setter TargetName="RegionStatus" Property="Content" Value="需先启用" />
+                        </Trigger>
+                        <Trigger Property="StatusTone" Value="Accent">
+                            <Setter TargetName="RegionStatus" Property="Style" Value="{StaticResource AfSettingsChipAccentStyle}" />
+                        </Trigger>
+                        <Trigger Property="StatusTone" Value="Attention">
+                            <Setter TargetName="RegionStatus" Property="Style" Value="{StaticResource AfSettingsChipAttentionStyle}" />
+                        </Trigger>
+                        <!--
+                            关闭时默认只变暗并显示芯片，让用户仍能看到“有哪些选项、需要先打开什么”。
+                            需要折叠的场景由 CollapseWhenDisabled 显式选择。
+                            While disabled the default is dim plus chip, so the user can still see which options
+                            exist and what must be turned on first. Folding is opted into explicitly.
+                        -->
+                        <Trigger Property="IsSubRegionEnabled" Value="False">
+                            <Setter TargetName="RegionRoot" Property="Opacity" Value="0.66" />
+                            <Setter TargetName="RegionStatus" Property="Visibility" Value="Visible" />
+                        </Trigger>
+                        <MultiTrigger>
+                            <MultiTrigger.Conditions>
+                                <Condition Property="IsSubRegionEnabled" Value="False" />
+                                <Condition Property="CollapseWhenDisabled" Value="True" />
+                            </MultiTrigger.Conditions>
+                            <Setter TargetName="RegionRoot" Property="Visibility" Value="Collapsed" />
+                        </MultiTrigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!--
+        分组标签 / Group tab
+
+        悬停只改底色，不位移：标签条会被高频划过，位移在那里只会变成噪声。
+        Hover changes only the fill and never moves the tab: the strip is crossed constantly, and movement there
+        reads as noise.
+    -->
+
+    <Style x:Key="AfSettingsGroupTabStyle" TargetType="{x:Type Button}">
+        <Setter Property="FocusVisualStyle" Value="{DynamicResource AfFocusVisualStyle}" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type Button}">
+                    <Border
+                        x:Name="TabBorder"
+                        Margin="0,0,2,0"
+                        Padding="10,6"
+                        Background="Transparent"
+                        CornerRadius="6">
+                        <TextBlock
+                            x:Name="TabText"
+                            VerticalAlignment="Center"
+                            FontSize="12.5"
+                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                            Text="{TemplateBinding Content}" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <DataTrigger Binding="{Binding IsActive}" Value="True">
+                            <Setter TargetName="TabText" Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+                            <Setter TargetName="TabText" Property="FontWeight" Value="{DynamicResource AppTextStrongFontWeight}" />
+                        </DataTrigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="TabBorder" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="TabText" Property="Opacity" Value="0.6" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!--
+        固定页头 / Pinned page header
+
+        页头与标签条都在滚动容器之外，因此内容滚过它们时不会把它们带走。背景必须是不透明的，
+        否则滚动内容会从页头底下透出来。
+        The header and the tabs live outside the scroll container, so scrolling content cannot carry them away.
+        The background must be opaque, or the content would show through the header.
+    -->
+
+    <Style TargetType="{x:Type components:SettingsGroupStrip}">
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type components:SettingsGroupStrip}">
+                    <StackPanel Background="{DynamicResource ApplicationBackgroundBrush}">
+                        <Grid Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <Grid
+                                x:Name="PageIcon"
+                                Width="34"
+                                Height="34"
+                                Margin="0,0,12,0"
+                                VerticalAlignment="Top"
+                                TextElement.Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}">
+                                <Border
+                                    Background="{DynamicResource AccentFillColorDefaultBrush}"
+                                    CornerRadius="9"
+                                    Opacity="0.16" />
+                                <ContentControl
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    Content="{TemplateBinding PageIcon}"
+                                    Focusable="False"
+                                    KeyboardNavigation.IsTabStop="False" />
+                            </Grid>
+
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock
+                                    FontSize="24"
+                                    FontWeight="{DynamicResource AppTextStrongFontWeight}"
+                                    Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                    Text="{TemplateBinding Title}" />
+                                <TextBlock
+                                    x:Name="PageSubtitle"
+                                    Margin="0,3,0,0"
+                                    FontSize="12"
+                                    LineHeight="17"
+                                    LineStackingStrategy="BlockLineHeight"
+                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                    Text="{TemplateBinding Subtitle}"
+                                    TextWrapping="Wrap" />
+                            </StackPanel>
+
+                            <ContentControl
+                                x:Name="PageStatus"
+                                Grid.Column="2"
+                                Margin="12,4,0,0"
+                                VerticalAlignment="Top"
+                                Style="{StaticResource AfSettingsChipAccentStyle}"
+                                Content="{TemplateBinding StatusText}" />
+                        </Grid>
+
+                        <Grid>
+                            <ItemsControl
+                                x:Name="PART_Tabs"
+                                Focusable="False"
+                                ItemsSource="{Binding Groups, RelativeSource={RelativeSource TemplatedParent}}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Button
+                                            Command="{Binding JumpCommand}"
+                                            CommandParameter="{Binding}"
+                                            Content="{Binding Name}"
+                                            Style="{StaticResource AfSettingsGroupTabStyle}" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <Border
+                                x:Name="PART_Indicator"
+                                Width="0"
+                                Height="2"
+                                Margin="0,0,0,1"
+                                HorizontalAlignment="Left"
+                                VerticalAlignment="Bottom"
+                                Background="{DynamicResource AccentFillColorDefaultBrush}"
+                                CornerRadius="1">
+                                <Border.RenderTransform>
+                                    <TranslateTransform X="0" />
+                                </Border.RenderTransform>
+                            </Border>
+                        </Grid>
+
+                        <Border
+                            x:Name="PART_Progress"
+                            Height="2"
+                            Margin="0,2,0,0"
+                            HorizontalAlignment="Stretch"
+                            Background="{DynamicResource AccentFillColorDefaultBrush}"
+                            Opacity="0.5"
+                            RenderTransformOrigin="0,0.5">
+                            <Border.RenderTransform>
+                                <ScaleTransform ScaleX="0" ScaleY="1" />
+                            </Border.RenderTransform>
+                        </Border>
+                    </StackPanel>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="Subtitle" Value="">
+                            <Setter TargetName="PageSubtitle" Property="Visibility" Value="Collapsed" />
+                        </Trigger>
+                        <Trigger Property="StatusText" Value="">
+                            <Setter TargetName="PageStatus" Property="Visibility" Value="Collapsed" />
+                        </Trigger>
+                        <Trigger Property="StatusTone" Value="Neutral">
+                            <Setter TargetName="PageStatus" Property="Style" Value="{StaticResource AfSettingsChipNeutralStyle}" />
+                        </Trigger>
+                        <Trigger Property="StatusTone" Value="Attention">
+                            <Setter TargetName="PageStatus" Property="Style" Value="{StaticResource AfSettingsChipAttentionStyle}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!--
+        说明图宿主 / Diagram host
+
+        页面只声明 Kind，模板由这里按种类选择；页面因此不再引用任何具体的图键，
+        改一张图也不会牵动六个页面。
+        A page declares only a Kind and the template is selected here, so pages no longer reference diagram
+        keys and changing one diagram touches no page.
+    -->
+
+    <Style TargetType="{x:Type components:SettingsDiagram}">
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="IsTabStop" Value="False" />
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding Kind, RelativeSource={RelativeSource Self}}" Value="LayerRest">
+                <Setter Property="Template" Value="{StaticResource AfDiagramLayerRest}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Kind, RelativeSource={RelativeSource Self}}" Value="LayerHover">
+                <Setter Property="Template" Value="{StaticResource AfDiagramLayerHover}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Kind, RelativeSource={RelativeSource Self}}" Value="LayerFull">
+                <Setter Property="Template" Value="{StaticResource AfDiagramLayerFull}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Kind, RelativeSource={RelativeSource Self}}" Value="TaskbarPlacement">
+                <Setter Property="Template" Value="{StaticResource AfDiagramTaskbarPlacement}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Kind, RelativeSource={RelativeSource Self}}" Value="TaskbarLength">
+                <Setter Property="Template" Value="{StaticResource AfDiagramTaskbarLength}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Kind, RelativeSource={RelativeSource Self}}" Value="InputGestures">
+                <Setter Property="Template" Value="{StaticResource AfDiagramInputGestures}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Kind, RelativeSource={RelativeSource Self}}" Value="WheelGestures">
+                <Setter Property="Template" Value="{StaticResource AfDiagramWheelGestures}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Kind, RelativeSource={RelativeSource Self}}" Value="TrayOverflow">
+                <Setter Property="Template" Value="{StaticResource AfDiagramTrayOverflow}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Kind, RelativeSource={RelativeSource Self}}" Value="LyricsTwoLine">
+                <Setter Property="Template" Value="{StaticResource AfDiagramLyricsTwoLine}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Kind, RelativeSource={RelativeSource Self}}" Value="LyricsAlignment">
+                <Setter Property="Template" Value="{StaticResource AfDiagramLyricsAlignment}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Kind, RelativeSource={RelativeSource Self}}" Value="NotificationPlacement">
+                <Setter Property="Template" Value="{StaticResource AfDiagramNotificationPlacement}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Kind, RelativeSource={RelativeSource Self}}" Value="Spectrum">
+                <Setter Property="Template" Value="{StaticResource AfDiagramSpectrum}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Kind, RelativeSource={RelativeSource Self}}" Value="DynamicIslandSurface">
+                <Setter Property="Template" Value="{StaticResource AfDiagramDynamicIslandSurface}" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+</ResourceDictionary>

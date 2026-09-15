@@ -1,4 +1,4 @@
-﻿using AFMediaBar.Classes.Services;
+using AFMediaBar.Classes.Services;
 using AFMediaBar.Classes.Abstractions;
 using AFMediaBar.Classes.Services.Lyrics;
 using AFMediaBar.ViewModels.Pages;
@@ -129,9 +129,6 @@ namespace AFMediaBar
                     () => sp.GetRequiredService<TrackChangeNotificationWindow>());
 
                 // === 设置页面及其 ViewModel Settings Pages and ViewModels ===
-                services.AddSingleton<GeneralPage>();
-                services.AddSingleton<GeneralViewModel>();
-
                 services.AddSingleton<AppearancePage>();
                 services.AddSingleton<AppearanceViewModel>();
 

@@ -84,15 +84,18 @@ public static class SettingsRevealAnimator
 
         void Settle()
         {
-            // HoldEnd 在结束瞬间已经停在终值上，因此先落到本地终值再清除动画不会产生回弹。
-            // HoldEnd already rests on the end value when this runs, so landing the local value before clearing the
-            // animation cannot bounce.
+            // 顺序很关键：必须先清除动画，再写本地终值。
+            // 反序（先写终值、后清除动画）会让清除动作把元素回退到动画启动时快照下来的起始值，
+            // 结果就是元素永久停在不可见状态——这正是页面标题消失的原因。
+            // Order matters: clear the animation first, then write the final local value. The reverse order
+            // lets the clear restore the start value snapshotted when the animation began, which leaves the
+            // element permanently invisible -- the exact cause of the vanishing page titles.
+            block.BeginAnimation(UIElement.OpacityProperty, null);
             block.Opacity = 1d;
+
+            offset?.BeginAnimation(TranslateTransform.YProperty, null);
             if (offset is not null)
                 offset.Y = 0d;
-
-            block.BeginAnimation(UIElement.OpacityProperty, null);
-            offset?.BeginAnimation(TranslateTransform.YProperty, null);
         }
 
         block.BeginAnimation(
@@ -142,7 +145,14 @@ public static class SettingsRevealAnimator
     {
         var animation = new DoubleAnimationUsingKeyFrames
         {
-            BeginTime = reveal.Delay > TimeSpan.Zero ? reveal.Delay : null,
+            // BeginTime 必须是 TimeSpan 而不是 null。写成 null（原实现在延迟为 0 时的取值）时，
+            // 动画同样会走完并触发 Completed，但随后清除动画会把这个元素回退到起始值 0，
+            // 于是页面第一个块——页面标题——永久不可见。以 TimeSpan.Zero 表达“立即开始”才是可靠的。
+            // BeginTime must be a TimeSpan, never null. Writing null (what the original code produced when the
+            // delay was zero) still runs the animation and still raises Completed, but clearing the animation
+            // afterwards rolls the element back to its start value of zero, which left the first block on every
+            // settings page -- the page title -- permanently invisible.
+            BeginTime = reveal.Delay,
             Duration = reveal.Duration,
             FillBehavior = FillBehavior.HoldEnd
         };
