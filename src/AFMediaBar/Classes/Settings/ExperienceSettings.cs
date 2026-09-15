@@ -3,7 +3,7 @@ using System.IO;
 
 namespace AFMediaBar.Classes.Settings;
 
-/// <summary>播放器表面的全局操作方式。 / Global interaction mode for player surfaces.</summary>
+/// <summary>旧播放器交互预设，仅保留用于读取早期设置。 / Legacy player-interaction preset retained only for reading older settings.</summary>
 public enum MediaInteractionMode
 {
     Buttons = 0,
@@ -11,7 +11,7 @@ public enum MediaInteractionMode
     Gestures = 2
 }
 
-/// <summary>播放器表面滚轮执行的媒体动作；旧音频值仅用于设置兼容读取。 / Media action for player-surface wheel input; legacy audio values remain only for settings compatibility.</summary>
+/// <summary>播放器表面滚轮可绑定的媒体或音频动作。 / Media or audio action bindable to player-surface wheel input.</summary>
 public enum WheelAction
 {
     PreviousNext = 0,
@@ -20,7 +20,7 @@ public enum WheelAction
     SwitchMediaSource = 3
 }
 
-/// <summary>组合滚轮使用的鼠标按键。 / Mouse button used by a chorded wheel gesture.</summary>
+/// <summary>旧组合滚轮鼠标按键，仅保留用于读取早期设置。 / Legacy mouse chord retained only for reading older settings.</summary>
 public enum MouseChordButton
 {
     Left = 0,
@@ -32,7 +32,23 @@ public enum TrayClickAction
 {
     None = 0,
     OpenSettings = 1,
-    OpenAudioControl = 2
+    OpenAudioControl = 2,
+    OpenContextMenu = 3
+}
+
+/// <summary>任务栏静置内容的点击结果。 / Result of clicking taskbar rest-layer content.</summary>
+public enum PlayerClickAction
+{
+    TogglePlayPause = 0,
+    ActivateSource = 1
+}
+
+/// <summary>普通滚轮映射切换到组合映射时使用的共享修饰键。 / Shared modifier that switches plain wheel input to its chord mapping.</summary>
+public enum InteractionModifier
+{
+    Shift = 0,
+    LeftMouseButton = 1,
+    RightMouseButton = 2
 }
 
 /// <summary>任务栏固定布局的信息密度。 / Information density for the fixed taskbar layout.</summary>
@@ -49,6 +65,14 @@ public enum TaskbarContentLayout
     CompactInline = 0,
     AdaptiveStack = 1,
     CenteredStack = 2
+}
+
+/// <summary>任务栏标题和歌手文字的对齐方式。 / Alignment of taskbar title and artist text.</summary>
+public enum TaskbarMediaTextAlignment
+{
+    Left = 0,
+    Center = 1,
+    Right = 2
 }
 
 /// <summary>任务栏媒体条主轴长度的决定方式。 / How the taskbar media bar resolves its primary-axis length.</summary>
@@ -231,6 +255,18 @@ public readonly record struct TaskbarFullPanelSettings(
             : Compact;
 }
 
+/// <summary>任务栏悬停层中各项控制的显隐设置。 / Visibility settings for controls in the taskbar hover layer.</summary>
+public readonly record struct TaskbarHoverControlsSettings(
+    bool PlayPauseVisible,
+    bool PreviousNextVisible,
+    bool OutputDeviceVisible,
+    bool AudioControlVisible,
+    bool ProgressVisible)
+{
+    /// <summary>手势优先的默认悬停控制组合。 / Default gesture-first hover-control combination.</summary>
+    public static TaskbarHoverControlsSettings Default { get; } = new(false, false, true, true, true);
+}
+
 /// <summary>任务栏三层体验设置。 / Settings for the three-layer taskbar experience.</summary>
 public readonly record struct TaskbarExperienceSettings(
     bool HoverLayerEnabled,
@@ -243,6 +279,18 @@ public readonly record struct TaskbarExperienceSettings(
 {
     /// <summary>任务栏组件之间的实际间距（DIP）。/ Actual gap between taskbar components in DIP.</summary>
     public double ComponentSpacingDip { get; init; } = 12;
+
+    /// <summary>标题和歌手文字的对齐方式。 / Alignment of title and artist text.</summary>
+    public TaskbarMediaTextAlignment MediaTextAlignment { get; init; } = TaskbarMediaTextAlignment.Left;
+
+    /// <summary>静置层是否显示播放态频谱。 / Whether the rest layer shows the playing spectrum.</summary>
+    public bool SpectrumVisible { get; init; } = true;
+
+    /// <summary>静置层是否显示性能组件。 / Whether the rest layer shows the performance component.</summary>
+    public bool PerformanceVisible { get; init; } = true;
+
+    /// <summary>悬停层中各项控制的显隐设置。 / Visibility settings for individual hover-layer controls.</summary>
+    public TaskbarHoverControlsSettings HoverControls { get; init; } = TaskbarHoverControlsSettings.Default;
 
     /// <summary>组件间距的持久化安全下限。/ Persistence-safe lower bound for component spacing.</summary>
     public const double MinimumComponentSpacingDip = 4;
@@ -272,6 +320,7 @@ public readonly record struct TaskbarExperienceSettings(
         {
             Density = Enum.IsDefined(Density) ? Density : defaults.Density,
             ContentLayout = Enum.IsDefined(ContentLayout) ? ContentLayout : defaults.ContentLayout,
+            MediaTextAlignment = Enum.IsDefined(MediaTextAlignment) ? MediaTextAlignment : defaults.MediaTextAlignment,
             FullPanel = FullPanel.Normalize(),
             LengthMode = Enum.IsDefined(LengthMode) ? LengthMode : defaults.LengthMode,
             FixedLengthDip = double.IsFinite(FixedLengthDip) && FixedLengthDip >= MinimumStoredFixedLengthDip
@@ -284,43 +333,47 @@ public readonly record struct TaskbarExperienceSettings(
     }
 }
 
-/// <summary>播放器显示模式共用的媒体交互设置。 / Media-interaction settings shared by player display modes.</summary>
+/// <summary>任务栏播放器和托盘图标共用的点击与滚轮绑定。 / Click and wheel bindings shared by the taskbar player and tray icon.</summary>
 public readonly record struct GlobalInteractionSettings(
-    MediaInteractionMode Mode,
+    PlayerClickAction ArtworkClickAction,
+    PlayerClickAction TextClickAction,
     WheelAction PrimaryWheelAction,
-    bool ChordWheelEnabled,
-    MouseChordButton ChordButton,
+    InteractionModifier Modifier,
     WheelAction ChordWheelAction,
     TrayClickAction TrayClickAction,
-    bool TrayUsesGlobalWheel)
+    TrayWheelBehavior TrayPrimaryWheelAction,
+    TrayWheelBehavior TrayChordWheelAction)
 {
     public static GlobalInteractionSettings Default { get; } = new(
-        MediaInteractionMode.Hybrid,
+        PlayerClickAction.TogglePlayPause,
+        PlayerClickAction.ActivateSource,
         WheelAction.PreviousNext,
-        false,
-        MouseChordButton.Left,
+        InteractionModifier.Shift,
         WheelAction.SwitchMediaSource,
         TrayClickAction.OpenAudioControl,
-        false);
+        TrayWheelBehavior.SwitchOutputDevice,
+        TrayWheelBehavior.AdjustVolume);
 
     public GlobalInteractionSettings Normalize()
     {
         var defaults = Default;
         return this with
         {
-            Mode = Enum.IsDefined(Mode) ? Mode : defaults.Mode,
-            PrimaryWheelAction = NormalizePlayerWheelAction(PrimaryWheelAction, defaults.PrimaryWheelAction),
-            ChordButton = Enum.IsDefined(ChordButton) ? ChordButton : defaults.ChordButton,
-            ChordWheelAction = NormalizePlayerWheelAction(ChordWheelAction, defaults.ChordWheelAction),
-            TrayClickAction = Enum.IsDefined(TrayClickAction) ? TrayClickAction : defaults.TrayClickAction,
-            // 兼容读取 schema 4 的旧字段；托盘滚轮已恢复为独立的 TrayWheelBehavior。
-            // Retain the schema-4 field for reading compatibility; tray wheel uses TrayWheelBehavior again.
-            TrayUsesGlobalWheel = false
+            ArtworkClickAction = Enum.IsDefined(ArtworkClickAction) ? ArtworkClickAction : defaults.ArtworkClickAction,
+            TextClickAction = Enum.IsDefined(TextClickAction) ? TextClickAction : defaults.TextClickAction,
+            PrimaryWheelAction = Enum.IsDefined(PrimaryWheelAction) ? PrimaryWheelAction : defaults.PrimaryWheelAction,
+            Modifier = Enum.IsDefined(Modifier) ? Modifier : defaults.Modifier,
+            ChordWheelAction = Enum.IsDefined(ChordWheelAction) ? ChordWheelAction : defaults.ChordWheelAction,
+            TrayClickAction = TrayClickAction is TrayClickAction.OpenAudioControl or TrayClickAction.OpenSettings or TrayClickAction.OpenContextMenu
+                ? TrayClickAction
+                : defaults.TrayClickAction,
+            TrayPrimaryWheelAction = NormalizeTrayWheelAction(TrayPrimaryWheelAction, defaults.TrayPrimaryWheelAction),
+            TrayChordWheelAction = NormalizeTrayWheelAction(TrayChordWheelAction, defaults.TrayChordWheelAction)
         };
     }
 
-    private static WheelAction NormalizePlayerWheelAction(WheelAction action, WheelAction fallback) =>
-        action is WheelAction.PreviousNext or WheelAction.SwitchMediaSource ? action : fallback;
+    private static TrayWheelBehavior NormalizeTrayWheelAction(TrayWheelBehavior action, TrayWheelBehavior fallback) =>
+        action is TrayWheelBehavior.AdjustVolume or TrayWheelBehavior.SwitchOutputDevice ? action : fallback;
 }
 
 /// <summary>一个显示模式的基础表面外观。 / Basic surface appearance for one display mode.</summary>

@@ -46,7 +46,8 @@ public static class TaskbarExperiencePolicy
         double maximumWidth,
         double? componentSpacingDip = null,
         bool performanceVisible = false,
-        double performanceWidth = 0)
+        double performanceWidth = 0,
+        TaskbarHoverControlsSettings? hoverControls = null)
     {
         var metrics = TaskbarDensityMetrics.From(density);
         var sectionGap = ResolveSectionGap(metrics, componentSpacingDip);
@@ -56,7 +57,16 @@ public static class TaskbarExperiencePolicy
             return ClampWidth(artworkOnlyWidth, maximumWidth);
 
         var hoverWidth = hoverLayerEnabled
-            ? CalculateHoverLayerWidth(transportVisible, progressVisible, density, componentSpacingDip)
+            ? CalculateHoverLayerWidth(
+                hoverControls ?? new TaskbarHoverControlsSettings(
+                    transportVisible,
+                    transportVisible,
+                    true,
+                    true,
+                    progressVisible),
+                progressVisible,
+                density,
+                componentSpacingDip)
             : 0;
         var middleWidth = Math.Max(Math.Max(0, measuredTextWidth), hoverWidth);
         var desired = Math.Max(0, artworkRight) +
@@ -122,6 +132,24 @@ public static class TaskbarExperiencePolicy
         var buttonCount = transportVisible ? 5 : 2;
         var buttons = buttonCount * metrics.ButtonSize + Math.Max(0, buttonCount - 1) * sectionGap;
         var progress = progressVisible ? sectionGap + metrics.ProgressWidth : 0;
+        return 11 + buttons + progress;
+    }
+
+    /// <summary>按独立控制显隐计算悬停层最小宽度。 / Calculates hover width from independently visible controls.</summary>
+    public static double CalculateHoverLayerWidth(
+        TaskbarHoverControlsSettings controls,
+        bool progressAvailable,
+        TaskbarInformationDensity density,
+        double? componentSpacingDip = null)
+    {
+        var metrics = TaskbarDensityMetrics.From(density);
+        var sectionGap = ResolveSectionGap(metrics, componentSpacingDip);
+        var buttonCount = (controls.PlayPauseVisible ? 1 : 0) +
+                          (controls.PreviousNextVisible ? 2 : 0) +
+                          (controls.OutputDeviceVisible ? 1 : 0) +
+                          (controls.AudioControlVisible ? 1 : 0);
+        var buttons = buttonCount == 0 ? 0 : buttonCount * metrics.ButtonSize + (buttonCount - 1) * sectionGap;
+        var progress = controls.ProgressVisible && progressAvailable ? (buttonCount > 0 ? sectionGap : 0) + metrics.ProgressWidth : 0;
         return 11 + buttons + progress;
     }
 

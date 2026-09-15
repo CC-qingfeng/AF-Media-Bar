@@ -37,6 +37,8 @@ public partial class AudioControlViewModel : ObservableObject, IDisposable
     private int _tooltipRefreshVersion;
     private string? _tooltipSourceId;
     private string? _tooltipSourceName;
+    private DateTime _suppressTrayLeftClickUntilUtc;
+    private DateTime _suppressTrayContextMenuUntilUtc;
     private bool _disposed;
 
     public ObservableCollection<AudioDeviceOption> OutputDevices { get; } = [];
@@ -46,20 +48,6 @@ public partial class AudioControlViewModel : ObservableObject, IDisposable
     [ObservableProperty] private string _spatialAudioText = "状态不可用";
     [ObservableProperty] private string _statusText = string.Empty;
     [ObservableProperty] private bool _isBusy;
-
-    public TrayWheelBehavior TrayWheelBehavior
-    {
-        get => SettingsManager.Current.TrayWheelBehavior;
-        set
-        {
-            if (SettingsManager.Current.TrayWheelBehavior == value)
-            {
-                return;
-            }
-
-            SettingsManager.SetTrayWheelBehavior(value);
-        }
-    }
 
     public ICommand RefreshCommand { get; }
     public ICommand OpenSpatialAudioSettingsCommand { get; }
@@ -96,7 +84,7 @@ public partial class AudioControlViewModel : ObservableObject, IDisposable
         _trayIconService.TooltipOpening += OnTrayTooltipOpening;
         _mouseInputMonitor.WheelChanged += OnTrayWheelChanged;
         _mediaSessionService.SnapshotChanged += OnMediaSnapshotChanged;
-        SettingsManager.TrayWheelBehaviorChanged += OnTrayWheelBehaviorChanged;
+        SettingsManager.InteractionSettingsChanged += OnInteractionSettingsChanged;
         _mouseInputMonitor.Start();
         QueueTrayTooltipRefresh();
     }
@@ -291,7 +279,17 @@ public partial class AudioControlViewModel : ObservableObject, IDisposable
 
     private void OnTrayWheelChanged(object? sender, TrayWheelEventArgs e)
     {
-        switch (SettingsManager.Current.TrayWheelBehavior)
+        var interaction = SettingsManager.Current.Interaction.Normalize();
+        if (interaction.Modifier == InteractionModifier.LeftMouseButton && e.IsLeftButtonDown)
+            _suppressTrayLeftClickUntilUtc = DateTime.UtcNow.AddMilliseconds(450);
+        if (interaction.Modifier == InteractionModifier.RightMouseButton && e.IsRightButtonDown)
+            _suppressTrayContextMenuUntilUtc = DateTime.UtcNow.AddMilliseconds(450);
+
+        switch (GlobalWheelGesturePolicy.ResolveTray(
+                    interaction,
+                    e.IsShiftDown,
+                    e.IsLeftButtonDown,
+                    e.IsRightButtonDown))
         {
             case TrayWheelBehavior.AdjustVolume:
                 _pendingTrayVolumeSteps += TrayWheelPolicy.GetVolumeSteps(e.Delta);
@@ -428,6 +426,9 @@ public partial class AudioControlViewModel : ObservableObject, IDisposable
 
     private void OnTrayLeftClicked(object? sender, EventArgs e)
     {
+        if (DateTime.UtcNow < _suppressTrayLeftClickUntilUtc)
+            return;
+
         switch (SettingsManager.Current.Interaction.TrayClickAction)
         {
             case TrayClickAction.OpenSettings:
@@ -436,9 +437,16 @@ public partial class AudioControlViewModel : ObservableObject, IDisposable
             case TrayClickAction.OpenAudioControl:
                 FlyoutToggleRequested?.Invoke(GetTrayBounds());
                 break;
+            case TrayClickAction.OpenContextMenu:
+                TrayContextMenuRequested?.Invoke(GetTrayBounds());
+                break;
         }
     }
-    private void OnTrayContextMenuRequested(object? sender, EventArgs e) => TrayContextMenuRequested?.Invoke(GetTrayBounds());
+    private void OnTrayContextMenuRequested(object? sender, EventArgs e)
+    {
+        if (DateTime.UtcNow >= _suppressTrayContextMenuUntilUtc)
+            TrayContextMenuRequested?.Invoke(GetTrayBounds());
+    }
 
     private void OnMediaSnapshotChanged(object? sender, MediaSnapshot snapshot)
     {
@@ -450,15 +458,14 @@ public partial class AudioControlViewModel : ObservableObject, IDisposable
 
         _tooltipSourceId = snapshot.SourceId;
         _tooltipSourceName = snapshot.SourceName;
-        if (SettingsManager.Current.TrayWheelBehavior == TrayWheelBehavior.AdjustVolume)
+        if (SettingsManager.Current.Interaction.TrayPrimaryWheelAction == TrayWheelBehavior.AdjustVolume)
             QueueTrayTooltipRefresh();
     }
 
     private void OnTrayTooltipOpening(object? sender, EventArgs e) => QueueTrayTooltipRefresh();
 
-    private void OnTrayWheelBehaviorChanged(object? sender, EventArgs e)
+    private void OnInteractionSettingsChanged(object? sender, EventArgs e)
     {
-        OnPropertyChanged(nameof(TrayWheelBehavior));
         QueueTrayTooltipRefresh();
     }
 
@@ -472,7 +479,7 @@ public partial class AudioControlViewModel : ObservableObject, IDisposable
     {
         try
         {
-            var behavior = SettingsManager.Current.TrayWheelBehavior;
+            var behavior = SettingsManager.Current.Interaction.Normalize().TrayPrimaryWheelAction;
             ApplicationVolumeSnapshot? application = null;
             AudioDeviceOption? device = null;
             if (behavior == TrayWheelBehavior.AdjustVolume)
@@ -527,7 +534,7 @@ public partial class AudioControlViewModel : ObservableObject, IDisposable
         _trayIconService.TooltipOpening -= OnTrayTooltipOpening;
         _mouseInputMonitor.WheelChanged -= OnTrayWheelChanged;
         _mediaSessionService.SnapshotChanged -= OnMediaSnapshotChanged;
-        SettingsManager.TrayWheelBehaviorChanged -= OnTrayWheelBehaviorChanged;
+        SettingsManager.InteractionSettingsChanged -= OnInteractionSettingsChanged;
         _mouseInputMonitor.Dispose();
         _deviceApplyVersion++;
         _pendingTrayDeviceSteps = 0;

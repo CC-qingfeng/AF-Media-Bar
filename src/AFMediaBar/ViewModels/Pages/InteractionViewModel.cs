@@ -2,26 +2,57 @@ using AFMediaBar.Classes.Settings;
 
 namespace AFMediaBar.ViewModels.Pages;
 
-/// <summary>共享点击、滚轮与托盘交互设置。 / Shared click, wheel, and tray interaction settings.</summary>
+/// <summary>任务栏静置内容与托盘图标的点击、滚轮结果绑定。 / Click and wheel-result bindings for taskbar rest content and the tray icon.</summary>
 public partial class InteractionViewModel : ObservableObject
 {
-    public MediaInteractionMode Mode { get => Current.Mode; set => Update(Current with { Mode = value }); }
-    public WheelAction PrimaryWheelAction { get => Current.PrimaryWheelAction; set => Update(Current with { PrimaryWheelAction = value }); }
-    public bool ChordWheelEnabled { get => Current.ChordWheelEnabled; set { Update(Current with { ChordWheelEnabled = value }); OnPropertyChanged(nameof(CanConfigureChord)); } }
-    public MouseChordButton ChordButton { get => Current.ChordButton; set => Update(Current with { ChordButton = value }); }
-    public WheelAction ChordWheelAction { get => Current.ChordWheelAction; set => Update(Current with { ChordWheelAction = value }); }
-    public TrayClickAction TrayClickAction { get => Current.TrayClickAction; set => Update(Current with { TrayClickAction = value }); }
-    public TrayWheelBehavior TrayWheelBehavior
+    public PlayerClickAction ArtworkClickAction
     {
-        get => SettingsManager.Current.TrayWheelBehavior;
-        set
-        {
-            SettingsManager.SetTrayWheelBehavior(value);
-            OnPropertyChanged();
-        }
+        get => Current.ArtworkClickAction;
+        set => Update(Current with { ArtworkClickAction = value });
     }
-    public bool CanConfigureChord => ChordWheelEnabled;
-    public bool TransportButtonsVisible => Mode != MediaInteractionMode.Gestures;
+
+    public PlayerClickAction TextClickAction
+    {
+        get => Current.TextClickAction;
+        set => Update(Current with { TextClickAction = value });
+    }
+
+    public WheelAction PrimaryWheelAction
+    {
+        get => Current.PrimaryWheelAction;
+        set => Update(Current with { PrimaryWheelAction = value });
+    }
+
+    public InteractionModifier Modifier
+    {
+        get => Current.Modifier;
+        set => Update(Current with { Modifier = value });
+    }
+
+    public WheelAction ChordWheelAction
+    {
+        get => Current.ChordWheelAction;
+        set => Update(Current with { ChordWheelAction = value });
+    }
+
+    public TrayClickAction TrayClickAction
+    {
+        get => Current.TrayClickAction;
+        set => Update(Current with { TrayClickAction = value });
+    }
+
+    public TrayWheelBehavior TrayPrimaryWheelAction
+    {
+        get => Current.TrayPrimaryWheelAction;
+        set => Update(Current with { TrayPrimaryWheelAction = value });
+    }
+
+    public TrayWheelBehavior TrayChordWheelAction
+    {
+        get => Current.TrayChordWheelAction;
+        set => Update(Current with { TrayChordWheelAction = value });
+    }
+
     private static GlobalInteractionSettings Current => SettingsManager.Current.Interaction;
 
     public InteractionViewModel() => SettingsManager.SettingsChanged += OnSettingsChanged;
@@ -36,15 +67,19 @@ public partial class InteractionViewModel : ObservableObject
 
     private void OnSettingsChanged(object? sender, SettingsChangedEventArgs e)
     {
-        if (e.ResetScope is SettingsResetScope.Interaction or SettingsResetScope.All) RaiseAll();
+        if (e.ResetScope is SettingsResetScope.Interaction or SettingsResetScope.All)
+            RaiseAll();
     }
 
     private void RaiseAll()
     {
-        OnPropertyChanged(nameof(Mode)); OnPropertyChanged(nameof(PrimaryWheelAction));
-        OnPropertyChanged(nameof(ChordWheelEnabled)); OnPropertyChanged(nameof(ChordButton));
-        OnPropertyChanged(nameof(ChordWheelAction)); OnPropertyChanged(nameof(TrayClickAction));
-        OnPropertyChanged(nameof(TrayWheelBehavior)); OnPropertyChanged(nameof(CanConfigureChord));
-        OnPropertyChanged(nameof(TransportButtonsVisible));
+        OnPropertyChanged(nameof(ArtworkClickAction));
+        OnPropertyChanged(nameof(TextClickAction));
+        OnPropertyChanged(nameof(PrimaryWheelAction));
+        OnPropertyChanged(nameof(Modifier));
+        OnPropertyChanged(nameof(ChordWheelAction));
+        OnPropertyChanged(nameof(TrayClickAction));
+        OnPropertyChanged(nameof(TrayPrimaryWheelAction));
+        OnPropertyChanged(nameof(TrayChordWheelAction));
     }
 }

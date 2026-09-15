@@ -52,6 +52,7 @@ public static partial class NativeMethods
     public const int NIN_KEYSELECT = 0x0401;
     public const int NIN_POPUPOPEN = 0x0406;
     public const int WH_MOUSE_LL = 14;
+    public const int VK_SHIFT = 0x10;
     internal const uint ErrorSuccess = 0;
     internal const uint PdhMoreData = 0x800007D2;
     internal const uint PdhFmtDouble = 0x00000200;
@@ -373,6 +374,10 @@ public static partial class NativeMethods
 
     [DllImport("user32.dll")]
     public static extern IntPtr CallNextHookEx(IntPtr hook, int code, IntPtr wParam, IntPtr lParam);
+
+    /// <summary>读取按键当前物理状态。/ Reads the current physical state of a key.</summary>
+    [DllImport("user32.dll")]
+    public static extern short GetAsyncKeyState(int virtualKey);
 
     /// <summary>读取当前线程消息。/ Reads a message from the current thread's message queue.</summary>
     [DllImport("user32.dll")]

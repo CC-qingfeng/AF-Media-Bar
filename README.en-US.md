@@ -84,7 +84,7 @@
 
 AF Media Bar is a portable media controller for Windows 10 and Windows 11. It reads Global System Media Transport Controls (GSMTC) sessions, displays artwork, title, and artist, and provides previous, play/pause, next, and source switching controls.
 
-The app runs in its own process. Its WPF player can be hosted as a taskbar child window or used as a freely movable dynamic-island window that retracts at a desktop edge. It does not modify or inject code into `explorer.exe`. Any player that publishes a GSMTC session can be discovered, including NetEase Cloud Music, QQ Music, Spotify, major browsers, VLC, PotPlayer, Windows Media Player, mpv, and foobar2000.
+The app runs in its own process and hosts its WPF player as a taskbar child window. Dynamic Island, Desktop Card, and Floating Orb currently appear only as unimplemented choices in Settings and do not change the runtime host. AF Media Bar does not modify or inject code into `explorer.exe`. Any player that publishes a GSMTC session can be discovered, including NetEase Cloud Music, QQ Music, Spotify, major browsers, VLC, PotPlayer, Windows Media Player, mpv, and foobar2000.
 
 ## Features
 
@@ -93,20 +93,20 @@ The app runs in its own process. Its WPF player can be hosted as a taskbar child
 | Category | Capabilities |
 | --- | --- |
 | Media | Previous, play/pause, next, repeat, and click-to-position or draggable progress; unavailable controls keep a transparent background and dim their icons; Full always retains explicit buttons |
-| Source interaction | Click the title or lyric to return to the media app; right-click the bar to switch sources |
+| Source interaction | Bind artwork and title/lyric clicks independently to play/pause or activate the media app; right-click the bar to switch sources |
 | Track-change notification | Optionally show the current track after it changes and starts playing, with six placements, 1–10 second duration, fullscreen suppression, and fixed- or foreground-display targeting |
 | Live lyrics | Lyrics exist only in taskbar rest and replace title plus artist/source when available; configure secondary content and alignment on the Lyrics page |
 | Taskbar behavior | Horizontal taskbars retain the original Rest appearance; Hover directly blurs/dims the original text while controls stay crisp, Full stays outside the taskbar, and a fixed target display can be selected independently |
-| Window modes | Settings present Taskbar, Dynamic Island, Floating Orb, and Desktop Card; Taskbar and the existing island are available, with the latter two deferred |
+| Window modes | Settings present Taskbar, Dynamic Island, Desktop Card, and Floating Orb; Taskbar is the only runtime mode, while the other three are labeled unimplemented and only change the page selection |
 | Appearance | Global fonts, foreground, theme, and window material; automatic text follows the actual taskbar color or wallpaper behind transparent surfaces and adds a subtle contrasting shadow on mixed backgrounds; the taskbar body is currently fixed transparent, while island surface style, opacity, and radius remain adjustable |
-| Light customization | Toggle Hover/Full and choose density, content layout, content-following or fixed length, and interaction; fixed length is bounded by the live Hover minimum and taskbar range, with marquees for long title, artist, and lyric text; Full retains its presets and four visibility groups |
+| Light customization | Rest is always enabled and exposes density, layout, title/artist alignment, spectrum, and metrics visibility; Hover and Full can be toggled with independent control/content choices; fixed length remains bounded by the live Hover minimum and taskbar range |
 | Information density | Minimal, Balanced, and Information presets consistently change buttons, seek width, and artwork-text-spectrum gaps; only the middle text region receives a Hover minimum, and no empty middle region is reserved while disconnected |
 | Auto-hide | Hide when every media session is stopped; collapse containers use an anchor container and shared edge, while four-way collapse still requires real-Windows acceptance |
-| Tray audio controls | Choose the tray left-click action and independently use the wheel for output devices, current-media volume, or disable it; player gesture mappings are not consulted |
+| Tray audio controls | Bind tray left-click to audio controls, Settings, or the context menu; bind plain and modified wheel gestures to output devices or current-media volume using the same Shift/left/right modifier as the player |
 | Audio devices | Switch devices in a stable ordered list; both the audio flyout and Full wheel-preview and apply after scrolling stops |
 | App volume | Aggregate application icons and audio sessions across active output endpoints; the audio flyout, Full, and tray wheel adjust the selected media app in 2% steps |
-| Visualizer | Nine-band spectrum from WASAPI loopback capture, shown only while a connected media source is playing; disconnected state keeps only the music-note placeholder |
-| Metrics | The Full panel auto-sizes its height to visible content and can show system memory, CPU, GPU, and AF Media Bar process memory; hidden metrics stop sampling, and spectrum remains excluded by default |
+| Visualizer | Configurable WASAPI loopback spectrum with 1–9 bands, 5–30 Hz refresh, and adjustable sensitivity; Rest visibility is controlled under Display Modes |
+| Metrics | Rest can rotate selected system/process metrics and Full can show all four; disabling the Rest component releases its sampling lease when Full has no consumer |
 | Low-performance fallback | When WPF reports software rendering or a low-performance path, decorative continuous motion, marquees, spectrum easing, blur, and backdrop effects are disabled automatically |
 
 </div>
@@ -120,7 +120,7 @@ flowchart LR
     A[Media apps] -->|GSMTC sessions| B[AF Media Bar]
     C[Windows Core Audio] -->|Devices, volume, loopback| B
     D[Windows 10/11 taskbar] -->|Position and auto-hide state| B
-    B --> E[WPF taskbar child or dynamic-island window]
+    B --> E[WPF taskbar child window]
 ```
 
 </div>
@@ -150,21 +150,21 @@ AF Media Bar is not commercially code-signed, so Windows SmartScreen may show an
 | Action | Result |
 | --- | --- |
 | Hover over the bar | With media connected, artwork, text, and the playing spectrum use independent legacy hover feedback; opening controls directly blurs/dims the original text while buttons remain crisp; when Hover is disabled, a text-region pull handle still opens Full |
-| Click artwork | Play/pause in Hybrid or Gestures; Buttons uses only visible controls |
-| Click title or lyric | Return to the media app |
+| Click artwork | Play/pause by default, or bind it to activate the current media app |
+| Click title or lyric | Activate the current media app by default, or bind it to play/pause |
 | Open the Lyrics page | Toggle live lyrics, secondary content, and alignment |
-| Scroll up/down over the media area | Previous/next by default, or cycle media sources; player-surface scrolling does not control output devices or application volume |
+| Scroll up/down over the media area | Bind plain and modified wheel gestures to previous/next, media-source cycling, output-device cycling, or current-media volume; defaults are previous/next and Shift + source cycling |
 | Right-click the bar and choose “Switch media source” | Switch between available media sessions |
-| Enable Track-change notification under Display Modes | Show the current track only after an observable track change begins playing; configure placement, duration, fullscreen policy, and fixed/foreground display targeting |
+| Enable Track-change notification under Extra Features | Show the current track only after an observable track change begins playing; configure placement, duration, fullscreen policy, and fixed/foreground display targeting |
 | Choose the taskbar target display under Display Modes | Close an open Full panel and rebuild the taskbar host through its safe reload path; a disconnected target temporarily falls back to the primary display without discarding the preference |
 | Disable content-length following under Display Modes | Choose a fixed value between the live Hover minimum and available taskbar length; overflowing title, artist, and lyric text scrolls within its clipped region |
 | Click the AF Media Bar tray icon | Open output-device, spatial-audio status, and application-volume controls |
 | Scroll over the audio flyout or Full output-device row | Preview immediately and switch about 1.2 seconds after scrolling stops; Full gives long device names more room and exposes the complete name as a tooltip |
 | Hover over the AF Media Bar tray icon | Show the default wheel action and its current value in the native Windows tooltip |
-| Scroll over the tray icon | Independently switch output devices or adjust current-media volume in 2% steps; device previews update the native tooltip immediately and apply after about 1.2 seconds of inactivity |
+| Scroll over the tray icon | Plain wheel switches output devices by default; Shift + wheel adjusts current-media volume in 2% steps; device previews update the native tooltip immediately and apply after about 1.2 seconds of inactivity |
 | Click the spatial-audio row | Show the current spatial format and open System > Sound > All sound devices; third-party apps cannot reliably switch Dolby/DTS modes for the system |
 | Drag an empty area of the strip | Move the bar and does not drag while locked |
-| Switch to dynamic-island mode | Drag the player anywhere in the desktop work area; drag it to an edge to enable paused retraction, while playback keeps it expanded |
+| Select Dynamic Island, Desktop Card, or Floating Orb | Only change the highlighted settings-page choice and show an unimplemented notice; the runtime remains in Taskbar mode |
 | Place an edge-collapse container on a desktop edge | Reveal its content when the pointer enters the trigger region; hide the content after leaving |
 | Right-click the bar or tray icon | Open detailed settings, media actions, or the exit menu; left-click outside to close it |
 

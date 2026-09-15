@@ -102,7 +102,7 @@ public sealed class AppSettings : INotifyPropertyChanged
         if (!Enum.IsDefined(result.TrayWheelBehavior)) result.TrayWheelBehavior = defaults.TrayWheelBehavior;
         if (!Enum.IsDefined(result.LyricsSecondaryLineMode)) result.LyricsSecondaryLineMode = defaults.LyricsSecondaryLineMode;
         if (!Enum.IsDefined(result.Position)) result.Position = defaults.Position;
-        if (!Enum.IsDefined(result.WindowMode)) result.WindowMode = defaults.WindowMode;
+        result.WindowMode = WindowMode.Taskbar;
         if (!Enum.IsDefined(result.LayoutOrientationMode)) result.LayoutOrientationMode = defaults.LayoutOrientationMode;
         if (!Enum.IsDefined(result.DynamicIslandBackgroundMode)) result.DynamicIslandBackgroundMode = defaults.DynamicIslandBackgroundMode;
         if (!Enum.IsDefined(result.DynamicIslandEdge)) result.DynamicIslandEdge = defaults.DynamicIslandEdge;
@@ -262,9 +262,7 @@ public static class SettingsManager
     public static void ResetInteraction()
     {
         var next = Current.Clone();
-        var defaults = new AppSettings();
         next.Interaction = GlobalInteractionSettings.Default;
-        next.TrayWheelBehavior = defaults.TrayWheelBehavior;
         Replace(next, SettingsResetScope.Interaction);
     }
     public static void ResetLyrics()

@@ -11,7 +11,7 @@ namespace AFMediaBar.Classes.Services;
 /// <summary>负责用户设置 JSON 的加载、恢复、原子保存和防抖。 / Owns loading, recovery, atomic saving and debouncing of user settings JSON.</summary>
 public sealed class SettingsPersistenceService : IDisposable
 {
-    public const int CurrentSchemaVersion = 6;
+    public const int CurrentSchemaVersion = 7;
     private readonly string _directoryPath;
     private readonly string _settingsPath;
     private readonly string _backupPath;
@@ -201,6 +201,36 @@ public sealed class SettingsPersistenceService : IDisposable
             result.SpectrumComponent = SpectrumComponentSettings.Default;
             result.PerformanceComponent = PerformanceComponentSettings.Default;
         }
+        if (envelope.SchemaVersion <= 6)
+        {
+            // Schema 7 replaces interaction presets with explicit bindings and makes the
+            // redesigned display-mode picker taskbar-only at runtime.
+            var legacyExperience = result.TaskbarExperience.Normalize();
+            var legacyLayoutNode = node["settings"]?["taskbarExperience"]?["contentLayout"];
+            var legacyLayoutText = legacyLayoutNode?.ToJsonString().Trim('"');
+            var legacyCenteredLayout = legacyExperience.ContentLayout == TaskbarContentLayout.CenteredStack ||
+                                       string.Equals(legacyLayoutText, nameof(TaskbarContentLayout.CenteredStack), StringComparison.OrdinalIgnoreCase) ||
+                                       legacyLayoutText == ((int)TaskbarContentLayout.CenteredStack).ToString() ||
+                                       legacyLayoutNode is JsonValue layoutValue &&
+                                       ((layoutValue.TryGetValue<string>(out var layoutName) &&
+                                         string.Equals(layoutName, nameof(TaskbarContentLayout.CenteredStack), StringComparison.OrdinalIgnoreCase)) ||
+                                        (layoutValue.TryGetValue<int>(out var layoutNumber) &&
+                                         layoutNumber == (int)TaskbarContentLayout.CenteredStack));
+            result.WindowMode = WindowMode.Taskbar;
+            result.Interaction = GlobalInteractionSettings.Default;
+            result.TaskbarExperience = legacyExperience with
+            {
+                ContentLayout = legacyCenteredLayout
+                    ? TaskbarContentLayout.AdaptiveStack
+                    : legacyExperience.ContentLayout,
+                MediaTextAlignment = legacyCenteredLayout
+                    ? TaskbarMediaTextAlignment.Center
+                    : TaskbarMediaTextAlignment.Left,
+                SpectrumVisible = true,
+                PerformanceVisible = true,
+                HoverControls = TaskbarHoverControlsSettings.Default
+            };
+        }
         return result.Normalize();
     }
 
@@ -289,9 +319,12 @@ public sealed class SettingsPersistenceService : IDisposable
                 typeof(TEnum) == typeof(MediaInteractionMode) ? MediaInteractionMode.Hybrid :
                 typeof(TEnum) == typeof(WheelAction) ? WheelAction.PreviousNext :
                 typeof(TEnum) == typeof(MouseChordButton) ? MouseChordButton.Left :
+                typeof(TEnum) == typeof(PlayerClickAction) ? PlayerClickAction.TogglePlayPause :
+                typeof(TEnum) == typeof(InteractionModifier) ? InteractionModifier.Shift :
                 typeof(TEnum) == typeof(TrayClickAction) ? TrayClickAction.OpenAudioControl :
                 typeof(TEnum) == typeof(TaskbarInformationDensity) ? TaskbarInformationDensity.Balanced :
                 typeof(TEnum) == typeof(TaskbarContentLayout) ? TaskbarContentLayout.AdaptiveStack :
+                typeof(TEnum) == typeof(TaskbarMediaTextAlignment) ? TaskbarMediaTextAlignment.Left :
                 typeof(TEnum) == typeof(TaskbarLengthMode) ? TaskbarLengthMode.FollowContent :
                 typeof(TEnum) == typeof(PlayerSurfaceStyle) ? PlayerSurfaceStyle.Automatic :
                 typeof(TEnum) == typeof(LyricsTextAlignment) ? LyricsTextAlignment.Center : default(TEnum);

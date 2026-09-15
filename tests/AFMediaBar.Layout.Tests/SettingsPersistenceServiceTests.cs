@@ -60,8 +60,22 @@ public sealed class SettingsPersistenceServiceTests
                 TaskbarContentLayout.CenteredStack,
                 new TaskbarFullPanelSettings(true, false, true, false),
                 TaskbarLengthMode.Fixed,
-                444),
-            Interaction = new GlobalInteractionSettings(MediaInteractionMode.Gestures, WheelAction.SwitchMediaSource, true, MouseChordButton.Right, WheelAction.PreviousNext, TrayClickAction.OpenSettings, false),
+                444)
+            {
+                MediaTextAlignment = TaskbarMediaTextAlignment.Right,
+                SpectrumVisible = false,
+                PerformanceVisible = false,
+                HoverControls = new TaskbarHoverControlsSettings(true, true, false, false, false)
+            },
+            Interaction = new GlobalInteractionSettings(
+                PlayerClickAction.ActivateSource,
+                PlayerClickAction.TogglePlayPause,
+                WheelAction.SwitchMediaSource,
+                InteractionModifier.RightMouseButton,
+                WheelAction.PreviousNext,
+                TrayClickAction.OpenSettings,
+                TrayWheelBehavior.AdjustVolume,
+                TrayWheelBehavior.SwitchOutputDevice),
             TaskbarSurface = new ModeSurfaceSettings(PlayerSurfaceStyle.ThemeTint, 72, 12),
             LyricsTextAlignment = LyricsTextAlignment.Right,
             TrackChangeNotification = new TrackChangeNotificationSettings(
@@ -85,17 +99,20 @@ public sealed class SettingsPersistenceServiceTests
 
         Assert.AreEqual(TrayWheelBehavior.Disabled, SettingsManager.Current.TrayWheelBehavior);
         Assert.AreEqual(LyricsSecondaryLineMode.Translation, SettingsManager.Current.LyricsSecondaryLineMode);
-        Assert.AreEqual(WindowMode.DynamicIsland, SettingsManager.Current.WindowMode);
+        Assert.AreEqual(WindowMode.Taskbar, SettingsManager.Current.WindowMode);
         Assert.AreEqual(DynamicIslandEdge.Right, SettingsManager.Current.DynamicIslandEdge);
         Assert.AreEqual(700, SettingsManager.Current.Appearance.FontWeight);
         Assert.AreEqual(120, SettingsManager.Current.DynamicIslandLeft);
-        Assert.AreEqual(MediaInteractionMode.Gestures, SettingsManager.Current.Interaction.Mode);
+        Assert.AreEqual(PlayerClickAction.ActivateSource, SettingsManager.Current.Interaction.ArtworkClickAction);
         Assert.AreEqual(WheelAction.SwitchMediaSource, SettingsManager.Current.Interaction.PrimaryWheelAction);
-        Assert.AreEqual(MouseChordButton.Right, SettingsManager.Current.Interaction.ChordButton);
+        Assert.AreEqual(InteractionModifier.RightMouseButton, SettingsManager.Current.Interaction.Modifier);
         Assert.AreEqual(TaskbarInformationDensity.Information, SettingsManager.Current.TaskbarExperience.Density);
         Assert.AreEqual(new TaskbarFullPanelSettings(true, false, true, false), SettingsManager.Current.TaskbarExperience.FullPanel);
         Assert.AreEqual(TaskbarLengthMode.Fixed, SettingsManager.Current.TaskbarExperience.LengthMode);
         Assert.AreEqual(444, SettingsManager.Current.TaskbarExperience.FixedLengthDip);
+        Assert.AreEqual(TaskbarMediaTextAlignment.Right, SettingsManager.Current.TaskbarExperience.MediaTextAlignment);
+        Assert.IsFalse(SettingsManager.Current.TaskbarExperience.SpectrumVisible);
+        Assert.IsFalse(SettingsManager.Current.TaskbarExperience.PerformanceVisible);
         Assert.AreEqual(72, SettingsManager.Current.TaskbarSurface.BackgroundOpacityPercent);
         Assert.AreEqual(LyricsTextAlignment.Right, SettingsManager.Current.LyricsTextAlignment);
         Assert.AreEqual(@"\\.\DISPLAY2", SettingsManager.Current.TaskbarTargetMonitorDeviceId);
@@ -115,7 +132,7 @@ public sealed class SettingsPersistenceServiceTests
         Assert.AreEqual(1800, SettingsManager.Current.PerformanceComponent.RefreshIntervalMilliseconds);
         Assert.IsTrue(SettingsManager.Current.PerformanceComponent.OpenTaskManagerOnClick);
         var persisted = File.ReadAllText(reader.SettingsPath);
-        StringAssert.Contains(persisted, "\"schemaVersion\": 6");
+        StringAssert.Contains(persisted, "\"schemaVersion\": 7");
         StringAssert.Contains(persisted, "\"Disabled\"");
     }
 
@@ -164,7 +181,7 @@ public sealed class SettingsPersistenceServiceTests
 
         Assert.IsTrue(SettingsManager.Current.LyricsEnabled);
         Assert.IsTrue(Directory.GetFiles(_directory, "settings.json.unsupported-*").Length == 1);
-        StringAssert.Contains(File.ReadAllText(main), "\"schemaVersion\": 6");
+        StringAssert.Contains(File.ReadAllText(main), "\"schemaVersion\": 7");
     }
 
     [TestMethod]
@@ -232,7 +249,7 @@ public sealed class SettingsPersistenceServiceTests
         Assert.AreEqual("DISPLAY2", SettingsManager.Current.TrackChangeNotification.FixedMonitorDeviceId);
         Assert.AreEqual(TaskbarLengthMode.FollowContent, SettingsManager.Current.TaskbarExperience.LengthMode);
         Assert.AreEqual(TaskbarExperienceSettings.Default.FixedLengthDip, SettingsManager.Current.TaskbarExperience.FixedLengthDip);
-        StringAssert.Contains(File.ReadAllText(service.SettingsPath), "\"schemaVersion\": 6");
+        StringAssert.Contains(File.ReadAllText(service.SettingsPath), "\"schemaVersion\": 7");
     }
 
     [TestMethod]
@@ -272,6 +289,42 @@ public sealed class SettingsPersistenceServiceTests
             PerformanceComponentSettings.Default.Metrics!.ToArray(),
             SettingsManager.Current.PerformanceComponent.Metrics!.ToArray());
         Assert.AreEqual(2500, SettingsManager.Current.PerformanceComponent.RefreshIntervalMilliseconds);
+    }
+
+    [TestMethod]
+    public void Schema6MigratesToTaskbarBindingsAndSeparatesMetadataAlignment()
+    {
+        Directory.CreateDirectory(_directory);
+        File.WriteAllText(
+            Path.Combine(_directory, "settings.json"),
+            """
+            {"schemaVersion":6,"settings":{"windowMode":"DynamicIsland","taskbarExperience":{"hoverLayerEnabled":true,"fullLayerEnabled":true,"density":"Balanced","contentLayout":"CenteredStack","fullPanel":{"mediaInfoVisible":true,"mediaControlsVisible":true}}}}
+            """);
+
+        using var service = new SettingsPersistenceService(_directory);
+        service.Initialize();
+
+        Assert.AreEqual(WindowMode.Taskbar, SettingsManager.Current.WindowMode);
+        Assert.AreEqual(GlobalInteractionSettings.Default, SettingsManager.Current.Interaction);
+        Assert.AreEqual(TaskbarContentLayout.AdaptiveStack, SettingsManager.Current.TaskbarExperience.ContentLayout);
+        Assert.AreEqual(TaskbarMediaTextAlignment.Center, SettingsManager.Current.TaskbarExperience.MediaTextAlignment);
+        Assert.AreEqual(TaskbarHoverControlsSettings.Default, SettingsManager.Current.TaskbarExperience.HoverControls);
+    }
+
+    [TestMethod]
+    public void UnimplementedDisplayModeSelectionDoesNotChangeRuntimeModeOrTaskbarSettings()
+    {
+        SettingsManager.Replace(new AppSettings());
+        var viewModel = new DisplayModesViewModel(new FakeDisplayMonitorService(), new TaskbarLengthConstraintsService());
+        var original = SettingsManager.Current.TaskbarExperience;
+
+        viewModel.SwitchToFloatingBallModeCommand.Execute(null);
+        viewModel.HoverLayerEnabled = false;
+
+        Assert.IsTrue(viewModel.IsFloatingBallMode);
+        Assert.IsTrue(viewModel.IsUnimplementedMode);
+        Assert.AreEqual(WindowMode.Taskbar, SettingsManager.Current.WindowMode);
+        Assert.AreEqual(original, SettingsManager.Current.TaskbarExperience);
     }
 
     [TestMethod]
@@ -362,7 +415,7 @@ public sealed class SettingsPersistenceServiceTests
         SettingsManager.ResetGeneral();
         Assert.IsFalse(SettingsManager.Current.LyricsEnabled);
         Assert.AreEqual(700, SettingsManager.Current.Appearance.FontWeight);
-        Assert.AreEqual(WindowMode.DynamicIsland, SettingsManager.Current.WindowMode);
+        Assert.AreEqual(WindowMode.Taskbar, SettingsManager.Current.WindowMode);
         SettingsManager.ResetLayout();
         Assert.AreEqual(WindowMode.Taskbar, SettingsManager.Current.WindowMode);
         Assert.AreEqual(700, SettingsManager.Current.Appearance.FontWeight);
@@ -376,7 +429,7 @@ public sealed class SettingsPersistenceServiceTests
         SettingsManager.Current.TrayWheelBehavior = TrayWheelBehavior.Disabled;
         SettingsManager.ResetInteraction();
         Assert.AreEqual(GlobalInteractionSettings.Default, SettingsManager.Current.Interaction);
-        Assert.AreEqual(TrayWheelBehavior.SwitchOutputDevice, SettingsManager.Current.TrayWheelBehavior);
+        Assert.AreEqual(TrayWheelBehavior.Disabled, SettingsManager.Current.TrayWheelBehavior);
 
         SettingsManager.Current.TaskbarExperience = TaskbarExperienceSettings.Default with
         {

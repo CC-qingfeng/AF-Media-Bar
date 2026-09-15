@@ -7,7 +7,7 @@ using AFMediaBar.Classes.Interop;
 namespace AFMediaBar.Classes.Services;
 
 /// <summary>托盘滚轮事件参数。/ Tray-wheel event arguments.</summary>
-public sealed record TrayWheelEventArgs(int Delta, bool IsLeftButtonDown, bool IsRightButtonDown);
+public sealed record TrayWheelEventArgs(int Delta, bool IsShiftDown, bool IsLeftButtonDown, bool IsRightButtonDown);
 
 /// <summary>全局左键事件的屏幕坐标。/ Screen coordinates for a global left-button event.</summary>
 public sealed record NativeMouseButtonEventArgs(int ScreenX, int ScreenY);
@@ -138,6 +138,7 @@ public sealed class NativeMouseInputMonitor : IDisposable
                     var delta = unchecked((short)(data.MouseData >> 16));
                     var screenX = data.Point.X;
                     var screenY = data.Point.Y;
+                    var isShiftDown = (NativeMethods.GetAsyncKeyState(NativeMethods.VK_SHIFT) & 0x8000) != 0;
                     var isLeftButtonDown = _isLeftButtonDown;
                     var isRightButtonDown = _isRightButtonDown;
                     Post(() =>
@@ -146,6 +147,7 @@ public sealed class NativeMouseInputMonitor : IDisposable
                         {
                             WheelChanged?.Invoke(this, new TrayWheelEventArgs(
                                 delta,
+                                isShiftDown,
                                 isLeftButtonDown,
                                 isRightButtonDown));
                         }

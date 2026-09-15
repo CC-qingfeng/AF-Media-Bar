@@ -165,6 +165,7 @@ public partial class TaskbarWindow : Window
         _spectrumTimer.Tick += (_, _) =>
         {
             if (!_isClosing && _appliedOrientation == LayoutOrientation.Horizontal &&
+                SettingsManager.Current.TaskbarExperience.SpectrumVisible &&
                 MediaControl.IsPlaying && _audioMonitorService.GetSpectrum(_spectrumBands))
             {
                 _spectrumActive = true;
@@ -753,7 +754,7 @@ public partial class TaskbarWindow : Window
 
     public void ApplyExperienceSettings()
     {
-        MediaControl.ApplyTaskbarExperienceSettings();
+        ApplyExtraFeaturesSettings();
         MediaControl.UpdateSongInfo(_lastSnapshot);
         Dispatcher.BeginInvoke(UpdatePosition, DispatcherPriority.Background);
     }
@@ -851,7 +852,7 @@ public partial class TaskbarWindow : Window
             _suppressContextMenuUntilUtc = DateTime.UtcNow.AddMilliseconds(450);
             PlayerMenu.IsOpen = false;
         }
-        await _interactionRouter.ExecuteWheelAsync(e.Delta, e.IsLeftButtonDown, e.IsRightButtonDown);
+        await _interactionRouter.ExecuteWheelAsync(e.Delta, e.IsShiftDown, e.IsLeftButtonDown, e.IsRightButtonDown);
     }
 
     private async void MediaControl_OutputDeviceMenuRequested(object? sender, EventArgs e)
@@ -1002,7 +1003,8 @@ public partial class TaskbarWindow : Window
         MediaControl.ApplyQuickLaunchEntries(SettingsManager.Current.QuickLaunch.Entries ?? []);
         MediaControl.ApplyTaskbarExperienceSettings();
         _metricsSubscription?.Dispose();
-        _metricsSubscription = !_isClosing && !_isEnvironmentSuspended
+        _metricsSubscription = !_isClosing && !_isEnvironmentSuspended &&
+                               SettingsManager.Current.TaskbarExperience.PerformanceVisible
             ? _metricsMonitor.Subscribe(
                 performance.Metrics!,
                 TimeSpan.FromMilliseconds(performance.RefreshIntervalMilliseconds),

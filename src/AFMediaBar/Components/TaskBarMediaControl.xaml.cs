@@ -23,10 +23,12 @@ namespace AFMediaBar.Components
     /// <summary>播放器表面滚轮及鼠标按键状态。 / Wheel delta and mouse-button state on a player surface.</summary>
     public sealed class PlayerSurfaceWheelEventArgs(
         int delta,
+        bool isShiftDown,
         bool isLeftButtonDown,
         bool isRightButtonDown) : EventArgs
     {
         public int Delta { get; } = delta;
+        public bool IsShiftDown { get; } = isShiftDown;
         public bool IsLeftButtonDown { get; } = isLeftButtonDown;
         public bool IsRightButtonDown { get; } = isRightButtonDown;
     }
@@ -122,7 +124,7 @@ namespace AFMediaBar.Components
         private bool _isSeeking;
         private PlayerForegroundDecision? _adaptiveForegroundDecision;
         private IReadOnlyList<QuickLaunchEntry> _quickLaunchEntries = Array.Empty<QuickLaunchEntry>();
-        private DateTime _suppressArtworkClickUntilUtc;
+        private DateTime _suppressSurfaceClickUntilUtc;
         private const double TaskbarSpectrumWidth = 38;
         private const double TaskbarPerformanceWidth = 74;
         private const double TaskbarTrailingMargin = 4;
@@ -359,12 +361,11 @@ namespace AFMediaBar.Components
         {
             var isHorizontalTaskbar = _currentMode == WindowMode.Taskbar && !_isVertical;
             var experience = SettingsManager.Current.TaskbarExperience.Normalize();
-            var interaction = SettingsManager.Current.Interaction.Normalize();
             var metrics = TaskbarDensityMetrics.From(experience.Density);
-            var transportVisible = interaction.Mode != MediaInteractionMode.Gestures;
             var progressVisible = _snapshot.Duration > 0;
-            var spectrumVisible = isHorizontalTaskbar && TaskbarExperiencePolicy.ShouldShowSpectrum(_snapshot);
-            TaskbarPerformanceSurface.Visibility = isHorizontalTaskbar ? Visibility.Visible : Visibility.Collapsed;
+            var controls = experience.HoverControls;
+            var spectrumVisible = isHorizontalTaskbar && experience.SpectrumVisible && TaskbarExperiencePolicy.ShouldShowSpectrum(_snapshot);
+            TaskbarPerformanceSurface.Visibility = isHorizontalTaskbar && experience.PerformanceVisible ? Visibility.Visible : Visibility.Collapsed;
 
             TaskbarSpectrumHoverSurface.Visibility = spectrumVisible ? Visibility.Visible : Visibility.Collapsed;
             TaskbarSpectrumHoverSurface.IsHitTestVisible = spectrumVisible;
@@ -376,10 +377,15 @@ namespace AFMediaBar.Components
             TaskbarRestProgress.Visibility = isHorizontalTaskbar && progressVisible
                 ? Visibility.Visible
                 : Visibility.Collapsed;
-            TaskbarTransportButtons.Visibility = transportVisible
+            TaskbarPreviousButton.Visibility = controls.PreviousNextVisible ? Visibility.Visible : Visibility.Collapsed;
+            TaskbarNextButton.Visibility = controls.PreviousNextVisible ? Visibility.Visible : Visibility.Collapsed;
+            TaskbarPlayPauseButton.Visibility = controls.PlayPauseVisible ? Visibility.Visible : Visibility.Collapsed;
+            TaskbarTransportButtons.Visibility = controls.PreviousNextVisible || controls.PlayPauseVisible
                 ? Visibility.Visible
                 : Visibility.Collapsed;
-            TaskbarHoverProgress.Visibility = progressVisible
+            TaskbarDeviceButton.Visibility = controls.OutputDeviceVisible ? Visibility.Visible : Visibility.Collapsed;
+            TaskbarVolumeButton.Visibility = controls.AudioControlVisible ? Visibility.Visible : Visibility.Collapsed;
+            TaskbarHoverProgress.Visibility = controls.ProgressVisible && progressVisible
                 ? Visibility.Visible
                 : Visibility.Collapsed;
             TaskbarHoverProgress.IsEnabled = _snapshot.CanSeek;
@@ -417,9 +423,12 @@ namespace AFMediaBar.Components
             };
             SongMetadataPanel.Orientation = Orientation.Vertical;
             SongArtistContainer.Margin = new Thickness(0, -1.5, 0, 0);
-            var metadataAlignment = experience.ContentLayout == TaskbarContentLayout.CenteredStack
-                ? TextAlignment.Center
-                : TextAlignment.Left;
+            var metadataAlignment = experience.MediaTextAlignment switch
+            {
+                TaskbarMediaTextAlignment.Center => TextAlignment.Center,
+                TaskbarMediaTextAlignment.Right => TextAlignment.Right,
+                _ => TextAlignment.Left
+            };
             SongTitle.TextAlignment = metadataAlignment;
             SongArtist.TextAlignment = metadataAlignment;
             SongLyrics.TextAlignment = lyricsAlignment;
@@ -471,13 +480,14 @@ namespace AFMediaBar.Components
 
             var metrics = TaskbarDensityMetrics.From(SettingsManager.Current.TaskbarExperience.Density);
             var artworkRight = GetTaskbarArtworkRight();
-            var spectrumVisible = TaskbarExperiencePolicy.ShouldShowSpectrum(_snapshot);
+            var experience = SettingsManager.Current.TaskbarExperience.Normalize();
+            var spectrumVisible = experience.SpectrumVisible && TaskbarExperiencePolicy.ShouldShowSpectrum(_snapshot);
             var sectionGap = Math.Clamp(SettingsManager.Current.TaskbarExperience.ComponentSpacingDip,
                 TaskbarExperienceSettings.MinimumComponentSpacingDip,
                 TaskbarExperienceSettings.MaximumComponentSpacingDip);
             var textLeft = artworkRight + (_isConnected ? sectionGap : 0);
             var reservedRight = (spectrumVisible ? sectionGap + TaskbarSpectrumWidth : 0) +
-                                sectionGap + TaskbarPerformanceWidth +
+                                (experience.PerformanceVisible ? sectionGap + TaskbarPerformanceWidth : 0) +
                                 TaskbarTrailingMargin;
             var textWidth = _isConnected
                 ? Math.Max(0, primaryLength - textLeft - reservedRight)
@@ -503,7 +513,7 @@ namespace AFMediaBar.Components
             TaskbarSpectrumHoverSurface.Width = TaskbarSpectrumWidth;
             TaskbarPerformanceSurface.Margin = new Thickness(0, 0, TaskbarTrailingMargin, 0);
             TaskbarSpectrumHoverSurface.Margin = new Thickness(0, 0,
-                TaskbarTrailingMargin + TaskbarPerformanceWidth + sectionGap, 0);
+                TaskbarTrailingMargin + (experience.PerformanceVisible ? TaskbarPerformanceWidth + sectionGap : 0), 0);
 
             HoverRevealHost.Margin = new Thickness(textLeft, 1, 0, 1);
             HoverRevealHost.Height = Math.Max(0, MainBorder.Height - 2);
@@ -866,7 +876,7 @@ namespace AFMediaBar.Components
             // Spectrum tuning and metric selection never change their reserved widths. Keeping
             // those values (or play/pause) in the fingerprint causes redundant host size
             // animations and visibly nudges title/artist/lyrics while sliders are adjusted.
-            var fingerprint = $"{orientation}|{visibleText}|{secondaryText}|{artist}|{SongTitle.FontSize:0.##}|{SongArtist.FontSize:0.##}|{SettingsManager.Current.LayoutLengthScalePercent:0.##}|{SettingsManager.Current.LayoutThicknessScalePercent:0.##}|{SettingsManager.Current.LyricsEnabled}|{SettingsManager.Current.TwoLineLyricsEnabled}|{SettingsManager.Current.LyricsSecondaryLineMode}|{SettingsManager.Current.TaskbarExperience}|{SettingsManager.Current.Interaction.Mode}|{_snapshot.IsConnected}|{_snapshot.Duration > 0}";
+            var fingerprint = $"{orientation}|{visibleText}|{secondaryText}|{artist}|{SongTitle.FontSize:0.##}|{SongArtist.FontSize:0.##}|{SettingsManager.Current.LayoutLengthScalePercent:0.##}|{SettingsManager.Current.LayoutThicknessScalePercent:0.##}|{SettingsManager.Current.LyricsEnabled}|{SettingsManager.Current.TwoLineLyricsEnabled}|{SettingsManager.Current.LyricsSecondaryLineMode}|{SettingsManager.Current.TaskbarExperience}|{_snapshot.IsConnected}|{_snapshot.Duration > 0}";
             if (!isResetToPreset && fingerprint == _lastSizeFingerprint)
                 return;
 
@@ -887,8 +897,7 @@ namespace AFMediaBar.Components
             if (_currentMode == WindowMode.Taskbar && orientation == LayoutOrientation.Horizontal)
             {
                 var experience = SettingsManager.Current.TaskbarExperience.Normalize();
-                var spectrumVisible = TaskbarExperiencePolicy.ShouldShowSpectrum(_snapshot);
-                var transportVisible = SettingsManager.Current.Interaction.Mode != MediaInteractionMode.Gestures;
+                var spectrumVisible = experience.SpectrumVisible && TaskbarExperiencePolicy.ShouldShowSpectrum(_snapshot);
                 var progressVisible = _snapshot.Duration > 0;
                 var contentWidth = TaskbarExperiencePolicy.CalculateWidth(
                     textWidth,
@@ -897,14 +906,15 @@ namespace AFMediaBar.Components
                     TaskbarTrailingMargin,
                     _snapshot.IsConnected,
                     spectrumVisible,
-                    transportVisible,
+                    experience.HoverControls.PlayPauseVisible || experience.HoverControls.PreviousNextVisible,
                     experience.HoverLayerEnabled,
                     progressVisible,
                     experience.Density,
                     double.PositiveInfinity,
                     experience.ComponentSpacingDip,
-                    performanceVisible: true,
-                    performanceWidth: TaskbarPerformanceWidth);
+                    performanceVisible: experience.PerformanceVisible,
+                    performanceWidth: TaskbarPerformanceWidth,
+                    hoverControls: experience.HoverControls);
                 _minimumPrimaryLength = TaskbarExperiencePolicy.CalculateWidth(
                     0,
                     GetTaskbarArtworkRight(),
@@ -912,14 +922,15 @@ namespace AFMediaBar.Components
                     TaskbarTrailingMargin,
                     _snapshot.IsConnected,
                     spectrumVisible,
-                    transportVisible,
+                    experience.HoverControls.PlayPauseVisible || experience.HoverControls.PreviousNextVisible,
                     experience.HoverLayerEnabled,
                     progressVisible,
                     experience.Density,
                     double.PositiveInfinity,
                     experience.ComponentSpacingDip,
-                    performanceVisible: true,
-                    performanceWidth: TaskbarPerformanceWidth);
+                    performanceVisible: experience.PerformanceVisible,
+                    performanceWidth: TaskbarPerformanceWidth,
+                    hoverControls: experience.HoverControls);
                 request = request with
                 {
                     Width = _snapshot.IsConnected
@@ -938,7 +949,7 @@ namespace AFMediaBar.Components
         private void SongImageBorder_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
         {
             if (e.ChangedButton != MouseButton.Left ||
-                DateTime.UtcNow < _suppressArtworkClickUntilUtc)
+                DateTime.UtcNow < _suppressSurfaceClickUntilUtc)
                 return;
 
             if (!_isConnected)
@@ -951,14 +962,18 @@ namespace AFMediaBar.Components
                 return;
             }
 
-            if (!_canPlayPause)
-                return;
-
-            if (_currentMode == WindowMode.Taskbar &&
-                SettingsManager.Current.Interaction.Mode == MediaInteractionMode.Buttons)
-                return;
-
-            TogglePlayPauseRequested?.Invoke(this, EventArgs.Empty);
+            var action = _currentMode == WindowMode.Taskbar
+                ? PlayerClickBindingPolicy.Resolve(SettingsManager.Current.Interaction, artwork: true)
+                : PlayerClickAction.TogglePlayPause;
+            if (action == PlayerClickAction.TogglePlayPause)
+            {
+                if (!_canPlayPause) return;
+                TogglePlayPauseRequested?.Invoke(this, EventArgs.Empty);
+            }
+            else
+            {
+                ActivateSourceRequested?.Invoke(this, EventArgs.Empty);
+            }
             e.Handled = true;
         }
 
@@ -973,7 +988,7 @@ namespace AFMediaBar.Components
             {
                 if (_currentMode == WindowMode.Taskbar && !_isVertical && SongImageBorder.IsMouseOver && _quickLaunchEntries.Count > 0)
                 {
-                    QuickLaunchWheelRequested?.Invoke(this, new PlayerSurfaceWheelEventArgs(e.Delta, false, false));
+                    QuickLaunchWheelRequested?.Invoke(this, new PlayerSurfaceWheelEventArgs(e.Delta, false, false, false));
                     e.Handled = true;
                 }
                 return;
@@ -983,10 +998,13 @@ namespace AFMediaBar.Components
             {
                 var leftDown = Mouse.LeftButton == MouseButtonState.Pressed;
                 var rightDown = Mouse.RightButton == MouseButtonState.Pressed;
-                if (leftDown)
-                    _suppressArtworkClickUntilUtc = DateTime.UtcNow.AddMilliseconds(350);
-                WheelRequested?.Invoke(this, new PlayerSurfaceWheelEventArgs(e.Delta, leftDown, rightDown));
-                e.Handled = SettingsManager.Current.Interaction.Mode != MediaInteractionMode.Buttons;
+                var shiftDown = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift);
+                var modifier = SettingsManager.Current.Interaction.Normalize().Modifier;
+                if ((modifier == InteractionModifier.LeftMouseButton && leftDown) ||
+                    (modifier == InteractionModifier.RightMouseButton && rightDown))
+                    _suppressSurfaceClickUntilUtc = DateTime.UtcNow.AddMilliseconds(350);
+                WheelRequested?.Invoke(this, new PlayerSurfaceWheelEventArgs(e.Delta, shiftDown, leftDown, rightDown));
+                e.Handled = true;
             }
             else if (e.Delta > 0 && _canSkipPrevious)
             {
@@ -1017,13 +1035,13 @@ namespace AFMediaBar.Components
 
         private void TaskbarDeviceButton_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
         {
-            OutputDeviceWheelRequested?.Invoke(this, new PlayerSurfaceWheelEventArgs(e.Delta, false, false));
+            OutputDeviceWheelRequested?.Invoke(this, new PlayerSurfaceWheelEventArgs(e.Delta, false, false, false));
             e.Handled = true;
         }
 
         private void TaskbarVolumeButton_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
         {
-            VolumeWheelRequested?.Invoke(this, new PlayerSurfaceWheelEventArgs(e.Delta, false, false));
+            VolumeWheelRequested?.Invoke(this, new PlayerSurfaceWheelEventArgs(e.Delta, false, false, false));
             e.Handled = true;
         }
 
@@ -1071,7 +1089,9 @@ namespace AFMediaBar.Components
             if (_currentMode == WindowMode.Taskbar && !_isVertical)
             {
                 TaskbarRestProgress.Visibility = hasDuration ? Visibility.Visible : Visibility.Collapsed;
-                TaskbarHoverProgress.Visibility = hasDuration ? Visibility.Visible : Visibility.Collapsed;
+                TaskbarHoverProgress.Visibility = hasDuration && SettingsManager.Current.TaskbarExperience.HoverControls.ProgressVisible
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
             }
         }
 
@@ -1089,10 +1109,21 @@ namespace AFMediaBar.Components
 
         private void SongTitleContainer_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
         {
-            if (!_isConnected || e.ChangedButton != MouseButton.Left)
+            if (!_isConnected || e.ChangedButton != MouseButton.Left || DateTime.UtcNow < _suppressSurfaceClickUntilUtc)
                 return;
 
-            ActivateSourceRequested?.Invoke(this, EventArgs.Empty);
+            var action = _currentMode == WindowMode.Taskbar
+                ? PlayerClickBindingPolicy.Resolve(SettingsManager.Current.Interaction, artwork: false)
+                : PlayerClickAction.ActivateSource;
+            if (action == PlayerClickAction.TogglePlayPause)
+            {
+                if (!_canPlayPause) return;
+                TogglePlayPauseRequested?.Invoke(this, EventArgs.Empty);
+            }
+            else
+            {
+                ActivateSourceRequested?.Invoke(this, EventArgs.Empty);
+            }
             e.Handled = true;
         }
     }

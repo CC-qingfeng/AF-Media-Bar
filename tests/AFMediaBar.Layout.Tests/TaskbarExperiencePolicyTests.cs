@@ -78,6 +78,23 @@ public sealed class TaskbarExperiencePolicyTests
     }
 
     [TestMethod]
+    public void IndependentHoverControlsDetermineMinimumWidth()
+    {
+        var defaults = TaskbarHoverControlsSettings.Default;
+        var defaultWidth = TaskbarExperiencePolicy.CalculateHoverLayerWidth(
+            defaults, true, TaskbarInformationDensity.Balanced);
+        var allControlsWidth = TaskbarExperiencePolicy.CalculateHoverLayerWidth(
+            new TaskbarHoverControlsSettings(true, true, true, true, true),
+            true,
+            TaskbarInformationDensity.Balanced);
+        var progressUnavailableWidth = TaskbarExperiencePolicy.CalculateHoverLayerWidth(
+            defaults, false, TaskbarInformationDensity.Balanced);
+
+        Assert.IsTrue(allControlsWidth > defaultWidth);
+        Assert.IsTrue(defaultWidth > progressUnavailableWidth);
+    }
+
+    [TestMethod]
     public void ComponentSpacingChangesHoverMinimum()
     {
         var compact = TaskbarExperiencePolicy.CalculateHoverLayerWidth(true, true, TaskbarInformationDensity.Balanced, 4);
@@ -196,10 +213,24 @@ public sealed class TaskbarExperiencePolicyTests
     }
 
     [TestMethod]
-    public void ButtonsDisablePlayerWheel()
+    public void ShiftModifierSelectsChordAndPlainWheelOtherwise()
     {
-        var settings = GlobalInteractionSettings.Default with { Mode = MediaInteractionMode.Buttons };
-        Assert.IsNull(GlobalWheelGesturePolicy.Resolve(settings, false, false));
+        var settings = GlobalInteractionSettings.Default with { Modifier = InteractionModifier.Shift };
+        Assert.AreEqual(WheelAction.SwitchMediaSource, GlobalWheelGesturePolicy.Resolve(settings, true, false, false));
+        Assert.AreEqual(WheelAction.PreviousNext, GlobalWheelGesturePolicy.Resolve(settings, false, false, false));
+    }
+
+    [TestMethod]
+    public void PlayerClickBindingsRemainIndependent()
+    {
+        var settings = GlobalInteractionSettings.Default with
+        {
+            ArtworkClickAction = PlayerClickAction.ActivateSource,
+            TextClickAction = PlayerClickAction.TogglePlayPause
+        };
+
+        Assert.AreEqual(PlayerClickAction.ActivateSource, PlayerClickBindingPolicy.Resolve(settings, artwork: true));
+        Assert.AreEqual(PlayerClickAction.TogglePlayPause, PlayerClickBindingPolicy.Resolve(settings, artwork: false));
     }
 
     [TestMethod]
@@ -207,30 +238,32 @@ public sealed class TaskbarExperiencePolicyTests
     {
         var settings = GlobalInteractionSettings.Default with
         {
-            ChordWheelEnabled = true,
-            ChordButton = MouseChordButton.Right,
+            Modifier = InteractionModifier.RightMouseButton,
             PrimaryWheelAction = WheelAction.PreviousNext,
             ChordWheelAction = WheelAction.SwitchMediaSource
         };
-        Assert.AreEqual(WheelAction.SwitchMediaSource, GlobalWheelGesturePolicy.Resolve(settings, false, true));
-        Assert.AreEqual(WheelAction.PreviousNext, GlobalWheelGesturePolicy.Resolve(settings, true, false));
+        Assert.AreEqual(WheelAction.SwitchMediaSource, GlobalWheelGesturePolicy.Resolve(settings, false, false, true));
+        Assert.AreEqual(WheelAction.PreviousNext, GlobalWheelGesturePolicy.Resolve(settings, false, true, false));
     }
 
     [TestMethod]
-    public void LegacyAudioWheelActionsNormalizeToPlayerActions()
+    public void AllPlayerWheelActionsRemainSelectableAndTrayUsesSharedModifier()
     {
         var settings = GlobalInteractionSettings.Default with
         {
             PrimaryWheelAction = WheelAction.OutputDevice,
             ChordWheelAction = WheelAction.CurrentApplicationVolume,
-            TrayUsesGlobalWheel = true
+            Modifier = InteractionModifier.LeftMouseButton,
+            TrayPrimaryWheelAction = TrayWheelBehavior.SwitchOutputDevice,
+            TrayChordWheelAction = TrayWheelBehavior.AdjustVolume
         };
 
         var normalized = settings.Normalize();
 
-        Assert.AreEqual(WheelAction.PreviousNext, normalized.PrimaryWheelAction);
-        Assert.AreEqual(WheelAction.SwitchMediaSource, normalized.ChordWheelAction);
-        Assert.IsFalse(normalized.TrayUsesGlobalWheel);
+        Assert.AreEqual(WheelAction.OutputDevice, normalized.PrimaryWheelAction);
+        Assert.AreEqual(WheelAction.CurrentApplicationVolume, normalized.ChordWheelAction);
+        Assert.AreEqual(TrayWheelBehavior.AdjustVolume, GlobalWheelGesturePolicy.ResolveTray(normalized, false, true, false));
+        Assert.AreEqual(TrayWheelBehavior.SwitchOutputDevice, GlobalWheelGesturePolicy.ResolveTray(normalized, false, false, false));
     }
 
     [TestMethod]

@@ -395,8 +395,7 @@ public partial class TaskbarFullPanelWindow : FluentWindow
 
     private async void ArtworkBorder_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
-        if (e.ChangedButton == MouseButton.Left &&
-            SettingsManager.Current.Interaction.Mode is MediaInteractionMode.Hybrid or MediaInteractionMode.Gestures)
+        if (e.ChangedButton == MouseButton.Left)
         {
             await _mediaSessionService.TogglePlayPauseAsync();
             e.Handled = true;

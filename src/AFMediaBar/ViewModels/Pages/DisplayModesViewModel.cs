@@ -5,18 +5,32 @@ using AFMediaBar.Classes.Settings;
 
 namespace AFMediaBar.ViewModels.Pages;
 
+/// <summary>设置页中可预览选择的显示模式。 / Display mode selectable for preview on the settings page.</summary>
+public enum DisplayModeSelection
+{
+    Taskbar = 0,
+    DynamicIsland = 1,
+    DesktopCard = 2,
+    FloatingBall = 3
+}
+
 /// <summary>四种显示模式及任务栏轻度自定义。 / Four display modes and light taskbar customization.</summary>
 public partial class DisplayModesViewModel : ObservableObject
 {
     private readonly IDisplayMonitorService _displayMonitorService;
     private readonly TaskbarLengthConstraintsService _taskbarLengthConstraints;
     private bool _isRefreshing;
+    private DisplayModeSelection _selectedMode = DisplayModeSelection.Taskbar;
     private IReadOnlyList<DisplayMonitorOption> _monitorOptions = Array.Empty<DisplayMonitorOption>();
 
     public IReadOnlyList<DisplayMonitorOption> MonitorOptions => _monitorOptions;
     public WindowMode CurrentWindowMode => SettingsManager.Current.WindowMode;
-    public bool IsTaskbarMode => CurrentWindowMode == WindowMode.Taskbar;
-    public bool IsDynamicIslandMode => CurrentWindowMode == WindowMode.DynamicIsland;
+    public DisplayModeSelection SelectedMode => _selectedMode;
+    public bool IsTaskbarMode => SelectedMode == DisplayModeSelection.Taskbar;
+    public bool IsDynamicIslandMode => SelectedMode == DisplayModeSelection.DynamicIsland;
+    public bool IsDesktopCardMode => SelectedMode == DisplayModeSelection.DesktopCard;
+    public bool IsFloatingBallMode => SelectedMode == DisplayModeSelection.FloatingBall;
+    public bool IsUnimplementedMode => !IsTaskbarMode;
 
     /// <summary>灵动岛背景方案。/ Dynamic-island background scheme.</summary>
     public DynamicIslandBackgroundMode DynamicIslandBackgroundMode
@@ -125,6 +139,60 @@ public partial class DisplayModesViewModel : ObservableObject
         get => SettingsManager.Current.TaskbarExperience.ContentLayout;
         set => UpdateExperience(SettingsManager.Current.TaskbarExperience with { ContentLayout = value });
     }
+
+    /// <summary>任务栏标题和歌手文字的对齐方式。 / Alignment of taskbar title and artist text.</summary>
+    public TaskbarMediaTextAlignment MediaTextAlignment
+    {
+        get => SettingsManager.Current.TaskbarExperience.MediaTextAlignment;
+        set => UpdateExperience(SettingsManager.Current.TaskbarExperience with { MediaTextAlignment = value });
+    }
+
+    /// <summary>静置层是否显示频谱组件。 / Whether the rest layer shows the spectrum component.</summary>
+    public bool SpectrumVisible
+    {
+        get => SettingsManager.Current.TaskbarExperience.SpectrumVisible;
+        set => UpdateExperience(SettingsManager.Current.TaskbarExperience with { SpectrumVisible = value });
+    }
+
+    /// <summary>静置层是否显示性能组件。 / Whether the rest layer shows the performance component.</summary>
+    public bool PerformanceVisible
+    {
+        get => SettingsManager.Current.TaskbarExperience.PerformanceVisible;
+        set => UpdateExperience(SettingsManager.Current.TaskbarExperience with { PerformanceVisible = value });
+    }
+
+    public bool HoverPlayPauseVisible
+    {
+        get => HoverControls.PlayPauseVisible;
+        set => UpdateHoverControls(HoverControls with { PlayPauseVisible = value });
+    }
+
+    public bool HoverPreviousNextVisible
+    {
+        get => HoverControls.PreviousNextVisible;
+        set => UpdateHoverControls(HoverControls with { PreviousNextVisible = value });
+    }
+
+    public bool HoverOutputDeviceVisible
+    {
+        get => HoverControls.OutputDeviceVisible;
+        set => UpdateHoverControls(HoverControls with { OutputDeviceVisible = value });
+    }
+
+    public bool HoverAudioControlVisible
+    {
+        get => HoverControls.AudioControlVisible;
+        set => UpdateHoverControls(HoverControls with { AudioControlVisible = value });
+    }
+
+    public bool HoverProgressVisible
+    {
+        get => HoverControls.ProgressVisible;
+        set => UpdateHoverControls(HoverControls with { ProgressVisible = value });
+    }
+
+    private TaskbarHoverControlsSettings HoverControls =>
+        SettingsManager.Current.TaskbarExperience.HoverControls;
 
     /// <summary>当前模式的组件间距（DIP）。/ Component gap for the current mode in DIP.</summary>
     public double ComponentSpacingDip
@@ -255,8 +323,10 @@ public partial class DisplayModesViewModel : ObservableObject
         RefreshMonitorOptions();
     }
 
-    [RelayCommand] private void SwitchToTaskbarMode() => SwitchMode(WindowMode.Taskbar);
-    [RelayCommand] private void SwitchToDynamicIslandMode() => SwitchMode(WindowMode.DynamicIsland);
+    [RelayCommand] private void SwitchToTaskbarMode() => SelectMode(DisplayModeSelection.Taskbar);
+    [RelayCommand] private void SwitchToDynamicIslandMode() => SelectMode(DisplayModeSelection.DynamicIsland);
+    [RelayCommand] private void SwitchToDesktopCardMode() => SelectMode(DisplayModeSelection.DesktopCard);
+    [RelayCommand] private void SwitchToFloatingBallMode() => SelectMode(DisplayModeSelection.FloatingBall);
     [RelayCommand] private void ApplyCompactFullPanelPreset() => UpdateFullPanel(TaskbarFullPanelSettings.Compact);
     [RelayCommand] private void ApplyFullFullPanelPreset() => UpdateFullPanel(TaskbarFullPanelSettings.Full);
 
@@ -269,20 +339,27 @@ public partial class DisplayModesViewModel : ObservableObject
         SettingsManager.RaiseLayoutSettingsChanged(CurrentWindowMode, Orientation);
     }
 
-    private void SwitchMode(WindowMode mode)
+    private void SelectMode(DisplayModeSelection mode)
     {
-        if (CurrentWindowMode == mode) return;
-        SettingsManager.Current.WindowMode = mode;
-        SettingsManager.RaiseLayoutSettingsChanged(mode, Orientation);
-        RaiseAll();
+        if (_selectedMode == mode) return;
+        _selectedMode = mode;
+        OnPropertyChanged(nameof(SelectedMode));
+        OnPropertyChanged(nameof(IsTaskbarMode));
+        OnPropertyChanged(nameof(IsDynamicIslandMode));
+        OnPropertyChanged(nameof(IsDesktopCardMode));
+        OnPropertyChanged(nameof(IsFloatingBallMode));
+        OnPropertyChanged(nameof(IsUnimplementedMode));
     }
 
     private void UpdateExperience(TaskbarExperienceSettings value)
     {
-        if (_isRefreshing) return;
+        if (_isRefreshing || !IsTaskbarMode) return;
         SettingsManager.SetTaskbarExperienceSettings(value.Normalize());
         RaiseExperience();
     }
+
+    private void UpdateHoverControls(TaskbarHoverControlsSettings controls) =>
+        UpdateExperience(SettingsManager.Current.TaskbarExperience with { HoverControls = controls });
 
     private void UpdateNotification(TrackChangeNotificationSettings value)
     {
@@ -386,6 +463,7 @@ public partial class DisplayModesViewModel : ObservableObject
         try
         {
             OnPropertyChanged(nameof(CurrentWindowMode)); OnPropertyChanged(nameof(IsTaskbarMode)); OnPropertyChanged(nameof(IsDynamicIslandMode));
+            OnPropertyChanged(nameof(IsDesktopCardMode)); OnPropertyChanged(nameof(IsFloatingBallMode)); OnPropertyChanged(nameof(IsUnimplementedMode));
             OnPropertyChanged(nameof(DynamicIslandBackgroundMode)); OnPropertyChanged(nameof(DynamicIslandEdge));
             RaiseExperience(); OnPropertyChanged(nameof(Orientation)); OnPropertyChanged(nameof(IsTaskbarPositionLocked));
             OnPropertyChanged(nameof(IsTaskbarAvoidingIcons)); OnPropertyChanged(nameof(TaskbarCrossAxisOffsetDip));
@@ -399,6 +477,10 @@ public partial class DisplayModesViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(HoverLayerEnabled)); OnPropertyChanged(nameof(FullLayerEnabled));
         OnPropertyChanged(nameof(Density)); OnPropertyChanged(nameof(ContentLayout));
+        OnPropertyChanged(nameof(MediaTextAlignment)); OnPropertyChanged(nameof(SpectrumVisible)); OnPropertyChanged(nameof(PerformanceVisible));
+        OnPropertyChanged(nameof(HoverPlayPauseVisible)); OnPropertyChanged(nameof(HoverPreviousNextVisible));
+        OnPropertyChanged(nameof(HoverOutputDeviceVisible)); OnPropertyChanged(nameof(HoverAudioControlVisible));
+        OnPropertyChanged(nameof(HoverProgressVisible));
         OnPropertyChanged(nameof(ComponentSpacingDip));
         OnPropertyChanged(nameof(FollowMediaTextLength)); OnPropertyChanged(nameof(UsesFixedTaskbarLength));
         OnPropertyChanged(nameof(FixedTaskbarLengthMinimum)); OnPropertyChanged(nameof(FixedTaskbarLengthMaximum));
