@@ -189,6 +189,22 @@ public sealed class TaskbarExperiencePolicyTests
     }
 
     [TestMethod]
+    public void MediaFontSizePercentNormalizesMissingAndOutOfRangeValues()
+    {
+        // schema 7 及更早的设置文件没有该字段，反序列化得到 0，必须回退到默认值而不是夹到下限。
+        // Settings files up to schema 7 lack the field and deserialize it as 0, which must fall back to the default rather
+        // than being clamped to the lower bound.
+        Assert.AreEqual(TaskbarExperienceSettings.Default.MediaFontSizePercent,
+            (TaskbarExperienceSettings.Default with { MediaFontSizePercent = 0 }).Normalize().MediaFontSizePercent);
+        Assert.AreEqual(TaskbarExperienceSettings.MinimumMediaFontSizePercent,
+            (TaskbarExperienceSettings.Default with { MediaFontSizePercent = 10 }).Normalize().MediaFontSizePercent);
+        Assert.AreEqual(TaskbarExperienceSettings.MaximumMediaFontSizePercent,
+            (TaskbarExperienceSettings.Default with { MediaFontSizePercent = 400 }).Normalize().MediaFontSizePercent);
+        Assert.AreEqual(115,
+            (TaskbarExperienceSettings.Default with { MediaFontSizePercent = 115 }).Normalize().MediaFontSizePercent);
+    }
+
+    [TestMethod]
     public void MarqueeRunsOnlyForOverflowInFixedMode()
     {
         Assert.AreEqual(80, TaskbarExperiencePolicy.CalculateMarqueeOverflow(280, 200, TaskbarLengthMode.Fixed), 0.001);

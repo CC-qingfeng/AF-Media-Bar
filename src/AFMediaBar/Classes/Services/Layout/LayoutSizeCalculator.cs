@@ -14,6 +14,7 @@ public static class LayoutSizeCalculator
     /// 根据内容宽度计算目标画布尺寸。长度缩放只影响组件间距，粗细缩放只影响组件自身尺寸。
     /// Calculates the target canvas size. Length scale affects gaps only; thickness scale affects components only.
     /// </summary>
+    /// <param name="isForcedRefresh">该请求是否绕过内容指纹去重。/ Whether the request bypasses the content-fingerprint dedupe.</param>
     public static MediaBarSizeRequest Calculate(
         LayoutSchema layout,
         double spacingScale,
@@ -21,7 +22,7 @@ public static class LayoutSizeCalculator
         double measuredTextWidthDip,
         double maximumPrimaryLengthDip,
         string contentFingerprint,
-        bool isResetToPreset = false)
+        bool isForcedRefresh = false)
     {
         spacingScale = Math.Clamp(spacingScale, 0.7, 1.25);
         thicknessScale = Math.Clamp(thicknessScale, 0.7, 1.25);
@@ -73,7 +74,7 @@ public static class LayoutSizeCalculator
             canvas.Width,
             canvas.Height,
             contentFingerprint,
-            isResetToPreset);
+            isForcedRefresh);
     }
 
     /// <summary>将当前布局调整到目标主轴长度。/ Resizes an already scaled layout to a target primary length.</summary>

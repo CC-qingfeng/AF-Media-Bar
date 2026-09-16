@@ -58,14 +58,14 @@ public sealed class LayoutSizeCalculatorTests
     }
 
     [TestMethod]
-    public void ContentFingerprintAndResetFlagArePreserved()
+    public void ContentFingerprintAndForcedRefreshFlagArePreserved()
     {
         var layout = LayoutPresets.GetLayout(WindowMode.DynamicIsland, LayoutOrientation.Horizontal);
 
         var request = LayoutSizeCalculator.Calculate(layout, 1, 1, 120, 1000, "lyric-1", true);
 
         Assert.AreEqual("lyric-1", request.ContentFingerprint);
-        Assert.IsTrue(request.IsResetToPreset);
+        Assert.IsTrue(request.IsForcedRefresh);
     }
 
     [TestMethod]
@@ -165,6 +165,43 @@ public sealed class LayoutSizeCalculatorTests
         Assert.AreEqual(302, scaled.Canvas.Width, 0.01);
         Assert.AreEqual(44, scaled.Canvas.Height, 0.01);
         Assert.AreEqual(54, scaled.Components[1].Bounds.X, 0.01);
+    }
+
+    [TestMethod]
+    public void ScaledLayoutFactoryScalesMediaFontSizesWithoutChangingBounds()
+    {
+        var layout = LayoutPresets.GetLayout(WindowMode.Taskbar, LayoutOrientation.Horizontal);
+
+        var scaled = ScaledLayoutFactory.Create(layout, lengthScale: 1, thicknessScale: 1, mediaFontScale: 1.25);
+
+        var songInfo = scaled.Components[1];
+        Assert.AreEqual(44, scaled.Canvas.Height, 0.01);
+        Assert.AreEqual(layout.Components[1].Bounds.Width, songInfo.Bounds.Width, 0.01);
+        Assert.AreEqual(14.0 * 1.25, (double)songInfo.Properties["titleFontSize"], 0.01);
+        Assert.AreEqual(12.0 * 1.25, (double)songInfo.Properties["artistFontSize"], 0.01);
+        Assert.AreEqual(12.0 * 1.25, (double)songInfo.Properties["lyricsFontSize"], 0.01);
+    }
+
+    [TestMethod]
+    public void ScaledLayoutFactoryCombinesThicknessAndMediaFontScale()
+    {
+        var layout = LayoutPresets.GetLayout(WindowMode.Taskbar, LayoutOrientation.Horizontal);
+
+        var scaled = ScaledLayoutFactory.Create(layout, lengthScale: 1, thicknessScale: 0.9, mediaFontScale: 1.2);
+
+        var songInfo = scaled.Components[1];
+        Assert.AreEqual(14.0 * 0.9 * 1.2, (double)songInfo.Properties["titleFontSize"], 0.01);
+        Assert.AreEqual(12.0 * 0.9 * 1.2, (double)songInfo.Properties["artistFontSize"], 0.01);
+    }
+
+    [TestMethod]
+    public void ScaledLayoutFactoryClampsMediaFontScale()
+    {
+        var layout = LayoutPresets.GetLayout(WindowMode.Taskbar, LayoutOrientation.Horizontal);
+
+        var scaled = ScaledLayoutFactory.Create(layout, lengthScale: 1, thicknessScale: 1, mediaFontScale: 4);
+
+        Assert.AreEqual(14.0 * 2, (double)scaled.Components[1].Properties["titleFontSize"], 0.01);
     }
 
     [TestMethod]

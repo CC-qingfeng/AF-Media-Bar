@@ -67,6 +67,48 @@ public sealed class PlayerForegroundPolicyTests
     }
 
     [TestMethod]
+    public void Resolve_ContrastShadowKeepsItsStateInsideTheHysteresisBand()
+    {
+        // #6E6E6E 的对比度约 5.1：高于进入阈值 4.5，低于退出阈值 6.5，因此两个方向都必须保留上一次决定。
+        // #6E6E6E yields roughly 5.1 contrast: above the 4.5 entry threshold and below the 6.5 exit threshold, so both
+        // directions must keep the previous decision instead of flapping.
+        var samples = Repeated(Color.FromRgb(0x6E, 0x6E, 0x6E));
+
+        var keepShadow = PlayerForegroundPolicy.Resolve(samples, new PlayerForegroundDecision(true, true));
+        var keepClear = PlayerForegroundPolicy.Resolve(samples, new PlayerForegroundDecision(true, false));
+
+        Assert.IsTrue(keepShadow?.NeedsContrastShadow);
+        Assert.IsFalse(keepClear?.NeedsContrastShadow);
+    }
+
+    [TestMethod]
+    public void Resolve_LowContrastBackgroundAlwaysRequestsShadow()
+    {
+        // #7A7A7A 的对比度在两种文字色分支下都低于 4.5，因此无论上一次是什么决定都应开启阴影。
+        // #7A7A7A stays below 4.5 contrast in both text-color branches, so the shadow turns on regardless of the
+        // previous decision.
+        var samples = Repeated(Color.FromRgb(0x7A, 0x7A, 0x7A));
+
+        var fromClear = PlayerForegroundPolicy.Resolve(samples, new PlayerForegroundDecision(true, false));
+        var fromShadow = PlayerForegroundPolicy.Resolve(samples, new PlayerForegroundDecision(true, true));
+
+        Assert.IsTrue(fromClear?.NeedsContrastShadow);
+        Assert.IsTrue(fromShadow?.NeedsContrastShadow);
+    }
+
+    [TestMethod]
+    public void Resolve_HighContrastBackgroundClearsShadowOnlyAboveTheExitBand()
+    {
+        var samples = Repeated(Color.FromRgb(0x20, 0x20, 0x20));
+
+        var fromShadow = PlayerForegroundPolicy.Resolve(samples, new PlayerForegroundDecision(true, true));
+        var fromClear = PlayerForegroundPolicy.Resolve(samples, new PlayerForegroundDecision(true, false));
+
+        Assert.IsFalse(fromShadow?.NeedsContrastShadow);
+        Assert.IsFalse(fromClear?.NeedsContrastShadow);
+    }
+
+    [TestMethod]
     public void Resolve_EmptyOrTransparentSamples_ReturnsNoDecision()
     {
         Assert.IsNull(PlayerForegroundPolicy.Resolve([]));

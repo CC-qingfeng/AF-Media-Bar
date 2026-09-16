@@ -351,7 +351,7 @@
                             </components:SettingsRow>
 
                             <components:SettingsRow
-                                Description="封面、文字与附加组件之间的水平间距"
+                                Description="封面区、文字区与附加组件之间的水平间距"
                                 Icon="{ui:SymbolIcon PaddingLeft24}"
                                 Title="组件间距">
                                 <StackPanel Orientation="Horizontal">
@@ -378,9 +378,9 @@
                             <components:SettingsDiagram Margin="0,0,0,12" Kind="LayerRest" />
 
                             <components:SettingsRow
-                                Description="统一调整按钮、进度与组件间的尺寸和间隔"
+                                Description="调整静置层中各按钮、进度条间的间隔"
                                 Icon="{ui:SymbolIcon TextAlignJustify24}"
-                                Title="信息密度">
+                                Title="静置层间隔">
                                 <ComboBox
                                     MinWidth="200"
                                     SelectedValue="{Binding ViewModel.Density, Mode=TwoWay}"
@@ -416,6 +416,22 @@
                                     <ComboBoxItem Content="居中" Tag="{x:Static settings:TaskbarMediaTextAlignment.Center}" />
                                     <ComboBoxItem Content="右对齐" Tag="{x:Static settings:TaskbarMediaTextAlignment.Right}" />
                                 </ComboBox>
+                            </components:SettingsRow>
+
+                            <components:SettingsRow
+                                Description="按百分比缩放静置层的标题、歌手与歌词字号（80%–125%）"
+                                Icon="{ui:SymbolIcon TextFont24}"
+                                Title="媒体文字大小">
+                                <StackPanel Orientation="Horizontal">
+                                    <Slider
+                                        Maximum="125"
+                                        Minimum="80"
+                                        Style="{StaticResource RowSliderStyle}"
+                                        IsSnapToTickEnabled="True"
+                                        TickFrequency="5"
+                                        Value="{Binding ViewModel.MediaFontSizePercent, Mode=TwoWay}" />
+                                    <TextBlock Style="{StaticResource RowValueStyle}" Text="{Binding ViewModel.MediaFontSizePercent, StringFormat={}{0:0}%}" />
+                                </StackPanel>
                             </components:SettingsRow>
 
                             <components:SettingsCallout

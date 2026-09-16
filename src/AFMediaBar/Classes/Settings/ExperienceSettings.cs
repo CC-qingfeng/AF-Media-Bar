@@ -292,11 +292,28 @@ public readonly record struct TaskbarExperienceSettings(
     /// <summary>悬停层中各项控制的显隐设置。 / Visibility settings for individual hover-layer controls.</summary>
     public TaskbarHoverControlsSettings HoverControls { get; init; } = TaskbarHoverControlsSettings.Default;
 
+    /// <summary>
+    /// 静置层媒体文字（标题、歌手、歌词）的字号缩放百分比。
+    /// Font-size scale percentage for rest-layer media text: title, artist, and lyrics.
+    /// </summary>
+    public int MediaFontSizePercent { get; init; } = 100;
+
     /// <summary>组件间距的持久化安全下限。/ Persistence-safe lower bound for component spacing.</summary>
     public const double MinimumComponentSpacingDip = 4;
 
     /// <summary>组件间距的持久化安全上限。/ Persistence-safe upper bound for component spacing.</summary>
     public const double MaximumComponentSpacingDip = 32;
+
+    /// <summary>静置层媒体文字字号缩放的持久化安全下限。/ Persistence-safe lower bound for the rest-layer media font-size scale.</summary>
+    public const int MinimumMediaFontSizePercent = 80;
+
+    /// <summary>
+    /// 静置层媒体文字字号缩放的持久化安全上限。任务栏高度固定，标题与歌手两行必须容纳在该高度内，
+    /// 因此上限保持在两行仍能完整显示的范围内。
+    /// Persistence-safe upper bound for the rest-layer media font-size scale. The taskbar height is fixed and the title and
+    /// artist must both fit inside it, so the upper bound keeps two lines fully visible.
+    /// </summary>
+    public const int MaximumMediaFontSizePercent = 125;
 
     /// <summary>固定长度设置的持久化安全下限。 / Persistence-safe lower bound for the fixed-length setting.</summary>
     public const double MinimumStoredFixedLengthDip = 120;
@@ -328,7 +345,13 @@ public readonly record struct TaskbarExperienceSettings(
                 : defaults.FixedLengthDip,
             ComponentSpacingDip = double.IsFinite(ComponentSpacingDip)
                 ? Math.Clamp(ComponentSpacingDip, MinimumComponentSpacingDip, MaximumComponentSpacingDip)
-                : defaults.ComponentSpacingDip
+                : defaults.ComponentSpacingDip,
+            // schema 7 及更早的设置文件没有该字段，反序列化得到 0；0 与任何合法值都不同，因此回退到默认值。
+            // Settings files up to schema 7 lack this field and deserialize it as 0; 0 is outside every legal value, so it
+            // falls back to the default instead of being clamped to the minimum.
+            MediaFontSizePercent = MediaFontSizePercent <= 0
+                ? defaults.MediaFontSizePercent
+                : Math.Clamp(MediaFontSizePercent, MinimumMediaFontSizePercent, MaximumMediaFontSizePercent)
         };
     }
 }

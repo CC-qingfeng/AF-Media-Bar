@@ -11,7 +11,7 @@ namespace AFMediaBar.Classes.Services;
 /// <summary>负责用户设置 JSON 的加载、恢复、原子保存和防抖。 / Owns loading, recovery, atomic saving and debouncing of user settings JSON.</summary>
 public sealed class SettingsPersistenceService : IDisposable
 {
-    public const int CurrentSchemaVersion = 7;
+    public const int CurrentSchemaVersion = 8;
     private readonly string _directoryPath;
     private readonly string _settingsPath;
     private readonly string _backupPath;
@@ -229,6 +229,16 @@ public sealed class SettingsPersistenceService : IDisposable
                 SpectrumVisible = true,
                 PerformanceVisible = true,
                 HoverControls = TaskbarHoverControlsSettings.Default
+            };
+        }
+        if (envelope.SchemaVersion <= 7)
+        {
+            // Schema 8 adds the rest-layer media font-size scale. Older files keep the previous
+            // text sizes instead of inheriting a new default scale.
+            // schema 8 新增静置层媒体文字字号缩放；旧设置文件保持原有文字大小，而不是继承新的默认缩放。
+            result.TaskbarExperience = result.TaskbarExperience with
+            {
+                MediaFontSizePercent = TaskbarExperienceSettings.Default.MediaFontSizePercent
             };
         }
         return result.Normalize();

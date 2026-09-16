@@ -20,6 +20,15 @@ public static class PlayerForegroundPolicy
 {
     private const double RequiredContrast = 4.5;
     private const double Hysteresis = 0.025;
+
+    /// <summary>
+    /// 关闭对比度阴影所需的对比度。阴影开关没有迟滞时，采样值在阈值附近来回跨过就会
+    /// 让阴影反复开关，而阴影压在字形边缘上会被看成"文字时清时糊"。
+    /// Contrast required to turn the contrast shadow back off. Without this exit band, a sample hovering around
+    /// the threshold toggles the shadow repeatedly, and a shadow sitting on the glyph edges reads as text that
+    /// alternates between crisp and blurry.
+    /// </summary>
+    private const double ShadowExitContrast = 6.5;
     private static readonly double DarkTextLuminance = RelativeLuminance(Color.FromRgb(0x1C, 0x1C, 0x1C));
     private static readonly double SwitchingLuminance =
         Math.Sqrt(1.05 * (DarkTextLuminance + 0.05)) - 0.05;
@@ -65,7 +74,15 @@ public static class PlayerForegroundPolicy
             ? 1.05 / (adverseLuminance + 0.05)
             : (adverseLuminance + 0.05) / (DarkTextLuminance + 0.05);
 
-        return new PlayerForegroundDecision(usesLightText, contrast < RequiredContrast);
+        // 对比度阴影同样带迟滞：进入阈值是必需对比度，退出阈值更高；两个方向都不满足时保留上一次决定。
+        // The contrast shadow carries hysteresis too: it enters below the required contrast and only leaves above the
+        // higher exit contrast, keeping the previous decision inside the band.
+        var needsContrastShadow = previous?.NeedsContrastShadow ?? false;
+        needsContrastShadow = needsContrastShadow
+            ? contrast < ShadowExitContrast
+            : contrast < RequiredContrast;
+
+        return new PlayerForegroundDecision(usesLightText, needsContrastShadow);
     }
 
     /// <summary>

@@ -132,7 +132,7 @@ public sealed class SettingsPersistenceServiceTests
         Assert.AreEqual(1800, SettingsManager.Current.PerformanceComponent.RefreshIntervalMilliseconds);
         Assert.IsTrue(SettingsManager.Current.PerformanceComponent.OpenTaskManagerOnClick);
         var persisted = File.ReadAllText(reader.SettingsPath);
-        StringAssert.Contains(persisted, "\"schemaVersion\": 7");
+        StringAssert.Contains(persisted, "\"schemaVersion\": 8");
         StringAssert.Contains(persisted, "\"Disabled\"");
     }
 
@@ -181,7 +181,7 @@ public sealed class SettingsPersistenceServiceTests
 
         Assert.IsTrue(SettingsManager.Current.LyricsEnabled);
         Assert.IsTrue(Directory.GetFiles(_directory, "settings.json.unsupported-*").Length == 1);
-        StringAssert.Contains(File.ReadAllText(main), "\"schemaVersion\": 7");
+        StringAssert.Contains(File.ReadAllText(main), "\"schemaVersion\": 8");
     }
 
     [TestMethod]
@@ -249,7 +249,7 @@ public sealed class SettingsPersistenceServiceTests
         Assert.AreEqual("DISPLAY2", SettingsManager.Current.TrackChangeNotification.FixedMonitorDeviceId);
         Assert.AreEqual(TaskbarLengthMode.FollowContent, SettingsManager.Current.TaskbarExperience.LengthMode);
         Assert.AreEqual(TaskbarExperienceSettings.Default.FixedLengthDip, SettingsManager.Current.TaskbarExperience.FixedLengthDip);
-        StringAssert.Contains(File.ReadAllText(service.SettingsPath), "\"schemaVersion\": 7");
+        StringAssert.Contains(File.ReadAllText(service.SettingsPath), "\"schemaVersion\": 8");
     }
 
     [TestMethod]
@@ -309,6 +309,27 @@ public sealed class SettingsPersistenceServiceTests
         Assert.AreEqual(TaskbarContentLayout.AdaptiveStack, SettingsManager.Current.TaskbarExperience.ContentLayout);
         Assert.AreEqual(TaskbarMediaTextAlignment.Center, SettingsManager.Current.TaskbarExperience.MediaTextAlignment);
         Assert.AreEqual(TaskbarHoverControlsSettings.Default, SettingsManager.Current.TaskbarExperience.HoverControls);
+    }
+
+    [TestMethod]
+    public void Schema7KeepsPreviousTextSizesInsteadOfAdoptingTheNewFontScale()
+    {
+        Directory.CreateDirectory(_directory);
+        File.WriteAllText(
+            Path.Combine(_directory, "settings.json"),
+            """
+            {"schemaVersion":7,"settings":{"taskbarExperience":{"hoverLayerEnabled":true,"fullLayerEnabled":true,"density":"Information","contentLayout":"AdaptiveStack","fullPanel":{"mediaInfoVisible":true,"mediaControlsVisible":true},"lengthMode":"Fixed","fixedLengthDip":420}}}
+            """);
+
+        using var service = new SettingsPersistenceService(_directory);
+        service.Initialize();
+
+        Assert.AreEqual(TaskbarExperienceSettings.Default.MediaFontSizePercent,
+            SettingsManager.Current.TaskbarExperience.MediaFontSizePercent);
+        Assert.AreEqual(TaskbarInformationDensity.Information, SettingsManager.Current.TaskbarExperience.Density);
+        Assert.AreEqual(TaskbarLengthMode.Fixed, SettingsManager.Current.TaskbarExperience.LengthMode);
+        Assert.AreEqual(420, SettingsManager.Current.TaskbarExperience.FixedLengthDip);
+        StringAssert.Contains(File.ReadAllText(service.SettingsPath), "\"schemaVersion\": 8");
     }
 
     [TestMethod]

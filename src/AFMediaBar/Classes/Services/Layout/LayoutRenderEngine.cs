@@ -106,9 +106,10 @@ public sealed class LayoutRenderEngine
     /// <param name="layout">布局配置 / Layout configuration</param>
     /// <param name="lengthScale">组件间距缩放系数 / Component-spacing scale factor</param>
     /// <param name="thicknessScale">横轴厚度缩放系数 / Cross-axis thickness scale factor</param>
-    public void ApplyLayout(LayoutSchema layout, double lengthScale, double thicknessScale)
+    /// <param name="mediaFontScale">媒体文字字号缩放系数 / Media-text font-size scale factor</param>
+    public void ApplyLayout(LayoutSchema layout, double lengthScale, double thicknessScale, double mediaFontScale = 1)
     {
-        var effectiveLayout = ScaledLayoutFactory.Create(layout, lengthScale, thicknessScale);
+        var effectiveLayout = ScaledLayoutFactory.Create(layout, lengthScale, thicknessScale, mediaFontScale);
         _currentLayout = effectiveLayout;
 
         // 应用画布配置
@@ -333,18 +334,33 @@ public sealed class LayoutRenderEngine
             config.Properties.TryGetValue("titleFontSize", out var titleFontSizeValue) &&
             titleFontSizeValue is double titleFontSize)
         {
-            _songTitle.FontSize = titleFontSize;
+            // 字号取整：非整数 DIP 字号会让字形落在半像素上，配合显示模式的像素对齐反而更容易发虚。
+            // Round the font size: fractional DIP sizes land glyphs on half pixels and look softer even with the pixel
+            // snapping that display formatting mode applies.
+            var roundedTitleFontSize = Math.Max(1, Math.Round(titleFontSize));
+            _songTitle.FontSize = roundedTitleFontSize;
             if (_songTitleContainer is not null)
-                _songTitleContainer.Height = Math.Max(titleFontSize + 5, config.Bounds.Height / 2);
+                _songTitleContainer.Height = Math.Max(roundedTitleFontSize + 5, config.Bounds.Height / 2);
         }
 
         if (_songArtist is not null &&
             config.Properties.TryGetValue("artistFontSize", out var artistFontSizeValue) &&
             artistFontSizeValue is double artistFontSize)
         {
-            _songArtist.FontSize = artistFontSize;
+            var roundedArtistFontSize = Math.Max(1, Math.Round(artistFontSize));
+            _songArtist.FontSize = roundedArtistFontSize;
             if (_songArtistContainer is not null)
-                _songArtistContainer.Height = Math.Max(artistFontSize + 5, config.Bounds.Height / 2);
+                _songArtistContainer.Height = Math.Max(roundedArtistFontSize + 5, config.Bounds.Height / 2);
+        }
+
+        if (_songLyrics is not null &&
+            config.Properties.TryGetValue("lyricsFontSize", out var lyricsFontSizeValue) &&
+            lyricsFontSizeValue is double lyricsFontSize)
+        {
+            // 歌词此前没有字号来源，一直沿用框架默认值；现在与标题、歌手共用同一个缩放设置。
+            // Lyrics had no font-size source before and used the framework default; they now follow the same scale as the
+            // title and artist.
+            _songLyrics.FontSize = Math.Max(1, Math.Round(lyricsFontSize));
         }
 
         if (_songArtist is not null &&

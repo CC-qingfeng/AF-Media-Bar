@@ -70,6 +70,7 @@ public partial class TaskbarWindow : Window
     private LayoutOrientation? _appliedOrientation;
     private double _appliedLengthScalePercent = double.NaN;
     private double _appliedThicknessScalePercent = double.NaN;
+    private int _appliedMediaFontSizePercent = -1;
     private int _dragStartCursorPrimary;
     private int _dragStartBarPrimary;
     private int _dragPrimaryLimit;
@@ -621,10 +622,12 @@ public partial class TaskbarWindow : Window
             taskbarHandle,
             orientation,
             SettingsManager.Current.LayoutThicknessScalePercent);
+        var mediaFontSizePercent = SettingsManager.Current.TaskbarExperience.Normalize().MediaFontSizePercent;
         var layoutChanged = _appliedWindowMode != windowMode ||
                             orientationChanged ||
                             !lengthScalePercent.Equals(_appliedLengthScalePercent) ||
-                            !thicknessScalePercent.Equals(_appliedThicknessScalePercent);
+                            !thicknessScalePercent.Equals(_appliedThicknessScalePercent) ||
+                            mediaFontSizePercent != _appliedMediaFontSizePercent;
         if (layoutChanged)
         {
             MediaControl.ApplyLayout(windowMode, orientation, lengthScalePercent, thicknessScalePercent);
@@ -634,6 +637,7 @@ public partial class TaskbarWindow : Window
             _appliedOrientation = orientation;
             _appliedLengthScalePercent = lengthScalePercent;
             _appliedThicknessScalePercent = thicknessScalePercent;
+            _appliedMediaFontSizePercent = mediaFontSizePercent;
             MediaControl.RefreshDesiredSize();
         }
 
@@ -754,6 +758,11 @@ public partial class TaskbarWindow : Window
 
     public void ApplyExperienceSettings()
     {
+        // 静置层设置里包含媒体文字字号，必须重新应用布局才能把新字号写进文本块；
+        // 布局状态未变化时 ApplyLayoutSettings 不会做任何工作。
+        // Rest-layer settings include the media font size, so the layout has to be re-applied before the text update;
+        // ApplyLayoutSettings does nothing when the layout state is unchanged.
+        ApplyLayoutSettings(SettingsManager.Current.WindowMode, SettingsManager.Current.LayoutOrientationMode);
         ApplyExtraFeaturesSettings();
         MediaControl.UpdateSongInfo(_lastSnapshot);
         Dispatcher.BeginInvoke(UpdatePosition, DispatcherPriority.Background);

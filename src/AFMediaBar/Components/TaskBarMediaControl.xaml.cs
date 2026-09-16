@@ -322,12 +322,19 @@ namespace AFMediaBar.Components
             // Get layout from presets
             var layout = LayoutPresets.GetLayout(mode, orientation);
 
+            // 字号设置只作用于任务栏静置层的媒体文字；灵动岛沿用预设字号。
+            // The font-size setting only scales taskbar rest-layer media text; the island keeps its preset sizes.
+            var mediaFontScale = mode == WindowMode.Taskbar
+                ? SettingsManager.Current.TaskbarExperience.Normalize().MediaFontSizePercent / 100.0
+                : 1.0;
+
             // 应用布局
             // Apply layout
             _layoutEngine?.ApplyLayout(
                 layout,
                 lengthScalePercent / 100.0,
-                thicknessScalePercent / 100.0);
+                thicknessScalePercent / 100.0,
+                mediaFontScale);
 
             // 更新内部状态标志以保持兼容
             // Update internal state flags to maintain compatibility
@@ -350,8 +357,16 @@ namespace AFMediaBar.Components
             ApplyTaskbarSectionGeometry(primaryLength);
         }
 
-        /// <summary>在宿主更新方向或缩放状态后重新发布尺寸请求。/ Re-raises the size request after the host updates orientation or scale state.</summary>
-        public void RefreshDesiredSize() => RaiseDesiredSizeChanged();
+        /// <summary>
+        /// 在宿主更新方向、缩放或字号状态后强制重新发布尺寸请求。
+        /// 宿主在这里明确要求重算，因此必须绕过内容指纹去重：布局状态变更期间的早期请求可能因为宿主尚未就绪而被丢弃，
+        /// 若被记入指纹，随后这次权威刷新会被去重丢弃，媒体栏就会停在预设画布长度上。
+        /// Force-republishes the size request after the host updates orientation, scale, or font-size state. The host is
+        /// explicitly asking for a recomputation here, so the content fingerprint must not suppress it: an earlier request
+        /// raised while the host was not ready yet can be dropped after being recorded, and this authoritative refresh would
+        /// then leave the bar at its preset canvas length.
+        /// </summary>
+        public void RefreshDesiredSize() => RaiseDesiredSizeChanged(isForcedRefresh: true);
 
         /// <summary>
         /// 应用横向任务栏的层级和交互设置，不改变原有封面、文字或布局引擎。
@@ -504,6 +519,18 @@ namespace AFMediaBar.Components
             SongLyricsContainer.Width = textWidth;
             SongLyricsSecondaryContainer.Width = textWidth;
 
+            // 任务栏的媒体文字宽度由本节几何唯一决定：布局引擎按布局 schema 写入的 TextBlock 宽度仍包含
+            // 频谱与性能组件占用的区间，比真实文字区更宽，会让标题按错误宽度裁剪、在容器边缘被硬切；
+            // 悬停路径会通过跑马灯配置重新写回正确宽度，所以这个错误只在设置变更后显现。
+            // This section owns the taskbar media-text width: the layout engine writes TextBlock widths from the layout
+            // schema, which still covers the spectrum and performance reserve and is wider than the real text area, so the
+            // title trims against the wrong width and is hard-cut at the container edge. The hover path rewrites the correct
+            // width through the marquee configuration, which is why the defect only shows up after a settings change.
+            SongTitle.Width = textWidth;
+            SongArtist.Width = textWidth;
+            SongLyrics.Width = textWidth;
+            SongLyricsSecondary.Width = textWidth;
+
             Canvas.SetLeft(SongInfoHoverOverlay, textLeft);
             Canvas.SetTop(SongInfoHoverOverlay, textTop);
             SongInfoHoverOverlay.Width = textWidth;
@@ -641,11 +668,18 @@ namespace AFMediaBar.Components
             Effect? effect = null;
             if (enabled)
             {
+                // 阴影只负责对比度，不参与字形：模糊半径保持在 1 DIP，并且必须离开字形轮廓。
+                // ShadowDepth 为 0 时模糊副本压在字形正中，会把每条笔画的边缘吃掉，用户看到的就是"文字发虚"；
+                // 偏移 1 DIP 后阴影落在轮廓外侧，字形边缘保持干净。
+                // The shadow exists for contrast, not for glyph shape: keep the blur radius at 1 DIP but move it off the
+                // glyph outline. With ShadowDepth 0 the blurred copy sits centered under the glyphs and eats every stroke
+                // edge, which reads as blurry text; a 1 DIP offset keeps the glyph edges clean.
                 var shadow = new DropShadowEffect
                 {
                     Color = usesLightText ? Colors.Black : Colors.White,
-                    BlurRadius = 2,
-                    ShadowDepth = 0,
+                    BlurRadius = 1,
+                    ShadowDepth = 1,
+                    Direction = 315,
                     Opacity = 0.85,
                     RenderingBias = RenderingBias.Quality
                 };
@@ -729,7 +763,7 @@ namespace AFMediaBar.Components
                     }
 
                     Visibility = Visibility.Visible;
-                    RaiseDesiredSizeChanged(isResetToPreset: true);
+                    RaiseDesiredSizeChanged(isForcedRefresh: true);
                 });
                 return;
             }
@@ -862,7 +896,8 @@ namespace AFMediaBar.Components
         }
 
         /// <summary>根据当前可见文本发布自动尺寸请求。/ Raises an auto-size request for the visible text.</summary>
-        private void RaiseDesiredSizeChanged(bool isResetToPreset = false)
+        /// <param name="isForcedRefresh">是否绕过内容指纹去重。/ Whether the content-fingerprint dedupe is bypassed.</param>
+        private void RaiseDesiredSizeChanged(bool isForcedRefresh = false)
         {
             if (_layoutEngine?.CurrentOrientation is not { } orientation)
                 return;
@@ -877,7 +912,16 @@ namespace AFMediaBar.Components
             // those values (or play/pause) in the fingerprint causes redundant host size
             // animations and visibly nudges title/artist/lyrics while sliders are adjusted.
             var fingerprint = $"{orientation}|{visibleText}|{secondaryText}|{artist}|{SongTitle.FontSize:0.##}|{SongArtist.FontSize:0.##}|{SettingsManager.Current.LayoutLengthScalePercent:0.##}|{SettingsManager.Current.LayoutThicknessScalePercent:0.##}|{SettingsManager.Current.LyricsEnabled}|{SettingsManager.Current.TwoLineLyricsEnabled}|{SettingsManager.Current.LyricsSecondaryLineMode}|{SettingsManager.Current.TaskbarExperience}|{_snapshot.IsConnected}|{_snapshot.Duration > 0}";
-            if (!isResetToPreset && fingerprint == _lastSizeFingerprint)
+
+            // 没有订阅者的请求不会被任何宿主消费，因此不能记入指纹；否则订阅后的首次请求会被去重丢弃，
+            // 媒体栏在上一次媒体连接之前一直停留在预设长度。
+            // A request raised without a subscriber is never consumed, so it must not be recorded: otherwise the first
+            // request after the host subscribes is dropped by the dedupe and the bar keeps its preset length until the next
+            // media connection.
+            if (DesiredSizeChanged is null)
+                return;
+
+            if (!isForcedRefresh && fingerprint == _lastSizeFingerprint)
                 return;
 
             _lastSizeFingerprint = fingerprint;
@@ -893,7 +937,7 @@ namespace AFMediaBar.Components
                 textWidth,
                 double.PositiveInfinity,
                 fingerprint,
-                isResetToPreset);
+                isForcedRefresh);
             if (_currentMode == WindowMode.Taskbar && orientation == LayoutOrientation.Horizontal)
             {
                 var experience = SettingsManager.Current.TaskbarExperience.Normalize();

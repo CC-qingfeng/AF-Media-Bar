@@ -76,6 +76,7 @@ public static class TaskbarHorizontalLayout
                     ["showArtist"] = true,
                     ["titleFontSize"] = 14.0,
                     ["artistFontSize"] = 12.0,
+                    ["lyricsFontSize"] = 12.0,
                     ["artistOpacity"] = 0.5,
                     ["layout"] = "vertical",
                     ["verticalAlignment"] = "center"

@@ -157,6 +157,16 @@ public partial class DisplayModesViewModel : ObservableObject
         set => UpdateExperience(SettingsManager.Current.TaskbarExperience with { ContentLayout = value });
     }
 
+    /// <summary>
+    /// 静置层媒体文字（标题、歌手、歌词）的字号缩放百分比。
+    /// Font-size scale percentage for rest-layer media text: title, artist, and lyrics.
+    /// </summary>
+    public int MediaFontSizePercent
+    {
+        get => SettingsManager.Current.TaskbarExperience.Normalize().MediaFontSizePercent;
+        set => UpdateExperience(SettingsManager.Current.TaskbarExperience with { MediaFontSizePercent = value });
+    }
+
     /// <summary>任务栏标题和歌手文字的对齐方式。 / Alignment of taskbar title and artist text.</summary>
     public TaskbarMediaTextAlignment MediaTextAlignment
     {
@@ -540,7 +550,8 @@ public partial class DisplayModesViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(HoverLayerEnabled)); OnPropertyChanged(nameof(FullLayerEnabled));
         OnPropertyChanged(nameof(Density)); OnPropertyChanged(nameof(ContentLayout));
-        OnPropertyChanged(nameof(MediaTextAlignment)); OnPropertyChanged(nameof(SpectrumVisible)); OnPropertyChanged(nameof(PerformanceVisible));
+        OnPropertyChanged(nameof(MediaTextAlignment)); OnPropertyChanged(nameof(MediaFontSizePercent));
+        OnPropertyChanged(nameof(SpectrumVisible)); OnPropertyChanged(nameof(PerformanceVisible));
         OnPropertyChanged(nameof(HoverPlayPauseVisible)); OnPropertyChanged(nameof(HoverPreviousNextVisible));
         OnPropertyChanged(nameof(HoverOutputDeviceVisible)); OnPropertyChanged(nameof(HoverAudioControlVisible));
         OnPropertyChanged(nameof(HoverProgressVisible));

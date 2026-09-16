@@ -232,7 +232,9 @@ public partial class TaskBarMediaControl
 
         var motion = CurrentMotion;
         BlurEffect? blur = null;
-        if (motion.UseDecorativeEffects)
+        var needsBlur = motion.UseDecorativeEffects &&
+                        (isCovered || SongInfoStackPanel.Effect is BlurEffect);
+        if (needsBlur)
         {
             if (SongInfoStackPanel.Effect is not BlurEffect currentBlur || currentBlur.IsFrozen)
             {
@@ -249,6 +251,10 @@ public partial class TaskBarMediaControl
         }
         else if (SongInfoStackPanel.Effect is BlurEffect existingBlur)
         {
+            // Effect 节点只要存在，文字就会一直被渲染到中间表面并失去字形保真度，
+            // 因此不透明状态必须真正清空它，而不是留下一个半径为 0 的模糊。
+            // While the effect node exists the text keeps rendering through an intermediate surface and loses glyph
+            // fidelity, so the un-covered state must clear it instead of leaving a zero-radius blur behind.
             existingBlur.BeginAnimation(BlurEffect.RadiusProperty, null);
             SongInfoStackPanel.Effect = null;
         }
@@ -259,20 +265,43 @@ public partial class TaskBarMediaControl
         {
             blur?.BeginAnimation(BlurEffect.RadiusProperty, null);
             SongInfoStackPanel.BeginAnimation(OpacityProperty, null);
-            if (blur is not null)
+            if (targetRadius > 0 && blur is not null)
                 blur.Radius = targetRadius;
+            else
+                SongInfoStackPanel.Effect = null;
             SongInfoStackPanel.Opacity = targetOpacity;
             return;
         }
 
         var duration = isCovered ? motion.StandardDuration : motion.FastDuration;
         var easingMode = isCovered ? EasingMode.EaseOut : EasingMode.EaseInOut;
-        blur?.BeginAnimation(BlurEffect.RadiusProperty, new DoubleAnimation
+        if (blur is not null)
         {
-            To = targetRadius,
-            Duration = duration,
-            EasingFunction = easingMode == EasingMode.EaseOut ? CreateEaseOut() : CreateEaseInOut()
-        }, HandoffBehavior.SnapshotAndReplace);
+            var radiusAnimation = new DoubleAnimation
+            {
+                To = targetRadius,
+                Duration = duration,
+                EasingFunction = easingMode == EasingMode.EaseOut ? CreateEaseOut() : CreateEaseInOut()
+            };
+            if (targetRadius <= 0)
+            {
+                // 恢复动画结束后立即移除 Effect 节点，让文字回到直接合成的清晰状态。
+                // Remove the effect node when the un-cover animation ends so the text composites directly again.
+                radiusAnimation.Completed += (_, _) =>
+                {
+                    // 快速重入时新的覆盖状态可能已经换上另一个模糊，只在仍由本次恢复持有该节点时才清空。
+                    // A quick re-entry can already have installed another blur, so clear the node only while this
+                    // un-cover still owns it.
+                    if (!ReferenceEquals(SongInfoStackPanel.Effect, blur))
+                        return;
+
+                    blur.BeginAnimation(BlurEffect.RadiusProperty, null);
+                    SongInfoStackPanel.Effect = null;
+                };
+            }
+
+            blur.BeginAnimation(BlurEffect.RadiusProperty, radiusAnimation, HandoffBehavior.SnapshotAndReplace);
+        }
         SongInfoStackPanel.BeginAnimation(OpacityProperty, new DoubleAnimation
         {
             To = targetOpacity,
