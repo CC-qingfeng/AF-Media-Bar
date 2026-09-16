@@ -86,13 +86,16 @@
         panel progress/volume, the compact menu's vertical volume, and the tray audio panel.
     -->
     <!--
-        强调色画刷取"原始系统强调色"（WPF-UI 的 SystemAccentColor），而不是主题里那档被压暗的填充令牌
-        （AccentFillColorDefaultBrush 是强调色的暗档，在深色主题下看起来发灰、发淡）。
-        The accent brush uses the raw system accent (WPF-UI's SystemAccentColor) instead of the theme's darkened fill
-        token (AccentFillColorDefaultBrush is a darker shade of the accent and reads washed out on dark themes).
+        强调色一律引用组合根发布的五个应用级画刷（AfAccentBrush / AfAccentHoverBrush / AfAccentPressedBrush /
+        AfAccentTintBrush / AfOnAccentBrush），它们由 ApplicationThemeCoordinator 从系统原始强调色派生，
+        并在强调色或主题变化时整体重发。不得直接引用任何第三方库的强调色键（WPF-UI 的 Accent*、SystemAccentColor*、
+        MicaWPF.Brushes.* 都属于第三方）：它们各自维护不同的一档派生色，正是"设置页是粉色、媒体栏是默认蓝"的来源。
+        Every accent reference goes through the five application-level brushes published by the composition root
+        (AfAccentBrush / AfAccentHoverBrush / AfAccentPressedBrush / AfAccentTintBrush / AfOnAccentBrush). They are derived
+        from the raw system accent by ApplicationThemeCoordinator and republished as a set whenever the accent or theme
+        changes. Never reference a third-party accent key (WPF-UI's Accent*, SystemAccentColor*, MicaWPF.Brushes.*): each
+        library maintains its own derived shade, which is exactly what split settings-pink from media-blue.
     -->
-    <SolidColorBrush x:Key="AfAccentFillBrush" Color="{DynamicResource SystemAccentColor}" />
-
     <Style x:Key="AfAccentSliderThumbStyle" TargetType="{x:Type Thumb}">
         <Setter Property="OverridesDefaultStyle" Value="True" />
         <Setter Property="Height" Value="18" />
@@ -105,7 +108,7 @@
                                 BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
                                 BorderThickness="3" />
                         <Ellipse Width="8" Height="8"
-                                 Fill="{DynamicResource AfAccentFillBrush}" />
+                                 Fill="{DynamicResource AfAccentBrush}" />
                     </Grid>
                 </ControlTemplate>
             </Setter.Value>
@@ -134,7 +137,7 @@
                                 Background="{DynamicResource ControlStrokeColorDefaultBrush}" />
                         <Border x:Name="PART_SelectionRange" Height="4" CornerRadius="2"
                                 VerticalAlignment="Center" HorizontalAlignment="Left"
-                                Background="{DynamicResource AfAccentFillBrush}" />
+                                Background="{DynamicResource AfAccentBrush}" />
                         <Track x:Name="PART_Track" Orientation="{TemplateBinding Orientation}">
                             <Track.DecreaseRepeatButton>
                                 <RepeatButton Command="{x:Static Slider.DecreaseLarge}" Focusable="False" IsTabStop="False">
@@ -146,7 +149,7 @@
                                 </RepeatButton>
                             </Track.DecreaseRepeatButton>
                             <Track.Thumb>
-                                <Thumb Style="{StaticResource AfAccentSliderThumbStyle}" />
+                                <Thumb x:Name="SliderThumb" Style="{StaticResource AfAccentSliderThumbStyle}" />
                             </Track.Thumb>
                             <Track.IncreaseRepeatButton>
                                 <RepeatButton Command="{x:Static Slider.IncreaseLarge}" Focusable="False" IsTabStop="False">
@@ -159,6 +162,18 @@
                             </Track.IncreaseRepeatButton>
                         </Track>
                     </Grid>
+                    <ControlTemplate.Triggers>
+                        <!--
+                            禁用的滑杆只让滑块变暗，轨道与填充保持满强度：完整层的进度条在会话不支持跳转时被禁用，
+                            而它旁边的音量条是启用的 —— 整条降透明度会让两个同色组件看起来深浅不一。
+                            A disabled slider only dims its thumb; the track and fill keep full strength. The full panel's progress
+                            slider is disabled while the session cannot seek and the volume slider next to it is enabled, so
+                            fading the whole control made two same-colored components look different.
+                        -->
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="SliderThumb" Property="Opacity" Value="0.4" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
@@ -175,7 +190,7 @@
                                         Background="{DynamicResource ControlStrokeColorDefaultBrush}" />
                                 <Border x:Name="PART_SelectionRange" Width="4" CornerRadius="2"
                                         HorizontalAlignment="Center" VerticalAlignment="Bottom"
-                                        Background="{DynamicResource AfAccentFillBrush}" />
+                                        Background="{DynamicResource AfAccentBrush}" />
                                 <Track x:Name="PART_Track" Orientation="{TemplateBinding Orientation}">
                                     <Track.DecreaseRepeatButton>
                                         <RepeatButton Command="{x:Static Slider.DecreaseLarge}" Focusable="False" IsTabStop="False">
@@ -187,7 +202,7 @@
                                         </RepeatButton>
                                     </Track.DecreaseRepeatButton>
                                     <Track.Thumb>
-                                        <Thumb Style="{StaticResource AfAccentSliderThumbStyle}" />
+                                        <Thumb x:Name="SliderThumb" Style="{StaticResource AfAccentSliderThumbStyle}" />
                                     </Track.Thumb>
                                     <Track.IncreaseRepeatButton>
                                         <RepeatButton Command="{x:Static Slider.IncreaseLarge}" Focusable="False" IsTabStop="False">
@@ -200,12 +215,16 @@
                                     </Track.IncreaseRepeatButton>
                                 </Track>
                             </Grid>
+                            <ControlTemplate.Triggers>
+                                <!-- 与横向模板一致：禁用只压暗滑块，轨道与填充保持满强度。 -->
+                                <!-- Same as the horizontal template: disabled dims only the thumb, never the track or fill. -->
+                                <Trigger Property="IsEnabled" Value="False">
+                                    <Setter TargetName="SliderThumb" Property="Opacity" Value="0.4" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
                         </ControlTemplate>
                     </Setter.Value>
                 </Setter>
-            </Trigger>
-            <Trigger Property="IsEnabled" Value="False">
-                <Setter Property="Opacity" Value="0.4" />
             </Trigger>
         </Style.Triggers>
     </Style>
@@ -233,7 +252,7 @@
                         <Border x:Name="PART_Track" CornerRadius="2"
                                 Background="{DynamicResource ControlStrokeColorDefaultBrush}" />
                         <Border x:Name="PART_Indicator" CornerRadius="2" HorizontalAlignment="Left"
-                                Background="{DynamicResource AfAccentFillBrush}" />
+                                Background="{DynamicResource AfAccentBrush}" />
                     </Grid>
                 </ControlTemplate>
             </Setter.Value>
@@ -352,7 +371,7 @@
                 Width="3"
                 Margin="0,2,10,2"
                 VerticalAlignment="Stretch"
-                Background="{DynamicResource AccentFillColorDefaultBrush}"
+                Background="{DynamicResource AfAccentBrush}"
                 CornerRadius="2" />
             <TextBlock
                 Grid.Column="1"
@@ -417,9 +436,9 @@
                                 Height="32"
                                 Margin="0,0,14,0"
                                 VerticalAlignment="Center"
-                                TextElement.Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}">
+                                TextElement.Foreground="{DynamicResource AfAccentBrush}">
                                 <Border
-                                    Background="{DynamicResource AccentFillColorDefaultBrush}"
+                                    Background="{DynamicResource AfAccentBrush}"
                                     CornerRadius="8"
                                     Opacity="0.14" />
                                 <ContentControl
@@ -466,7 +485,7 @@
                             <Setter TargetName="CardBorder" Property="BorderBrush" Value="{DynamicResource ControlStrokeColorSecondaryBrush}" />
                         </Trigger>
                         <Trigger Property="IsKeyboardFocused" Value="True">
-                            <Setter TargetName="CardBorder" Property="BorderBrush" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+                            <Setter TargetName="CardBorder" Property="BorderBrush" Value="{DynamicResource AfAccentBrush}" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -513,7 +532,7 @@
         <Grid>
             <Border
                 x:Name="ChoiceTint"
-                Background="{DynamicResource AccentFillColorDefaultBrush}"
+                Background="{DynamicResource AfAccentBrush}"
                 CornerRadius="8"
                 Opacity="0" />
             <Border
@@ -534,7 +553,7 @@
                 <Setter TargetName="ChoiceBorder" Property="BorderBrush" Value="{DynamicResource ControlStrokeColorSecondaryBrush}" />
             </Trigger>
             <Trigger Property="IsChecked" Value="True">
-                <Setter TargetName="ChoiceBorder" Property="BorderBrush" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+                <Setter TargetName="ChoiceBorder" Property="BorderBrush" Value="{DynamicResource AfAccentBrush}" />
                 <Setter TargetName="ChoiceBorder" Property="BorderThickness" Value="1.5" />
                 <Trigger.EnterActions>
                     <BeginStoryboard>
@@ -564,7 +583,7 @@
                 </Trigger.ExitActions>
             </Trigger>
             <Trigger Property="IsPressed" Value="True">
-                <Setter TargetName="ChoiceBorder" Property="BorderBrush" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+                <Setter TargetName="ChoiceBorder" Property="BorderBrush" Value="{DynamicResource AfAccentBrush}" />
             </Trigger>
             <Trigger Property="IsEnabled" Value="False">
                 <Setter TargetName="ChoiceBorder" Property="Opacity" Value="0.55" />

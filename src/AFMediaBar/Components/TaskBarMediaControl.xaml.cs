@@ -824,11 +824,15 @@ namespace AFMediaBar.Components
                 SongInfoStackPanel.ToolTip += !string.IsNullOrEmpty(snapshot.Title) ? snapshot.Title : string.Empty;
                 SongInfoStackPanel.ToolTip += !string.IsNullOrEmpty(snapshot.Artist) ? "\n\n" + snapshot.Artist : string.Empty;
 
-                // 根据主色调改变图标颜色（从封面提取）
-                // Change icon color based on dominant color (extracted from artwork)
+                // 根据主色调改变图标颜色（从封面提取）；没有封面主色时回退到应用统一强调色，再退回系统高亮色。
+                // 旧实现回退到 MicaWPF 的强调色键，而该键在本项目中不解析，会得到一个空画刷。
+                // Change icon color based on dominant color (extracted from artwork); without an artwork dominant color it
+                // falls back to the application accent and then to the system highlight color. The previous fallback used a
+                // MicaWPF accent key that does not resolve in this project and produced a null brush.
                 SolidColorBrush brush = BitmapHelper.SavedDominantColors.Count > 0
                     ? BitmapHelper.SavedDominantColors.Last()
-                    : (SolidColorBrush)Application.Current.TryFindResource("MicaWPF.Brushes.SystemAccentColorTertiary");
+                    : Application.Current.TryFindResource("AfAccentBrush") as SolidColorBrush
+                      ?? new SolidColorBrush(SystemColors.HighlightColor);
                 SongImagePlaceholder.Foreground = brush;
 
                 if (snapshot.Artwork is not null)

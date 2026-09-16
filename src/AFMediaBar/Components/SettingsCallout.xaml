@@ -32,7 +32,7 @@
             <Setter Property="BorderBrush" Value="{DynamicResource ControlStrokeColorDefaultBrush}" />
             <Style.Triggers>
                 <DataTrigger Binding="{Binding IsAccent, ElementName=Root}" Value="True">
-                    <Setter Property="BorderBrush" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+                    <Setter Property="BorderBrush" Value="{DynamicResource AfAccentBrush}" />
                 </DataTrigger>
             </Style.Triggers>
         </Style>
@@ -41,7 +41,7 @@
             <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
             <Style.Triggers>
                 <DataTrigger Binding="{Binding IsAccent, ElementName=Root}" Value="True">
-                    <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+                    <Setter Property="Foreground" Value="{DynamicResource AfAccentBrush}" />
                 </DataTrigger>
             </Style.Triggers>
         </Style>
@@ -71,7 +71,7 @@
         <Border
             CornerRadius="8"
             Style="{StaticResource CalloutTintStyle}"
-            Background="{DynamicResource AccentFillColorDefaultBrush}" />
+            Background="{DynamicResource AfAccentBrush}" />
         <Border
             Padding="14,12"
             BorderThickness="1"

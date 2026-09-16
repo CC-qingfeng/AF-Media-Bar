@@ -200,6 +200,12 @@ namespace AFMediaBar
             _themeCoordinator = new ApplicationThemeCoordinator(Dispatcher, UpdateAppearanceResources);
             _themeCoordinator.Start();
             _themeCoordinator.Apply(SettingsManager.Current.Appearance);
+
+            // DWM 的强调色变化消息由窗口外观服务统一接收；转交协调器后整套应用级画刷会一起更新。
+            // The window appearance service receives DWM's accent-change message; forwarding it makes the coordinator refresh
+            // the whole set of application-level brushes at once.
+            Services.GetRequiredService<WindowAppearanceService>().SystemColorizationChanged +=
+                () => _themeCoordinator?.Apply(SettingsManager.Current.Appearance);
             await _host.StartAsync();
 
 #if DEBUG
@@ -309,7 +315,7 @@ namespace AFMediaBar
             Environment.Exit(e.ApplicationExitCode);
         }
 
-        private void UpdateAppearanceResources(AppearanceSettings appearance, ApplicationTheme theme)
+        private void UpdateAppearanceResources(AppearanceSettings appearance, ApplicationTheme theme, AccentPalette accent)
         {
             var fontFamily = new FontFamily(appearance.ResolveFontFamilySource(SystemFonts.MessageFontFamily.Source));
             var fontWeight = FontWeight.FromOpenTypeWeight(appearance.FontWeight);
@@ -318,6 +324,17 @@ namespace AFMediaBar
             Resources["AppTextFontWeight"] = fontWeight;
             Resources["AppTextMediumFontWeight"] = FontWeight.FromOpenTypeWeight(Math.Clamp(appearance.FontWeight + 100, 100, 999));
             Resources["AppTextStrongFontWeight"] = FontWeight.FromOpenTypeWeight(Math.Clamp(appearance.FontWeight + 200, 100, 999));
+
+            // 强调色只在这里发布一次：所有界面（任务栏媒体栏、菜单、完整层、设置页与图示）都引用这几个应用级画刷，
+            // 因此系统强调色变化后不需要逐个界面刷新，也不会再出现"设置页是粉色、媒体栏是默认蓝"的分裂。
+            // The accent is published exactly once, here: every surface (taskbar bar, menus, full panel, settings pages, and
+            // diagrams) references these application-level brushes, so an accent change needs no per-surface refresh and the
+            // settings-pink / media-blue split cannot come back.
+            Resources["AfAccentBrush"] = CreateFrozenBrush(accent.Accent);
+            Resources["AfAccentHoverBrush"] = CreateFrozenBrush(accent.Hover);
+            Resources["AfAccentPressedBrush"] = CreateFrozenBrush(accent.Pressed);
+            Resources["AfAccentTintBrush"] = CreateFrozenBrush(accent.Tint);
+            Resources["AfOnAccentBrush"] = CreateFrozenBrush(accent.OnAccent);
 
             var dark = theme == ApplicationTheme.Dark || theme == ApplicationTheme.HighContrast && SystemParameters.HighContrast;
             // Context menus always use an opaque Fluent solid surface. Native
@@ -328,6 +345,13 @@ namespace AFMediaBar
             menuBrush.Freeze();
             Resources["AppMenuBackgroundBrush"] = menuBrush;
             Resources["ContextMenuBackground"] = menuBrush;
+        }
+
+        private static SolidColorBrush CreateFrozenBrush(Color color)
+        {
+            var brush = new SolidColorBrush(color);
+            brush.Freeze();
+            return brush;
         }
 
         /// <summary>

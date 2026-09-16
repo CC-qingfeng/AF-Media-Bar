@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2024-2026 The FluentFlyout Authors
+// Copyright (c) 2024-2026 The FluentFlyout Authors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 using System.Diagnostics;
@@ -46,22 +46,15 @@ internal static class BitmapHelper
     public static List<SolidColorBrush> GetDominantColors(int colorCount, int maxIterations = 15)
     {
         int hashCode = ArtworkLoader.CurrentThumbnailHash;
-
         if (!UseAlbumArtAsAccentColor || hashCode == 0)
         {
-            // control color (buttons, etc.)
-            var accent =
-                (SolidColorBrush)Application.Current.TryFindResource("MicaWPF.Brushes.SystemAccentColorSecondary");
-            if (!accent.IsFrozen)
-                accent = accent.Clone();
-            accent.Freeze();
-
-            // accent color (for non-control elements)
-            var accent2 =
-                (SolidColorBrush)Application.Current.TryFindResource("MicaWPF.Brushes.SystemAccentColorTertiary");
-            if (!accent2.IsFrozen)
-                accent2 = accent2.Clone();
-            accent2.Freeze();
+            // 强调色回退统一取自应用调色板；取不到时退回系统高亮色，绝不会是空画刷。
+            // 旧实现取 MicaWPF 的强调色键，而该键在本项目中并不存在，命中这条回退路径时会直接空引用。
+            // The accent fallback comes from the application palette and degrades to the system highlight color, so it can
+            // never be null. The previous implementation read MicaWPF accent keys that do not resolve in this project and
+            // would throw a null reference whenever this fallback ran.
+            var accent = ResolveAccentFallback("AfAccentHoverBrush");
+            var accent2 = ResolveAccentFallback("AfAccentBrush");
 
             _currentDominantColors = [accent, accent2];
             return _currentDominantColors;
@@ -136,4 +129,21 @@ internal static class BitmapHelper
         }
     }
 
+    /// <summary>
+    /// 读取应用统一调色板中的强调色画刷，缺失时退回系统高亮色，并保证返回冻结的非空画刷。
+    /// Reads an accent brush from the application palette, degrading to the system highlight color and always returning a
+    /// frozen, non-null brush.
+    /// </summary>
+    private static SolidColorBrush ResolveAccentFallback(string resourceKey)
+    {
+        var brush = Application.Current?.TryFindResource(resourceKey) as SolidColorBrush
+            ?? new SolidColorBrush(SystemColors.HighlightColor);
+        if (!brush.IsFrozen)
+        {
+            brush = brush.Clone();
+            brush.Freeze();
+        }
+
+        return brush;
+    }
 }

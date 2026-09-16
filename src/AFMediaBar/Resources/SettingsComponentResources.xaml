@@ -59,8 +59,8 @@
         x:Key="AfSettingsChipAccentStyle"
         BasedOn="{StaticResource AfSettingsChipBaseStyle}"
         TargetType="{x:Type ContentControl}">
-        <Setter Property="Background" Value="{DynamicResource AccentFillColorDefaultBrush}" />
-        <Setter Property="Foreground" Value="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
+        <Setter Property="Background" Value="{DynamicResource AfAccentBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource AfOnAccentBrush}" />
     </Style>
 
     <Style
@@ -114,8 +114,8 @@
         x:Key="AfSettingsBadgeAccentStyle"
         BasedOn="{StaticResource AfSettingsBadgeBaseStyle}"
         TargetType="{x:Type ContentControl}">
-        <Setter Property="Background" Value="{DynamicResource AccentFillColorDefaultBrush}" />
-        <Setter Property="Foreground" Value="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
+        <Setter Property="Background" Value="{DynamicResource AfAccentBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource AfOnAccentBrush}" />
     </Style>
 
     <Style
@@ -180,9 +180,9 @@
                                 Height="32"
                                 Margin="0,0,14,0"
                                 VerticalAlignment="Center"
-                                TextElement.Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}">
+                                TextElement.Foreground="{DynamicResource AfAccentBrush}">
                                 <Border
-                                    Background="{DynamicResource AccentFillColorDefaultBrush}"
+                                    Background="{DynamicResource AfAccentBrush}"
                                     CornerRadius="8"
                                     Opacity="0.14" />
                                 <ContentControl
@@ -270,7 +270,7 @@
                                 <Condition Property="IsNested" Value="False" />
                                 <Condition Property="IsKeyboardFocused" Value="True" />
                             </MultiTrigger.Conditions>
-                            <Setter TargetName="RowSurface" Property="BorderBrush" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+                            <Setter TargetName="RowSurface" Property="BorderBrush" Value="{DynamicResource AfAccentBrush}" />
                         </MultiTrigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -337,9 +337,9 @@
                                 Height="26"
                                 Margin="0,0,10,0"
                                 VerticalAlignment="Center"
-                                TextElement.Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}">
+                                TextElement.Foreground="{DynamicResource AfAccentBrush}">
                                 <Border
-                                    Background="{DynamicResource AccentFillColorDefaultBrush}"
+                                    Background="{DynamicResource AfAccentBrush}"
                                     CornerRadius="7"
                                     Opacity="0.16" />
                                 <ContentControl
@@ -488,9 +488,9 @@
                                 Height="34"
                                 Margin="0,0,12,0"
                                 VerticalAlignment="Top"
-                                TextElement.Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}">
+                                TextElement.Foreground="{DynamicResource AfAccentBrush}">
                                 <Border
-                                    Background="{DynamicResource AccentFillColorDefaultBrush}"
+                                    Background="{DynamicResource AfAccentBrush}"
                                     CornerRadius="9"
                                     Opacity="0.16" />
                                 <ContentControl
@@ -554,7 +554,7 @@
                                 Margin="0,0,0,1"
                                 HorizontalAlignment="Left"
                                 VerticalAlignment="Bottom"
-                                Background="{DynamicResource AccentFillColorDefaultBrush}"
+                                Background="{DynamicResource AfAccentBrush}"
                                 CornerRadius="1">
                                 <Border.RenderTransform>
                                     <TranslateTransform X="0" />
@@ -567,7 +567,7 @@
                             Height="2"
                             Margin="0,2,0,0"
                             HorizontalAlignment="Stretch"
-                            Background="{DynamicResource AccentFillColorDefaultBrush}"
+                            Background="{DynamicResource AfAccentBrush}"
                             Opacity="0.5"
                             RenderTransformOrigin="0,0.5">
                             <Border.RenderTransform>

@@ -15,8 +15,11 @@ namespace AFMediaBar.Classes.Services;
 public sealed class ApplicationThemeCoordinator : IDisposable
 {
     private readonly Dispatcher _dispatcher;
-    private readonly Action<AppearanceSettings, ApplicationTheme> _updateResources;
+    private readonly Action<AppearanceSettings, ApplicationTheme, AccentPalette> _updateResources;
     private DispatcherTimer? _systemThemeRefreshTimer;
+    private AccentPalette? _publishedAccent;
+    private ApplicationTheme? _publishedTheme;
+    private bool _isPublishing;
     private bool _started;
     private bool _disposed;
 
@@ -25,10 +28,13 @@ public sealed class ApplicationThemeCoordinator : IDisposable
     /// Creates the application theme coordinator.
     /// </summary>
     /// <param name="dispatcher">WPF UI 调度器 / WPF UI dispatcher.</param>
-    /// <param name="updateResources">资源更新回调 / Resource update callback.</param>
+    /// <param name="updateResources">
+    /// 资源更新回调，接收外观设置、当前主题与派生好的强调色调色板。
+    /// Resource update callback receiving the appearance settings, the current theme, and the derived accent palette.
+    /// </param>
     public ApplicationThemeCoordinator(
         Dispatcher dispatcher,
-        Action<AppearanceSettings, ApplicationTheme> updateResources)
+        Action<AppearanceSettings, ApplicationTheme, AccentPalette> updateResources)
     {
         _dispatcher = dispatcher;
         _updateResources = updateResources;
@@ -50,21 +56,103 @@ public sealed class ApplicationThemeCoordinator : IDisposable
     }
 
     /// <summary>
-    /// 立即应用指定外观设置。
-    /// Applies the specified appearance settings immediately.
+    /// 立即应用指定外观设置，并发布当前系统强调色。
+    /// Applies the specified appearance settings immediately and publishes the current system accent.
     /// </summary>
     public void Apply(AppearanceSettings appearance)
     {
         if (_disposed)
             return;
 
-        var theme = ResolveApplicationTheme(appearance.ApplicationThemeMode);
-        if (ApplicationThemeManager.GetAppTheme() != theme)
+        PublishAccent(
+            appearance,
+            ResolveApplicationTheme(appearance.ApplicationThemeMode),
+            ResolveSystemAccent());
+    }
+
+    /// <summary>
+    /// 解析当前系统强调色。优先取 WPF-UI 已应用的系统强调色，它是用户真正设置的那一支；
+    /// <c>DwmGetColorizationColor</c> 返回的是旧式窗口着色值，与"强调色"不是同一个口径，
+    /// 直接使用它会让我们的画刷（媒体栏、滑杆、进度条）停在偏蓝的着色值上，而 WPF-UI 的控件已是用户颜色。
+    /// Resolves the current system accent, preferring the one WPF-UI applied because that is the color the user actually
+    /// chose. <c>DwmGetColorizationColor</c> reports the legacy window-colorization value, which is a different quantity:
+    /// using it leaves our brushes (media bar, sliders, progress bars) on a bluish colorization value while WPF-UI's own
+    /// controls already show the user's accent.
+    /// </summary>
+    public static Color ResolveSystemAccent()
+    {
+        var applied = ApplicationAccentColorManager.SystemAccent;
+        if (applied.A > 0 && (applied.R | applied.G | applied.B) != 0)
+            return applied;
+
+        try
         {
-            ApplicationThemeManager.Apply(theme, WindowBackdropType.None, updateAccent: true);
+            var colorization = ApplicationAccentColorManager.GetColorizationColor();
+            if (colorization.A > 0 && (colorization.R | colorization.G | colorization.B) != 0)
+                return colorization;
+        }
+        catch
+        {
+            // DWM 取色在会话切换等场景会失败；此时保留上面那支已应用强调色。
+            // The DWM query can fail across session transitions; the applied accent above stays authoritative.
         }
 
-        _updateResources(appearance, theme);
+        return applied;
+    }
+
+    private void PublishAccent(AppearanceSettings appearance, ApplicationTheme theme, Color systemAccent)
+    {
+        // 库内的强调色/主题应用会同步回调主题事件，重入必须直接返回，否则会递归重发资源。
+        // The library's accent and theme application raise the theme event synchronously; a re-entrant call must return
+        // immediately, otherwise the resources would be republished recursively.
+        if (_isPublishing)
+            return;
+
+        _isPublishing = true;
+        try
+        {
+            PublishAccentCore(appearance, theme, systemAccent);
+        }
+        finally
+        {
+            _isPublishing = false;
+        }
+    }
+
+    private void PublishAccentCore(AppearanceSettings appearance, ApplicationTheme theme, Color systemAccent)
+    {
+        // 先让 WPF-UI 按系统强调色重刷它自己的资源，再读取它的结果：这样"我们的画刷"和"库内控件"必然同色，
+        // 也不会再出现库内控件是新色、我们的滑杆还是旧色（或反过来）的分裂。
+        // Let WPF-UI refresh its own resources from the system accent first and then read its result: our brushes and the
+        // library's controls are then guaranteed to be the same color instead of one being fresh and the other stale.
+        ApplicationAccentColorManager.ApplySystemAccent();
+        systemAccent = ResolveSystemAccent();
+
+        var dark = theme == ApplicationTheme.Dark ||
+                   (theme == ApplicationTheme.HighContrast && SystemParameters.HighContrast);
+        var palette = AccentColorPolicy.Build(systemAccent, dark, SystemParameters.HighContrast);
+
+        // 强调色与主题都没变时不做任何重应用：DWM 与系统偏好消息会出现成串重复事件。
+        // Skip everything when neither the accent nor the theme changed: DWM and system-preference messages arrive in bursts.
+        if (_publishedAccent == palette && _publishedTheme == theme)
+            return;
+
+        // 先记录本次结果，再调用可能同步回调的库方法，避免 ApplySystemAccent 触发的主题事件把流程递归回来。
+        // Record the result first, then call the library method: it can raise the theme event synchronously, and the
+        // re-entrant call must already see the new state.
+        _publishedAccent = palette;
+        _publishedTheme = theme;
+
+        // 主题应用与强调色应用必须一起发生：WPF-UI 只在主题应用时重建主题字典，
+        // 库内控件（开关的基础态、窗口边框、导航选中态）才会重新解析强调色。只调用 ApplySystemAccent 时，
+        // 那些控件的悬停/按下态会读到新色而基础态停在旧色（实测：悬停一下开关才显示正确颜色）。
+        // Theme application and accent application must happen together: WPF-UI rebuilds its theme dictionaries only when
+        // the theme is applied, which is when its controls (a toggle's base state, the window frame, the navigation
+        // selection) re-resolve the accent. Calling only ApplySystemAccent updates their hover and pressed states while the
+        // base state keeps the old color - hovering a toggle was the only way to make it look right.
+        ApplicationThemeManager.Apply(theme, WindowBackdropType.None, updateAccent: true);
+
+        _updateResources(appearance, theme, palette);
     }
 
     /// <summary>
@@ -101,7 +189,9 @@ public sealed class ApplicationThemeCoordinator : IDisposable
     }
 
     private void OnApplicationThemeChanged(ApplicationTheme theme, Color accent) =>
-        _updateResources(SettingsManager.Current.Appearance, theme);
+        // WPF-UI 报出的 accent 是它自己那一档派生色，强调色仍以 DWM 原始值为准，因此走完整的 Apply 流程重新解析。
+        // WPF-UI reports its own derived accent shade, so the raw DWM value stays authoritative: run the full Apply flow.
+        Apply(SettingsManager.Current.Appearance);
 
     private void OnUserPreferenceChanged(object? sender, UserPreferenceChangedEventArgs e)
     {

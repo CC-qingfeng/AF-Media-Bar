@@ -105,7 +105,7 @@
                         <Grid>
                             <ui:SymbolIcon Name="SongImagePlaceholder" Symbol="MusicNote220" FontSize="24"
                                            Filled="True"
-                                           Foreground="{DynamicResource MicaWPF.Brushes.SystemAccentColorTertiary}" />
+                                           Foreground="{DynamicResource AfAccentBrush}" />
                             <Border x:Name="SongImageHoverOverlay"
                                     CornerRadius="5"
                                     Background="Transparent"

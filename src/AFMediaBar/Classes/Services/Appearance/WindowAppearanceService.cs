@@ -35,6 +35,13 @@ public sealed class WindowAppearanceService : IDisposable
     private bool _disposed;
 
     /// <summary>
+    /// 系统强调色变化时触发，由组合根转交主题协调器重新解析并发布强调色调色板。
+    /// Raised when the system accent color changes; the composition root forwards it so the theme coordinator re-resolves and
+    /// publishes the accent palette.
+    /// </summary>
+    public event Action? SystemColorizationChanged;
+
+    /// <summary>
     /// 创建窗口外观协调服务并订阅外观与主题变化。
     /// Creates the window appearance coordinator and subscribes to appearance and theme changes.
     /// </summary>
@@ -201,6 +208,9 @@ public sealed class WindowAppearanceService : IDisposable
         if (message is WmSettingChange or WmThemeChanged or WmDwmCompositionChanged or
             WmDwmColorizationColorChanged or WmDpiChanged or WmDpiChangedAfterParent)
         {
+            if (message == WmDwmColorizationColorChanged)
+                SystemColorizationChanged?.Invoke();
+
             QueueApplyAll();
         }
 

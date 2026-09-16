@@ -495,7 +495,7 @@
                                     <components:SettingsRow
                                         Icon="{ui:SymbolIcon DataBarVertical24}"
                                         IsNested="True"
-                                        Title="进度控制">
+                                        Title="进度条">
                                         <ui:ToggleSwitch IsChecked="{Binding ViewModel.HoverProgressVisible, Mode=TwoWay}" />
                                     </components:SettingsRow>
                                 </StackPanel>
