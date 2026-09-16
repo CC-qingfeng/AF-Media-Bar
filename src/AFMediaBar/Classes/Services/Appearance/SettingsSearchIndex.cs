@@ -195,8 +195,8 @@ public static class SettingsSearchIndex
             SettingsPageKey.AppAndAbout,
             0,
             "应用",
-            "开机自动启动、界面语言与检查更新，都还没做",
-            ["开机", "启动", "startup", "自启", "语言", "language", "中文", "更新", "update", "预留"]),
+            "版本信息、检查更新与自动更新；开机自动启动与界面语言仍为预留",
+            ["更新", "update", "升级", "版本", "version", "检查更新", "自动更新", "自动下载", "下载", "安装", "安装程序", "静默安装", "重启", "加速", "镜像", "跳过此版本", "开机", "启动", "startup", "自启", "语言", "language", "中文", "预留"]),
         Create(
             SettingsPageKey.AppAndAbout,
             1,

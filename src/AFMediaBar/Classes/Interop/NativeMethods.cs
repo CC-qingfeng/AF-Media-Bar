@@ -50,6 +50,9 @@ public static partial class NativeMethods
     public const uint PM_NOREMOVE = 0x0000;
     public const int NIN_SELECT = 0x0400;
     public const int NIN_KEYSELECT = 0x0401;
+
+    /// <summary>气泡通知被点击。/ The balloon notification was clicked.</summary>
+    public const int NIN_BALLOONUSERCLICK = 0x0405;
     public const int NIN_POPUPOPEN = 0x0406;
     public const int WH_MOUSE_LL = 14;
     public const int VK_SHIFT = 0x10;
@@ -68,6 +71,12 @@ public static partial class NativeMethods
     public const uint NIF_ICON = 2;
     public const uint NIF_TIP = 4;
     public const uint NIF_SHOWTIP = 0x80;
+
+    /// <summary>本次调用携带气泡通知内容。/ This call carries balloon-notification content.</summary>
+    public const uint NIF_INFO = 0x10;
+
+    /// <summary>信息类气泡（蓝色图标）。/ Informational balloon, which uses the information icon.</summary>
+    public const uint NIIF_INFO = 0x1;
     public const uint NOTIFYICON_VERSION_4 = 4;
 
     // monitor

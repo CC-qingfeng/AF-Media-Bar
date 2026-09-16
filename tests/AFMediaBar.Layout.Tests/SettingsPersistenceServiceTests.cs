@@ -90,7 +90,12 @@ public sealed class SettingsPersistenceServiceTests
                 new QuickLaunchEntry("player", "Player", QuickLaunchTargetKind.Executable, @"C:\Apps\Player.exe", "Player.One")]),
             SpectrumComponent = new SpectrumComponentSettings(7, 25, 180),
             PerformanceComponent = new PerformanceComponentSettings(
-                [MetricKind.SystemCpu, MetricKind.ProcessMemory], 1800, true)
+                [MetricKind.SystemCpu, MetricKind.ProcessMemory], 1800, true),
+            Update = new UpdateSettings(
+                AutoCheckEnabled: false,
+                SkippedVersion: "1.2.0",
+                LastCheckUtc: new DateTimeOffset(2026, 9, 16, 8, 30, 0, TimeSpan.Zero),
+                LastCheckSucceeded: false)
         };
         using (var writer = new SettingsPersistenceService(_directory)) { writer.Initialize(); SettingsManager.Replace(settings); writer.Flush(); }
         SettingsManager.ResetAll();
@@ -131,8 +136,14 @@ public sealed class SettingsPersistenceServiceTests
             SettingsManager.Current.PerformanceComponent.Metrics!.ToArray());
         Assert.AreEqual(1800, SettingsManager.Current.PerformanceComponent.RefreshIntervalMilliseconds);
         Assert.IsTrue(SettingsManager.Current.PerformanceComponent.OpenTaskManagerOnClick);
+        Assert.IsFalse(SettingsManager.Current.Update.AutoCheckEnabled);
+        Assert.AreEqual("1.2.0", SettingsManager.Current.Update.SkippedVersion);
+        Assert.AreEqual(
+            new DateTimeOffset(2026, 9, 16, 8, 30, 0, TimeSpan.Zero),
+            SettingsManager.Current.Update.LastCheckUtc);
+        Assert.IsFalse(SettingsManager.Current.Update.LastCheckSucceeded);
         var persisted = File.ReadAllText(reader.SettingsPath);
-        StringAssert.Contains(persisted, "\"schemaVersion\": 8");
+        StringAssert.Contains(persisted, "\"schemaVersion\": 9");
         StringAssert.Contains(persisted, "\"Disabled\"");
     }
 
@@ -181,7 +192,7 @@ public sealed class SettingsPersistenceServiceTests
 
         Assert.IsTrue(SettingsManager.Current.LyricsEnabled);
         Assert.IsTrue(Directory.GetFiles(_directory, "settings.json.unsupported-*").Length == 1);
-        StringAssert.Contains(File.ReadAllText(main), "\"schemaVersion\": 8");
+        StringAssert.Contains(File.ReadAllText(main), "\"schemaVersion\": 9");
     }
 
     [TestMethod]
@@ -249,7 +260,7 @@ public sealed class SettingsPersistenceServiceTests
         Assert.AreEqual("DISPLAY2", SettingsManager.Current.TrackChangeNotification.FixedMonitorDeviceId);
         Assert.AreEqual(TaskbarLengthMode.FollowContent, SettingsManager.Current.TaskbarExperience.LengthMode);
         Assert.AreEqual(TaskbarExperienceSettings.Default.FixedLengthDip, SettingsManager.Current.TaskbarExperience.FixedLengthDip);
-        StringAssert.Contains(File.ReadAllText(service.SettingsPath), "\"schemaVersion\": 8");
+        StringAssert.Contains(File.ReadAllText(service.SettingsPath), "\"schemaVersion\": 9");
     }
 
     [TestMethod]
@@ -329,7 +340,32 @@ public sealed class SettingsPersistenceServiceTests
         Assert.AreEqual(TaskbarInformationDensity.Information, SettingsManager.Current.TaskbarExperience.Density);
         Assert.AreEqual(TaskbarLengthMode.Fixed, SettingsManager.Current.TaskbarExperience.LengthMode);
         Assert.AreEqual(420, SettingsManager.Current.TaskbarExperience.FixedLengthDip);
-        StringAssert.Contains(File.ReadAllText(service.SettingsPath), "\"schemaVersion\": 8");
+        StringAssert.Contains(File.ReadAllText(service.SettingsPath), "\"schemaVersion\": 9");
+    }
+
+    [TestMethod]
+    public void Schema8KeepsItsOwnValuesAndReceivesTheUpdateDefaults()
+    {
+        Directory.CreateDirectory(_directory);
+        File.WriteAllText(
+            Path.Combine(_directory, "settings.json"),
+            """
+            {"schemaVersion":8,"settings":{"taskbarExperience":{"hoverLayerEnabled":true,"fullLayerEnabled":true,"density":"Balanced","contentLayout":"AdaptiveStack","fullPanel":{"mediaInfoVisible":true,"mediaControlsVisible":true},"mediaFontSizePercent":125}}}
+            """);
+
+        using var service = new SettingsPersistenceService(_directory);
+        service.Initialize();
+
+        Assert.AreEqual(
+            125,
+            SettingsManager.Current.TaskbarExperience.MediaFontSizePercent,
+            "新增更新设置的迁移不得覆盖 schema 8 已有的字号。");
+        Assert.AreEqual(
+            UpdateSettings.Default,
+            SettingsManager.Current.Update,
+            "schema 8 的文件没有更新设置，必须取默认值，而不是被推断成关闭。");
+        Assert.IsTrue(SettingsManager.Current.Update.AutoCheckEnabled);
+        StringAssert.Contains(File.ReadAllText(service.SettingsPath), "\"schemaVersion\": 9");
     }
 
     [TestMethod]

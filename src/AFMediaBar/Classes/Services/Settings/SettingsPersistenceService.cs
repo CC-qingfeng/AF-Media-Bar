@@ -11,7 +11,7 @@ namespace AFMediaBar.Classes.Services;
 /// <summary>负责用户设置 JSON 的加载、恢复、原子保存和防抖。 / Owns loading, recovery, atomic saving and debouncing of user settings JSON.</summary>
 public sealed class SettingsPersistenceService : IDisposable
 {
-    public const int CurrentSchemaVersion = 8;
+    public const int CurrentSchemaVersion = 9;
     private readonly string _directoryPath;
     private readonly string _settingsPath;
     private readonly string _backupPath;
@@ -240,6 +240,17 @@ public sealed class SettingsPersistenceService : IDisposable
             {
                 MediaFontSizePercent = TaskbarExperienceSettings.Default.MediaFontSizePercent
             };
+        }
+        if (envelope.SchemaVersion <= 8)
+        {
+            // Schema 9 新增更新下载器设置。旧设置文件里没有这一段，反序列化后字段保留声明处的默认值，
+            // 但这里仍然显式赋值：迁移意图必须写在代码里，而不是依赖"缺字段时恰好等于默认值"这种巧合。
+            // 默认开启自动检查与自动下载安装，与全新安装后的行为一致。
+            // Schema 9 adds the update-downloader settings. Older files have no such section, and deserialization
+            // keeps the declared default of the backing field; the assignment is explicit anyway, because a
+            // migration intent belongs in code rather than in the coincidence that a missing field equals a
+            // default. Automatic checking and automatic download/install are on, matching a fresh installation.
+            result.Update = UpdateSettings.Default;
         }
         return result.Normalize();
     }

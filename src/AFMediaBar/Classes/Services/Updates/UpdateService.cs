@@ -1,0 +1,856 @@
+using System.Diagnostics;
+using System.IO;
+using System.Reflection;
+using System.Security.Principal;
+using System.Windows.Threading;
+using AFMediaBar.Classes.Models.Updates;
+using AFMediaBar.Classes.Settings;
+
+namespace AFMediaBar.Classes.Services.Updates;
+
+/// <summary>
+/// 更新下载器的协调器：唯一的状态机所有者。
+///
+/// 它把"什么时候检查、从哪里下载、什么时候可以安装"集中在一个地方，并只对外发布不可变的
+/// <see cref="UpdateState"/>：设置页与托盘菜单因此永远说同一件事，也不需要各自实现一遍重试与回退。
+///
+/// 三条硬边界：
+/// 1) 检查与下载全部在后台线程，状态只在 Dispatcher 上发布，UI 线程不等待任何 <see cref="Task"/>；
+/// 2) 只有通过 SHA-256 校验的文件才会成为"待安装"，校验失败一律删除并且绝不安装；
+/// 3) 安装由安装程序在程序退出之后完成——运行中的单文件可执行文件无法被覆盖——因此本类只负责决定
+///    "退出时是否启动安装包、要不要在装完后重新启动程序"。
+/// Coordinator of the update downloader and the single owner of its state machine.
+///
+/// It concentrates when to check, where to download from, and when installing is allowed, and publishes nothing
+/// but an immutable <see cref="UpdateState"/>: that is why the settings page and the tray menu always agree and
+/// neither has to reimplement retries or fallbacks.
+///
+/// Three hard boundaries:
+/// 1) checking and downloading happen on background threads, state is published on the dispatcher only, and the UI
+///    thread never waits for a <see cref="Task"/>;
+/// 2) only a file that passed its SHA-256 check becomes pending, and a failed check deletes the file and never
+///    installs it;
+/// 3) installing is performed by the installer after the application exits — a running single-file executable
+///    cannot be overwritten — so this class only decides whether to start the installer on exit and whether the
+///    application should come back afterwards.
+/// </summary>
+public sealed class UpdateService : IDisposable
+{
+    private static readonly TimeSpan ScheduleTickInterval = TimeSpan.FromMinutes(5);
+
+    private readonly UpdateManifestClient _manifestClient;
+    private readonly UpdatePackageDownloader _downloader;
+    private readonly UpdatePackageStore _store;
+    private readonly InstalledApplicationProbe _probe;
+    private readonly InstallCoordinatorMutex _installMutex;
+    private readonly Dispatcher _dispatcher;
+    private readonly object _gate = new();
+    private readonly HashSet<string> _failedSources = new(StringComparer.OrdinalIgnoreCase);
+
+    private UpdateState _state;
+    private IReadOnlyList<UpdateDownloadSource> _plan = [];
+    private CancellationTokenSource? _operation;
+    private DispatcherTimer? _scheduleTimer;
+    private InstalledApplicationInfo _installInfo = InstalledApplicationInfo.NotInstalled;
+    private bool _started;
+    private bool _disposed;
+    private bool _installHandoffStarted;
+    private bool _installOnExit;
+    private int _lastReportedPercent = -1;
+
+    /// <summary>
+    /// 创建协调器并捕获 UI Dispatcher。构造函数不执行任何网络、注册表或文件访问。
+    /// Creates the coordinator and captures the UI dispatcher. The constructor performs no network, registry or
+    /// file access.
+    /// </summary>
+    /// <param name="manifestClient">清单读取器。/ Manifest reader.</param>
+    /// <param name="downloader">安装包下载器。/ Installer downloader.</param>
+    /// <param name="store">更新目录的所有者。/ Owner of the update directory.</param>
+    /// <param name="probe">安装记录探测器。/ Installation record probe.</param>
+    /// <param name="installMutex">安装协调互斥体，启动安装包前必须释放。/ Install-coordination mutex, released before starting the installer.</param>
+    public UpdateService(
+        UpdateManifestClient manifestClient,
+        UpdatePackageDownloader downloader,
+        UpdatePackageStore store,
+        InstalledApplicationProbe probe,
+        InstallCoordinatorMutex installMutex)
+    {
+        _manifestClient = manifestClient;
+        _downloader = downloader;
+        _store = store;
+        _probe = probe;
+        _installMutex = installMutex;
+        _dispatcher = Application.Current?.Dispatcher ?? Dispatcher.CurrentDispatcher;
+
+        var assemblyVersion = Assembly.GetEntryAssembly()?.GetName().Version;
+        var formatted = UpdateVersionPolicy.Format(assemblyVersion);
+        CurrentVersion = formatted.Length > 0 ? formatted : "0.0";
+        _state = UpdateState.Initial(CurrentVersion);
+    }
+
+    /// <summary>当前运行的版本，已按显示格式去掉尾部零。/ Running version, formatted without trailing zeros.</summary>
+    public string CurrentVersion { get; }
+
+    /// <summary>当前状态。/ Current state.</summary>
+    public UpdateState CurrentState
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _state;
+            }
+        }
+    }
+
+    /// <summary>状态变化（始终在 UI 线程上发布）。/ State changes, always published on the UI thread.</summary>
+    public event Action<UpdateState>? UpdateStateChanged;
+
+    /// <summary>用户要求立即重启并安装；宿主据此开始退出流程。/ The user asked to restart and install now; the host starts its shutdown sequence.</summary>
+    public event EventHandler? RestartRequested;
+
+    /// <summary>
+    /// 启动排期：清理上次运行留下的残留，并在延迟后按策略检查。必须在 UI 线程上调用。
+    /// Starts scheduling: leftovers from the previous run are cleaned up and a policy-driven check is queued after
+    /// the initial delay. Must be called on the UI thread.
+    /// </summary>
+    public void Start()
+    {
+        lock (_gate)
+        {
+            if (_started || _disposed)
+            {
+                return;
+            }
+
+            _started = true;
+        }
+
+        // 保留待安装的那一个，删掉其余安装包、未完成的 .part 与过期日志。
+        // Keep the pending installer and delete the other packages, unfinished .part files and expired logs.
+        var pending = _store.ReadPendingRecord();
+        _store.CleanupObsolete(pending?.Path);
+        RefreshInstallInfo();
+        SettingsManager.SettingsChanged += OnSettingsChanged;
+
+        if (pending is not null &&
+            File.Exists(pending.Path) &&
+            UpdateVersionPolicy.IsUpdateAvailable(CurrentVersion, pending.Version) &&
+            !UpdateCheckSchedulePolicy.IsSkipped(SettingsManager.Current.Update, pending.Version))
+        {
+            // 上次运行已经下载并校验过：直接进入"就绪"，用户不必重新下载 70 MB。清单本身会在下一次检查时补回来，
+            // 因此这里用记录里的版本与哈希构造一个最小的清单，只用于驱动"就绪"状态与安装交接。
+            // The previous run already downloaded and verified this file, so it starts out ready instead of making
+            // the user download 70 MB again. The full manifest returns with the next check, so the pending record's
+            // version and hash build the minimal manifest that drives the ready state and the install hand-off.
+            PublishState(CreateReadyState(pending));
+        }
+
+        _scheduleTimer = new DispatcherTimer(DispatcherPriority.Background, _dispatcher)
+        {
+            Interval = ScheduleTickInterval
+        };
+        _scheduleTimer.Tick += OnScheduleTick;
+        _scheduleTimer.Start();
+
+        // 首检延迟让媒体会话、任务栏停靠与主题先完成初始化；这段时间里的任何失败都只会写进调试输出。
+        // The delay lets media sessions, taskbar docking and the theme finish initializing; any failure in the
+        // meantime only reaches the debug output.
+        var firstCheck = new DispatcherTimer(DispatcherPriority.Background, _dispatcher)
+        {
+            Interval = UpdateCheckSchedulePolicy.InitialDelay
+        };
+        firstCheck.Tick += (_, _) =>
+        {
+            firstCheck.Stop();
+            _ = TryAutoCheckAsync();
+        };
+        firstCheck.Start();
+    }
+
+    /// <summary>
+    /// 检查版本清单。<paramref name="manual"/> 为 true 时忽略"每天一次"的间隔，也忽略"已跳过"对提示的抑制。
+    /// Checks the version manifest. When <paramref name="manual"/> is true the once-a-day interval is ignored, as
+    /// is the way a skipped version suppresses the offer.
+    /// </summary>
+    /// <param name="manual">是否由用户手动触发。/ Whether the user triggered the check.</param>
+    /// <returns>检查完成时结束的任务。/ A task that completes when the check finishes.</returns>
+    public async Task CheckAsync(bool manual)
+    {
+        CancellationToken token;
+        lock (_gate)
+        {
+            if (_disposed || _state.IsBusy)
+            {
+                return;
+            }
+
+            _operation?.Dispose();
+            _operation = new CancellationTokenSource();
+            token = _operation.Token;
+        }
+
+        PublishState(CurrentState with
+        {
+            Phase = UpdatePhase.Checking,
+            ProgressPercent = 0d,
+            FailureReason = null
+        });
+
+        var userAgent = $"AFMediaBar/{CurrentVersion}";
+        UpdateManifestFetchResult fetch;
+        try
+        {
+            fetch = await _manifestClient.FetchAsync(userAgent, token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        if (token.IsCancellationRequested || _disposed)
+        {
+            return;
+        }
+
+        var settings = SettingsManager.Current.Update;
+        if (!fetch.Succeeded)
+        {
+            SettingsManager.Current.Update = settings with
+            {
+                LastCheckUtc = DateTimeOffset.UtcNow,
+                LastCheckSucceeded = false
+            };
+            PublishState(CurrentState with
+            {
+                Phase = UpdatePhase.Failed,
+                FailureReason = fetch.FailureReason,
+                ProgressPercent = 0d
+            });
+            return;
+        }
+
+        SettingsManager.Current.Update = settings with
+        {
+            LastCheckUtc = DateTimeOffset.UtcNow,
+            LastCheckSucceeded = true
+        };
+        ApplyManifest(fetch.Manifest!, manual);
+    }
+
+    /// <summary>
+    /// 开始下载。已有可用副本时直接复用，只有时间戳变了才重新校验；每个来源失败后自动尝试下一个。
+    /// Starts downloading. A usable local copy is reused directly and only a changed timestamp forces
+    /// re-verification; a failed source moves on to the next one.
+    /// </summary>
+    public void StartDownload()
+    {
+        UpdateManifest? manifest;
+        lock (_gate)
+        {
+            if (_disposed || _state.IsBusy || _state.Phase == UpdatePhase.Ready)
+            {
+                return;
+            }
+
+            manifest = _state.Manifest;
+        }
+
+        if (manifest is null || _plan.Count == 0)
+        {
+            return;
+        }
+
+        _ = Task.Run(() => DownloadLoopAsync(manifest));
+    }
+
+    /// <summary>取消正在进行的下载或校验；已完成的下载不受影响。/ Cancels an in-flight download or verification; a finished download is unaffected.</summary>
+    public void CancelDownload()
+    {
+        lock (_gate)
+        {
+            _operation?.Cancel();
+        }
+    }
+
+    /// <summary>跳过清单中的当前版本；必须更新时不做任何事。/ Skips the version offered by the manifest, doing nothing for a required update.</summary>
+    public void SkipCurrentVersion()
+    {
+        var state = CurrentState;
+        if (!UpdatePresentationPolicy.CanSkipVersion(state) || state.AvailableVersion is not { } version)
+        {
+            return;
+        }
+
+        SettingsManager.Current.Update = SettingsManager.Current.Update with { SkippedVersion = version };
+        PublishState(state with { Phase = UpdatePhase.Skipped, IsSkipped = true });
+    }
+
+    /// <summary>
+    /// 用户要求立即重启并安装：置位后请求宿主退出，安装将在退出之后由安装程序完成。
+    /// The user asked to restart and install now: the flag is set and the host is asked to exit, after which the
+    /// installer performs the installation.
+    /// </summary>
+    public void RequestInstallAndExit()
+    {
+        if (!UpdatePresentationPolicy.CanInstallNow(CurrentState))
+        {
+            return;
+        }
+
+        _installOnExit = true;
+        RaiseOnDispatcher(() => RestartRequested?.Invoke(this, EventArgs.Empty));
+    }
+
+    /// <summary>
+    /// 打开人工下载页；加速入口不可用时退回 GitHub 直连。
+    /// Opens the manual download page, falling back to the plain GitHub page when no accelerator is available.
+    /// </summary>
+    /// <param name="useAccelerator">是否优先使用加速站点。/ Whether to prefer an accelerator.</param>
+    /// <returns>是否成功启动了浏览器。/ Whether a browser was started.</returns>
+    public bool OpenManualDownloadPage(bool useAccelerator)
+    {
+        var manifest = CurrentState.Manifest;
+        var page = manifest?.ReleasePageUrl ?? UpdateSourcePlanPolicy.DefaultManualReleasePage;
+        if (useAccelerator)
+        {
+            var accelerated = GitHubAcceleratorPolicy.Expand(page, manifest?.Accelerators);
+            if (accelerated.Count > 0)
+            {
+                page = accelerated[0];
+            }
+        }
+
+        return TryOpenUrl(page);
+    }
+
+    /// <summary>
+    /// 在这次启动"之前"安装待安装的更新：启动安装程序并让调用方立刻结束本次启动。
+    ///
+    /// 这是自动更新的正常路径。退出时安装会把一个安装程序窗口留在用户刚关掉程序之后，看起来像程序自己又启动了
+    /// 一次；放到下次启动之前，用户看到的顺序是"打开程序 → 安装进度 → 新版本启动"，与他的意图一致。
+    ///
+    /// 只有"已安装的副本、没有其它实例在跑、待安装文件与记录完全一致、且版本确实比当前新"时才启动。
+    /// 版本不新时（例如用户已经手动升级过）待安装文件与记录会被清理掉，绝不安装旧版本。
+    /// Installs the pending update *before* this start: the installer is started and the caller ends the current start
+    /// immediately.
+    ///
+    /// This is the normal path for automatic updates. Installing on exit leaves an installer window right after the
+    /// user closed the application, which looks like the application restarting itself; running it before the next
+    /// start makes the order "open the app → install progress → the new version starts", which matches the user's
+    /// intent.
+    ///
+    /// It only starts when the copy is an installed one, no other instance is running, the pending file still matches
+    /// its record, and the version really is newer than the running one. When it is not newer (the user upgraded by
+    /// hand, for example) the pending file and record are cleaned up rather than installing an older version.
+    /// </summary>
+    /// <returns>是否已启动安装程序；为 true 时调用方必须结束本次启动。/ Whether an installer was started, in which case the caller must end this start.</returns>
+    public bool TryLaunchPendingInstallOnStartup()
+    {
+        PendingInstallPlan? plan;
+        lock (_gate)
+        {
+            if (_disposed || _installHandoffStarted)
+            {
+                return false;
+            }
+
+            var record = _store.ReadPendingRecord();
+            if (record is null || !File.Exists(record.Path))
+            {
+                return false;
+            }
+
+            if (!UpdateVersionPolicy.IsUpdateAvailable(CurrentVersion, record.Version))
+            {
+                // 待安装的版本不高于正在运行的版本：它已经过期了（用户可能刚手动升级过），清理掉而不是降级安装。
+                // The pending version is not newer than the running one, so it is stale (the user may have upgraded by
+                // hand); it is cleaned up instead of downgrading anything.
+                Debug.WriteLine($"[Update] Discarding stale pending installer for {record.Version}.");
+                _store.RemoveInstaller(record.Path);
+                _store.ClearPendingRecord();
+                return false;
+            }
+
+            RefreshInstallInfo();
+            plan = ResolvePendingInstallPlan(record, new UpdatePackageAsset(string.Empty, record.Size, record.Sha256));
+        }
+
+        return TryStartPendingInstall(plan);
+    }
+
+    /// <summary>
+    /// 在退出边界上安装待安装的更新，且只在用户明确点击"立即重启并安装"之后。
+    ///
+    /// 自动更新已经不在退出时发生（见 <see cref="TryLaunchPendingInstallOnStartup"/>）；这里只服务于那一次显式请求，
+    /// 因此没有该请求时直接返回 false，不会把一个安装程序窗口留在用户退出之后。
+    /// Installs the pending update on the exit boundary, and only after the user explicitly clicked "restart and install
+    /// now".
+    ///
+    /// Automatic updates no longer happen on exit (see <see cref="TryLaunchPendingInstallOnStartup"/>); this serves
+    /// that one explicit request, so without it the call returns false and never leaves an installer window behind a
+    /// user's exit.
+    /// </summary>
+    /// <returns>是否已启动安装程序。/ Whether an installer was started.</returns>
+    public bool TryLaunchPendingInstallOnExit()
+    {
+        PendingInstallPlan? plan;
+        lock (_gate)
+        {
+            if (_disposed || _installHandoffStarted || !_installOnExit)
+            {
+                return false;
+            }
+
+            var record = _store.ReadPendingRecord();
+            if (record is null ||
+                !File.Exists(record.Path) ||
+                _state.Manifest is not { } manifest ||
+                manifest.Packages.Count == 0)
+            {
+                return false;
+            }
+
+            RefreshInstallInfo();
+            plan = ResolvePendingInstallPlan(record, manifest.Packages[0]);
+        }
+
+        return TryStartPendingInstall(plan);
+    }
+
+    /// <summary>
+    /// 判断现在能否安装，并在可以时给出启动参数。所有外部状态（注册表、进程枚举、文件时间戳）都在锁内读取，
+    /// 进程启动留在锁外：持有锁调用外部组件会把一次 UAC 提示变成整个更新状态的阻塞点。
+    /// Decides whether installing is possible now and, when it is, produces the launch arguments. Every external piece
+    /// of state (registry, process enumeration, file timestamps) is read inside the lock while the process itself is
+    /// started outside it: calling an external component under the lock would turn one UAC prompt into a stall of the
+    /// whole update state.
+    /// </summary>
+    private PendingInstallPlan? ResolvePendingInstallPlan(UpdatePendingFileRecord record, UpdatePackageAsset asset)
+    {
+        switch (_store.Evaluate(asset))
+        {
+            case UpdatePendingFileAction.Reuse:
+                break;
+
+            // 文件被改动过：不做同步重算 70 MB 哈希的阻塞操作，本次不安装，留给下一次启动或用户的显式请求。
+            // The file changed: no synchronous 70 MB re-hash, so this attempt is skipped and left to the next start or
+            // an explicit user request.
+            case UpdatePendingFileAction.VerifyAgain:
+                Debug.WriteLine("[Update] Pending installer changed on disk; skipping this install attempt.");
+                return null;
+
+            default:
+                return null;
+        }
+
+        var decision = ResolveInstallDecision();
+        if (!decision.CanInstall)
+        {
+            Debug.WriteLine($"[Update] Install deferred: {decision.BlockedReason}");
+            return null;
+        }
+
+        // 一次性标记先置位：即使安装程序随后通过 Restart Manager 关闭了本进程，也不会启动第二个安装包。
+        // The one-shot flag is set first, so a second installer is never started even if the installer closes this
+        // process through the Restart Manager.
+        _installHandoffStarted = true;
+
+        // 待安装记录必须在启动安装程序之前清掉，否则安装完成后重新启动的新版本可能再次读到它并再装一遍：
+        // 只要"清单声明的版本"高于"程序集里的版本"（发布侧写错版本号就会这样），每次启动都会启动一次安装程序，
+        // 程序于是永远打不开。代价是安装失败后需要重新下载，这比一个无限安装循环好得多。
+        // The pending record has to be cleared before the installer starts, otherwise the new version started after the
+        // install can read it again and install once more: whenever the version declared by the manifest is higher than
+        // the assembly version (which a wrong version number on the release side produces), every start would launch an
+        // installer and the application could never open. The cost is re-downloading after a failed install, which is
+        // far better than an endless install loop.
+        _store.ClearPendingRecord();
+        return new PendingInstallPlan(
+            record.Path,
+            UpdateInstallPlanPolicy.BuildArguments(relaunchAfterInstall: true, _store.ResolveLogPath(record.Version)),
+            decision.UseRunAs);
+    }
+
+    private bool TryStartPendingInstall(PendingInstallPlan? plan)
+    {
+        if (plan is not { } pending)
+        {
+            return false;
+        }
+
+        // 释放协调互斥体：Inno 在启动阶段检查它，静默模式下若它仍然存在会直接退出。
+        // Release the coordination mutex: Inno checks it while starting up and exits immediately in silent mode when it
+        // still exists.
+        _installMutex.Release();
+        return TryStartInstaller(pending.Path, pending.Arguments, pending.UseRunAs);
+    }
+
+    /// <summary>一次待安装更新的启动参数。/ Launch arguments for one pending update.</summary>
+    /// <param name="Path">安装程序路径。/ Installer path.</param>
+    /// <param name="Arguments">静默安装参数。/ Silent install arguments.</param>
+    /// <param name="UseRunAs">是否需要提权。/ Whether elevation is required.</param>
+    private readonly record struct PendingInstallPlan(string Path, string Arguments, bool UseRunAs);
+
+
+    /// <summary>停止排期并取消进行中的操作。/ Stops scheduling and cancels any in-flight operation.</summary>
+    public void Dispose()
+    {
+        lock (_gate)
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            _disposed = true;
+            _operation?.Cancel();
+        }
+
+        SettingsManager.SettingsChanged -= OnSettingsChanged;
+        _scheduleTimer?.Stop();
+        _scheduleTimer = null;
+    }
+
+    private async Task TryAutoCheckAsync()
+    {
+        if (!UpdateCheckSchedulePolicy.ShouldCheck(SettingsManager.Current.Update, DateTimeOffset.UtcNow))
+        {
+            return;
+        }
+
+        await CheckAsync(manual: false).ConfigureAwait(false);
+    }
+
+    private void OnScheduleTick(object? sender, EventArgs e) => _ = TryAutoCheckAsync();
+
+    private void OnSettingsChanged(object? sender, SettingsChangedEventArgs e)
+    {
+        if (_disposed || e.PropertyName is not (null or nameof(AppSettings.Update)))
+        {
+            return;
+        }
+
+        var state = CurrentState;
+
+        // 取消"跳过此版本"后，可用版本要重新出现，否则那一页会一直显示"已跳过"。
+        // Clearing the skipped version must bring the offer back, otherwise the page keeps saying "skipped" forever.
+        if (state.Phase == UpdatePhase.Skipped &&
+            !UpdateCheckSchedulePolicy.IsSkipped(SettingsManager.Current.Update, state.AvailableVersion))
+        {
+            PublishState(state with { Phase = UpdatePhase.Available, IsSkipped = false });
+        }
+    }
+
+    private void ApplyManifest(UpdateManifest manifest, bool manual)
+    {
+        var settings = SettingsManager.Current.Update;
+        if (!UpdateVersionPolicy.IsUpdateAvailable(CurrentVersion, manifest.Version))
+        {
+            PublishState(CurrentState with
+            {
+                Phase = UpdatePhase.UpToDate,
+                Manifest = manifest,
+                ProgressPercent = 0d,
+                FailureReason = null,
+                ActiveSource = null,
+                IsMandatory = false,
+                IsSkipped = false,
+                InstallBlockedReason = null
+            });
+            return;
+        }
+
+        _plan = UpdateSourcePlanPolicy.BuildDownloadPlan(manifest);
+        _failedSources.Clear();
+
+        var skipped = UpdateCheckSchedulePolicy.IsSkipped(settings, manifest.Version);
+        var state = CurrentState with
+        {
+            Manifest = manifest,
+            ProgressPercent = 0d,
+            FailureReason = null,
+            ActiveSource = null,
+            IsMandatory = UpdateVersionPolicy.IsMandatory(CurrentVersion, manifest),
+            IsSkipped = skipped,
+            // 安装是否被阻止必须在"发现新版本"时就确定，而不是等到下载完成：便携版用户要在按下"下载并安装"
+            // 之前就知道这次更新不会被自动安装，否则他会白等一次 70 MB 下载。
+            // Whether installing is blocked has to be decided as soon as a newer version is found rather than when
+            // the download finishes: a portable user must learn that this update will not install itself before
+            // pressing "download and install", instead of waiting through 70 MB first.
+            InstallBlockedReason = ResolveInstallDecision().BlockedReason
+        };
+
+        if (!manifest.HasInstallablePackage)
+        {
+            // 清单有效、版本更新，只是没有带哈希的安装包直链，因此只能人工下载。这不是失败。
+            // The manifest is valid and newer, it simply has no hashed installer link, so only manual download is
+            // possible. That is not a failure.
+            PublishState(state with { Phase = UpdatePhase.ManualOnly });
+            return;
+        }
+
+        if (skipped && !manual)
+        {
+            PublishState(state with { Phase = UpdatePhase.Skipped });
+            return;
+        }
+
+        // 发现新版本只发布状态：宿主据此弹一次系统通知，下载必须由用户在"应用与关于"页显式开始。
+        // 默认自动下载会把 70 MB 流量变成用户没要求过的行为，因此这里刻意不做任何下载。
+        // Discovering a newer version only publishes state: the host raises one system notification from it, and the
+        // download has to be started explicitly on the "application and about" page. Downloading by default would
+        // turn 70 MB of traffic into behaviour the user never asked for, so nothing is started here.
+        PublishState(state with { Phase = UpdatePhase.Available });
+    }
+
+    private async Task DownloadLoopAsync(UpdateManifest manifest)
+    {
+        CancellationToken token;
+        lock (_gate)
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            _operation?.Dispose();
+            _operation = new CancellationTokenSource();
+            token = _operation.Token;
+        }
+
+        // 所有 package 条目描述同一个文件，因此第一条就是这段下载的期望长度与哈希。
+        // Every package entry describes the same file, so the first one carries the expected size and hash.
+        var asset = manifest.Packages[0];
+        var progress = new Progress<double>(ReportProgress);
+        SetPhase(UpdatePhase.Downloading, 0d, null);
+
+        string? lastFailure = null;
+        UpdatePendingFileRecord? record = null;
+        UpdateDownloadSource? usedSource = null;
+
+        while (!token.IsCancellationRequested)
+        {
+            var source = UpdateSourcePlanPolicy.SelectNext(_plan, _failedSources);
+            if (source is null)
+            {
+                break;
+            }
+
+            UpdateDownloadOutcome outcome;
+            switch (_store.Evaluate(asset))
+            {
+                case UpdatePendingFileAction.Reuse:
+                    record = _store.ReadPendingRecord();
+                    outcome = record is null
+                        ? UpdateDownloadOutcome.Failure("已下载的安装包记录缺失", source.HostName)
+                        : UpdateDownloadOutcome.Success(record, null);
+                    break;
+
+                case UpdatePendingFileAction.VerifyAgain:
+                    SetPhase(UpdatePhase.Verifying, 0d, null);
+                    var existing = _store.ReadPendingRecord();
+                    outcome = existing is null
+                        ? UpdateDownloadOutcome.Failure("已下载的安装包记录缺失", source.HostName)
+                        : await _downloader
+                            .VerifyAsync(existing.Path, asset, manifest.Version, progress, token)
+                            .ConfigureAwait(false);
+                    break;
+
+                default:
+                    outcome = await _downloader
+                        .DownloadAsync(source, asset, manifest.Version, progress, token)
+                        .ConfigureAwait(false);
+                    break;
+            }
+
+            if (outcome.Succeeded)
+            {
+                record = outcome.Record;
+                usedSource = outcome.SourceHost is null
+                    ? null
+                    : new UpdateDownloadSource(source.Url, source.HostName, source.IsAccelerated);
+                break;
+            }
+
+            if (outcome.Canceled)
+            {
+                PublishState(CurrentState with
+                {
+                    Phase = UpdatePhase.Available,
+                    ProgressPercent = 0d,
+                    ActiveSource = null,
+                    FailureReason = null
+                });
+                return;
+            }
+
+            lastFailure = outcome.FailureReason;
+            _failedSources.Add(source.Url);
+        }
+
+        if (_disposed)
+        {
+            return;
+        }
+
+        if (record is null)
+        {
+            PublishState(CurrentState with
+            {
+                Phase = UpdatePhase.Failed,
+                ProgressPercent = 0d,
+                ActiveSource = null,
+                FailureReason = token.IsCancellationRequested ? null : lastFailure ?? "所有下载地址都不可用"
+            });
+            return;
+        }
+
+        RefreshInstallInfo();
+        PublishState(CurrentState with
+        {
+            Phase = UpdatePhase.Ready,
+            ProgressPercent = 100d,
+            ActiveSource = usedSource,
+            FailureReason = null,
+            InstallBlockedReason = ResolveInstallDecision().BlockedReason
+        });
+    }
+
+    private UpdateState CreateReadyState(UpdatePendingFileRecord record)
+    {
+        var manifest = new UpdateManifest(
+            record.Version,
+            null,
+            null,
+            [],
+            null,
+            null,
+            null,
+            false,
+            [new UpdatePackageAsset(string.Empty, record.Size, record.Sha256)],
+            null,
+            null);
+        return CurrentState with
+        {
+            Phase = UpdatePhase.Ready,
+            Manifest = manifest,
+            ProgressPercent = 100d,
+            FailureReason = null,
+            IsMandatory = UpdateVersionPolicy.IsMandatory(CurrentVersion, manifest),
+            IsSkipped = false,
+            InstallBlockedReason = ResolveInstallDecision().BlockedReason
+        };
+    }
+
+    private void ReportProgress(double percent)
+    {
+        var rounded = (int)Math.Clamp(Math.Round(percent), 0d, 100d);
+        if (rounded == _lastReportedPercent)
+        {
+            return;
+        }
+
+        _lastReportedPercent = rounded;
+        var state = CurrentState;
+        PublishState(state with { ProgressPercent = percent });
+    }
+
+    private void SetPhase(UpdatePhase phase, double progress, string? failureReason)
+    {
+        _lastReportedPercent = -1;
+        PublishState(CurrentState with { Phase = phase, ProgressPercent = progress, FailureReason = failureReason });
+    }
+
+    private void RefreshInstallInfo()
+    {
+        _installInfo = _probe.Probe();
+    }
+
+    private (bool CanInstall, bool UseRunAs, string? BlockedReason) ResolveInstallDecision()
+    {
+        var isInstalledCopy = InstalledApplicationProbe.MatchesRunningProcess(_installInfo, Environment.ProcessPath);
+        var others = InstalledApplicationProbe.CountOtherRunningInstances(Environment.ProcessId);
+        var decision = UpdateInstallPlanPolicy.Decide(isInstalledCopy, _installInfo.IsMachineWide, IsElevated(), others);
+        return (decision.CanInstall, decision.UseRunAs, decision.BlockedReason);
+    }
+
+    private static bool IsElevated()
+    {
+        try
+        {
+            using var identity = WindowsIdentity.GetCurrent();
+            return new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator);
+        }
+        catch (Exception exception)
+        {
+            Debug.WriteLine($"[Update] Elevation could not be determined: {exception.Message}");
+            return false;
+        }
+    }
+
+    private bool TryStartInstaller(string path, string arguments, bool useRunAs)
+    {
+        try
+        {
+            var startInfo = new ProcessStartInfo(path, arguments)
+            {
+                UseShellExecute = useRunAs,
+                CreateNoWindow = !useRunAs,
+                WorkingDirectory = _store.DirectoryPath
+            };
+
+            if (useRunAs)
+            {
+                startInfo.Verb = "runas";
+            }
+
+            using var process = Process.Start(startInfo);
+            Debug.WriteLine($"[Update] Installer started ({useRunAs}): {path} {arguments}");
+            return process is not null;
+        }
+        catch (Exception exception)
+        {
+            Debug.WriteLine($"[Update] Installer could not be started: {exception.Message}");
+            return false;
+        }
+    }
+
+    private static bool TryOpenUrl(string url)
+    {
+        try
+        {
+            using var process = Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+            return true;
+        }
+        catch (Exception exception)
+        {
+            Debug.WriteLine($"[Update] Could not open {url}: {exception.Message}");
+            return false;
+        }
+    }
+
+    private void PublishState(UpdateState state)
+    {
+        lock (_gate)
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            _state = state;
+        }
+
+        RaiseOnDispatcher(() => UpdateStateChanged?.Invoke(state));
+    }
+
+    private void RaiseOnDispatcher(Action action)
+    {
+        if (_dispatcher.HasShutdownStarted || _dispatcher.HasShutdownFinished)
+        {
+            return;
+        }
+
+        _dispatcher.BeginInvoke(action, DispatcherPriority.Normal);
+    }
+}

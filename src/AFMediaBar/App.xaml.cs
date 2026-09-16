@@ -15,6 +15,7 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using AFMediaBar.Classes.Models;
 using AFMediaBar.Classes.Services.Audio;
+using AFMediaBar.Classes.Services.Updates;
 using AFMediaBar.Classes.Settings;
 using Wpf.Ui;
 using Wpf.Ui.Appearance;
@@ -105,6 +106,18 @@ namespace AFMediaBar
                 services.AddSingleton<WindowAppearanceService>();
                 services.AddSingleton<ScreenBackgroundSampler>();
                 services.AddSingleton<SettingsPersistenceService>();
+
+                // 安装协调互斥体：只让安装程序能识别"程序正在运行"，不改变单实例行为。
+                // Install-coordination mutex: lets the installer notice a running instance without changing single-instance behaviour.
+                services.AddSingleton<InstallCoordinatorMutex>();
+
+                // 更新下载器：清单读取、安装包下载与校验、退出时的安装交接。
+                // Update downloader: manifest reading, installer download and verification, and the install hand-off on exit.
+                services.AddSingleton<UpdateManifestClient>();
+                services.AddSingleton<UpdatePackageStore>();
+                services.AddSingleton<UpdatePackageDownloader>();
+                services.AddSingleton<InstalledApplicationProbe>();
+                services.AddSingleton<UpdateService>();
 
                 // 导航服务（页面导航，不依赖具体窗口）Navigation service (page navigation, window-independent)
                 services.AddSingleton<INavigationService, NavigationService>();
@@ -197,6 +210,27 @@ namespace AFMediaBar
             {
                 displayMonitorService.MonitorsChanged -= legacyMigrationHandler;
             }
+
+            // 更新在"这一次启动之前"安装。
+            //
+            // 退出时安装会把安装程序窗口留在用户刚关掉程序之后，看起来像程序自己又起来了一次；放在这里，
+            // 用户看到的顺序是「打开程序 → 安装进度 → 新版本启动」。必须在设置加载之后、宿主启动之前：
+            // 设置没加载时 OnExit 的 Flush 会把默认设置写回用户文件，而宿主启动后又会先建出托盘图标与任务栏媒体栏。
+            // The update is installed *before* this start.
+            //
+            // Installing on exit leaves an installer window right after the user closed the application, which looks
+            // like the application starting itself again; here the order the user sees is "open the app → install
+            // progress → the new version starts". It has to happen after the settings are loaded and before the host
+            // starts: without loaded settings, the flush in OnExit would write defaults over the user's file, and once
+            // the host has started the tray icon and taskbar bar would already exist.
+            var updateService = Services.GetRequiredService<UpdateService>();
+            updateService.RestartRequested += (_, _) => Shutdown();
+            if (updateService.TryLaunchPendingInstallOnStartup())
+            {
+                Debug.WriteLine("[App] A pending update is being installed before this start; exiting now.");
+                Shutdown();
+                return;
+            }
             _themeCoordinator = new ApplicationThemeCoordinator(Dispatcher, UpdateAppearanceResources);
             _themeCoordinator.Start();
             _themeCoordinator.Apply(SettingsManager.Current.Appearance);
@@ -207,6 +241,16 @@ namespace AFMediaBar
             Services.GetRequiredService<WindowAppearanceService>().SystemColorizationChanged +=
                 () => _themeCoordinator?.Apply(SettingsManager.Current.Appearance);
             await _host.StartAsync();
+
+            // 安装协调互斥体必须在 Host 启动后创建：更新链路会在启动安装包之前释放它（见 InstallCoordinatorMutex）。
+            // The install-coordination mutex is created after the host starts; the update path releases it before
+            // starting the installer (see InstallCoordinatorMutex). A failure here must never affect startup.
+            Services.GetRequiredService<InstallCoordinatorMutex>().Acquire();
+
+            // 更新排期在宿主就绪之后启动：它自己带首检延迟，因此不会和媒体会话、任务栏停靠抢启动资源。
+            // Update scheduling starts once the host is ready; it carries its own initial delay, so it never competes
+            // with media sessions or taskbar docking during startup.
+            updateService.Start();
 
 #if DEBUG
             _debugLyricsDiagnostics = new DebugLyricsDiagnostics();
@@ -245,6 +289,16 @@ namespace AFMediaBar
                 return;
             }
 
+            // 这两个服务必须在 Host 释放之前取出来。
+            // Host.Dispose 同时释放 DI 容器，之后再从 App.Services 解析任何东西都会抛 ObjectDisposedException；
+            // 那既会跳过退出时的安装交接，也会把一次正常退出变成一次崩溃（WER 里是 e0434352）。
+            // These two services must be resolved before the host is disposed.
+            // Host.Dispose also disposes the DI container, and resolving anything from App.Services afterwards
+            // throws ObjectDisposedException, which would both skip the install hand-off on exit and turn a normal
+            // exit into a crash recorded as e0434352.
+            var updateService = Services.GetRequiredService<UpdateService>();
+            var installCoordinatorMutex = Services.GetRequiredService<InstallCoordinatorMutex>();
+
 #if DEBUG
             if (_debugLyricsDiagnostics is not null)
                 Services.GetRequiredService<MediaSessionService>().SnapshotChanged -= _debugLyricsDiagnostics.OnSnapshotChanged;
@@ -279,34 +333,58 @@ namespace AFMediaBar
             {
                 Debug.WriteLine($"[App] Host shutdown failed: {exception}");
             }
+
+            // 只有用户明确点过"立即重启并安装"时才在退出边界启动安装程序。
+            //
+            // 自动更新已经不在退出时发生：它在**下一次启动之前**执行（见 TryLaunchPendingInstallOnStartup），
+            // 否则安装程序窗口会出现在用户刚关掉程序之后，看起来像程序自己又起来了一次。仍要放在 Dispose 看门狗
+            // 之前：看门狗会在 5 秒后直接结束进程，排在它之后就会与之赛跑。
+            // The installer is only started on the exit boundary when the user explicitly clicked "restart and install
+            // now".
+            //
+            // Automatic updates no longer happen on exit: they run *before the next start* (see
+            // TryLaunchPendingInstallOnStartup), because otherwise the installer window appears right after the user
+            // closed the application and looks like the application starting itself again. It still has to happen
+            // before the disposal watchdog, which ends the process after five seconds and would otherwise win the race.
+            try
+            {
+                updateService.TryLaunchPendingInstallOnExit();
+            }
+            catch (Exception exception)
+            {
+                Debug.WriteLine($"[App] Update install hand-off failed: {exception}");
+            }
+
+            // 安装程序启动前，交接路径已经释放了协调互斥体；这里只需保证其余情形下它也随进程一起消失。
+            // The hand-off already released the coordination mutex before starting the installer; this only makes sure
+            // it disappears with the process in every other case.
+            installCoordinatorMutex.Dispose();
+
+            // A media-session/native component can occasionally block while disposing
+            // after Explorer or a tray Popup has already been torn down. Keep a bounded
+            // watchdog so an explicit user exit can never leave AFMediaBar alive forever.
+            var disposalCompleted = 0;
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(HostShutdownTimeout).ConfigureAwait(false);
+                if (Volatile.Read(ref disposalCompleted) == 0)
+                {
+                    Environment.Exit(e.ApplicationExitCode);
+                }
+            });
+
+            try
+            {
+                _host.Dispose();
+            }
+            catch (Exception exception)
+            {
+                // Cleanup must not cancel the final process-termination step.
+                Debug.WriteLine($"[App] Host disposal failed: {exception}");
+            }
             finally
             {
-                // A media-session/native component can occasionally block while disposing
-                // after Explorer or a tray Popup has already been torn down. Keep a bounded
-                // watchdog so an explicit user exit can never leave AFMediaBar alive forever.
-                var disposalCompleted = 0;
-                _ = Task.Run(async () =>
-                {
-                    await Task.Delay(HostShutdownTimeout).ConfigureAwait(false);
-                    if (Volatile.Read(ref disposalCompleted) == 0)
-                    {
-                        Environment.Exit(e.ApplicationExitCode);
-                    }
-                });
-
-                try
-                {
-                    _host.Dispose();
-                }
-                catch (Exception exception)
-                {
-                    // Cleanup must not cancel the final process-termination step.
-                    Debug.WriteLine($"[App] Host disposal failed: {exception}");
-                }
-                finally
-                {
-                    Volatile.Write(ref disposalCompleted, 1);
-                }
+                Volatile.Write(ref disposalCompleted, 1);
             }
 
             // WPF has completed its Exit event, but third-party native media components

@@ -50,6 +50,7 @@ public sealed class AppSettings : INotifyPropertyChanged
     private QuickLaunchSettings _quickLaunch = QuickLaunchSettings.Default;
     private SpectrumComponentSettings _spectrumComponent = SpectrumComponentSettings.Default;
     private PerformanceComponentSettings _performanceComponent = PerformanceComponentSettings.Default;
+    private UpdateSettings _update = UpdateSettings.Default;
 
     public AppearanceSettings Appearance { get => _appearance; set => Set(ref _appearance, value.Normalize()); }
     public TrayWheelBehavior TrayWheelBehavior { get => _trayWheelBehavior; set => Set(ref _trayWheelBehavior, value); }
@@ -92,6 +93,9 @@ public sealed class AppSettings : INotifyPropertyChanged
     public SpectrumComponentSettings SpectrumComponent { get => _spectrumComponent; set => Set(ref _spectrumComponent, value.Normalize()); }
     public PerformanceComponentSettings PerformanceComponent { get => _performanceComponent; set => Set(ref _performanceComponent, value.Normalize()); }
 
+    /// <summary>更新下载器设置：自动检查、自动下载安装、已跳过版本与上次检查结果。/ Update-downloader settings: automatic checking, automatic download and install, skipped version, and the last check result.</summary>
+    public UpdateSettings Update { get => _update; set => Set(ref _update, value.Normalize()); }
+
     public event PropertyChangedEventHandler? PropertyChanged;
 
     public AppSettings Normalize()
@@ -116,6 +120,7 @@ public sealed class AppSettings : INotifyPropertyChanged
         result.QuickLaunch = result.QuickLaunch.Normalize();
         result.SpectrumComponent = result.SpectrumComponent.Normalize();
         result.PerformanceComponent = result.PerformanceComponent.Normalize();
+        result.Update = result.Update.Normalize();
         result.TaskbarTargetMonitorDeviceId = string.IsNullOrWhiteSpace(result.TaskbarTargetMonitorDeviceId)
             ? null
             : result.TaskbarTargetMonitorDeviceId.Trim();
@@ -163,7 +168,8 @@ public sealed class AppSettings : INotifyPropertyChanged
         SmtcSourceFilter = SmtcSourceFilter,
         QuickLaunch = QuickLaunch,
         SpectrumComponent = SpectrumComponent,
-        PerformanceComponent = PerformanceComponent
+        PerformanceComponent = PerformanceComponent,
+        Update = Update
     };
 
     private void Set<T>(ref T field, T value, [CallerMemberName] string? name = null)
@@ -201,6 +207,9 @@ public static class SettingsManager
     public static event EventHandler? ExtraFeaturesSettingsChanged;
     public static event EventHandler? TaskbarTargetMonitorChanged;
 
+    /// <summary>更新设置变化（开关、跳过版本或上次检查结果）。/ Update settings changed: toggles, skipped version, or the last check result.</summary>
+    public static event EventHandler? UpdateSettingsChanged;
+
     public static void Replace(AppSettings settings, SettingsResetScope? scope = null)
     {
         var normalized = settings.Normalize();
@@ -222,6 +231,7 @@ public static class SettingsManager
     public static void SetQuickLaunchSettings(QuickLaunchSettings settings) => Current.QuickLaunch = settings;
     public static void SetSpectrumComponentSettings(SpectrumComponentSettings settings) => Current.SpectrumComponent = settings;
     public static void SetPerformanceComponentSettings(PerformanceComponentSettings settings) => Current.PerformanceComponent = settings;
+    public static void SetUpdateSettings(UpdateSettings settings) => Current.Update = settings;
     public static void RaiseLayoutSettingsChanged(WindowMode windowMode, LayoutOrientationMode orientationMode) => LayoutSettingsChanged?.Invoke(null, new LayoutSettingsChangedEventArgs(windowMode, orientationMode));
 
     public static void ResetGeneral()
@@ -313,6 +323,7 @@ public static class SettingsManager
             case nameof(AppSettings.QuickLaunch):
             case nameof(AppSettings.SpectrumComponent):
             case nameof(AppSettings.PerformanceComponent): ExtraFeaturesSettingsChanged?.Invoke(null, EventArgs.Empty); break;
+            case nameof(AppSettings.Update): UpdateSettingsChanged?.Invoke(null, EventArgs.Empty); break;
             case nameof(AppSettings.TaskbarTargetMonitorDeviceId): TaskbarTargetMonitorChanged?.Invoke(null, EventArgs.Empty); break;
             case nameof(AppSettings.TaskbarSurface):
             case nameof(AppSettings.DynamicIslandSurface): AppearanceSettingsChanged?.Invoke(null, new AppearanceSettingsChangedEventArgs(Current.Appearance)); break;
@@ -326,6 +337,7 @@ public static class SettingsManager
         TaskbarExperienceSettingsChanged?.Invoke(null, EventArgs.Empty); InteractionSettingsChanged?.Invoke(null, EventArgs.Empty);
         TrackChangeNotificationSettingsChanged?.Invoke(null, EventArgs.Empty); TaskbarTargetMonitorChanged?.Invoke(null, EventArgs.Empty);
         ExtraFeaturesSettingsChanged?.Invoke(null, EventArgs.Empty);
+        UpdateSettingsChanged?.Invoke(null, EventArgs.Empty);
         RaiseLayoutSettingsChanged(Current.WindowMode, Current.LayoutOrientationMode);
     }
 }

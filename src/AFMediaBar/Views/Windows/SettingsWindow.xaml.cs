@@ -61,6 +61,15 @@ namespace AFMediaBar.Views.Windows
                 MotionPolicy.ResolveCurrent().StandardDuration.TotalMilliseconds);
 
             navigationService.SetNavigationControl(RootNavigation);
+
+            // 更新提示的订阅与显示放在窗口构造的最后：它依赖 InitializeComponent 创建好的导航项。
+            // The update notice subscribes and renders at the end of the constructor, because it depends on the
+            // navigation item created by InitializeComponent.
+            ViewModel.Subscribe();
+            ViewModel.Refresh();
+            ViewModel.PropertyChanged += ViewModel_PropertyChanged;
+            ApplyUpdateNotice();
+            Closed += SettingsWindow_ClosedForUpdateNotice;
         }
 
         #region Search
@@ -173,6 +182,56 @@ namespace AFMediaBar.Views.Windows
         }
 
         #endregion Search
+
+        #region Update notice
+
+        /// <summary>
+        /// 更新提示只在确有可用版本时出现。导航项的内容与徽章都是控件，而视图模型只发布纯数据，
+        /// 因此由窗口按 <see cref="SettingsWindowViewModel.HasUpdateAvailable"/> 安装或移除它们。
+        ///
+        /// 视图模型是单例、窗口是 Transient，因此订阅必须在关闭时退订，否则反复开关设置窗口会累积处理器。
+        /// The update notice only appears when a newer version really exists. Both the navigation item's content and
+        /// its badge are controls while the view model publishes plain data, so the window installs or removes them
+        /// according to <see cref="SettingsWindowViewModel.HasUpdateAvailable"/>.
+        ///
+        /// The view model is a singleton and the window is transient, so the subscription must be released on close;
+        /// otherwise opening the settings repeatedly would accumulate handlers.
+        /// </summary>
+        private void UpdateNoticeNavItem_Click(object sender, RoutedEventArgs e)
+        {
+            // 提示行本身不是页面，因此点击它等同于导航到「应用与关于」。
+            // The notice row is not a page, so clicking it simply navigates to "application and about".
+            Navigate(typeof(AboutPage));
+        }
+
+        private void ViewModel_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName is nameof(SettingsWindowViewModel.HasUpdateAvailable) or null)
+            {
+                ApplyUpdateNotice();
+            }
+        }
+
+        private void ApplyUpdateNotice()
+        {
+            var visible = ViewModel.HasUpdateAvailable;
+            UpdateNoticeNavItem.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+
+            // 徽章只是强调；即使它不渲染，提示行本身也仍然带着版本号。
+            // The badge is emphasis only: even if it does not render, the row itself still carries the version.
+            UpdateNoticeNavItem.InfoBadge = visible
+                ? new InfoBadge { Severity = InfoBadgeSeverity.Attention }
+                : null;
+        }
+
+        private void SettingsWindow_ClosedForUpdateNotice(object? sender, EventArgs e)
+        {
+            ViewModel.Unsubscribe();
+            ViewModel.PropertyChanged -= ViewModel_PropertyChanged;
+            Closed -= SettingsWindow_ClosedForUpdateNotice;
+        }
+
+        #endregion Update notice
 
         #region INavigationWindow methods
 

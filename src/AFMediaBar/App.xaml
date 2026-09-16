@@ -25,6 +25,13 @@
         <ResourceDictionary Source="/AFMediaBar;component/Resources/SettingsComponentResources.xaml" />
       </ResourceDictionary.MergedDictionaries>
       <FontFamily x:Key="AppTextFontFamily">Segoe UI Variable Text, Segoe UI</FontFamily>
+      <!--
+        布尔到可见性的应用级转换器：更新区、便携版提示等"只在某些状态下出现"的行都用它，
+        因此这些行不需要各自写代码切换 Visibility。
+        Application-level boolean-to-visibility converter used by rows that only appear in certain states, such as
+        the update section and the portable-build notice, so none of them needs code to toggle Visibility.
+      -->
+      <BooleanToVisibilityConverter x:Key="AfBooleanToVisibilityConverter" />
       <FontFamily x:Key="AppIconFontFamily">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
       <FontWeight x:Key="AppTextFontWeight">Normal</FontWeight>
       <FontWeight x:Key="AppTextMediumFontWeight">Medium</FontWeight>

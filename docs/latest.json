@@ -10,15 +10,12 @@
     "修复浏览器媒体封面刷新、断线期媒体切换和暂停后的自动切源。",
     "完善简体中文、繁体中文和英文的即时界面切换。",
     "改进设置窗口、诊断日志、字体预设及多项尺寸与外观调节。",
-    "增加资源监控区域的任务管理器快捷操作。",
-    "蓝奏云密码：zzzz"
+    "增加资源监控区域的任务管理器快捷操作。"
   ],
   "releaseNotesUrl": "https://github.com/Fervent-Tempo/AF-Media-Bar/releases/tag/v1.1.1",
+  "releasePageUrl": "https://github.com/Fervent-Tempo/AF-Media-Bar/releases/latest",
   "downloads": {
-    "github": "https://github.com/Fervent-Tempo/AF-Media-Bar/releases/download/v1.1.1/AFMediaBar-v1.1.1-win-x64.zip",
-    "quark": "https://pan.quark.cn/s/6987e4945b16",
-    "baidu": "https://pan.baidu.com/s/1zUQtZ_N1tnRTjJKd9kKREA?pwd=6ddc",
-    "lanzou": "https://amorfate.lanzoue.com/b01eupanbg"
+    "github": "https://github.com/Fervent-Tempo/AF-Media-Bar/releases/download/v1.1.1/AFMediaBar-v1.1.1-win-x64.zip"
   },
   "sha256": {
     "github": "58285a60c93f1f3f4b4a325bd9331eedcc0e79fdb196db25d15f5b2fc70a9551"

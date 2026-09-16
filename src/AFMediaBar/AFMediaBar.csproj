@@ -9,6 +9,24 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+
+    <!--
+      Version 是版本号的唯一来源：运行期从程序集版本读取并显示，安装程序与发布工作流用
+      `dotnet msbuild -getProperty:Version` 读取同一个值，发布标签必须与它一致。
+      Version is the single source of the version number: the running app reads and displays it from
+      the assembly version, while the installer script and the release workflow read the same value
+      through `dotnet msbuild -getProperty:Version`, and the release tag must match it.
+    -->
+    <AssemblyName>AFMediaBar</AssemblyName>
+    <RootNamespace>AFMediaBar</RootNamespace>
+    <AssemblyTitle>AF Media Bar</AssemblyTitle>
+    <Product>AF Media Bar</Product>
+    <Description>Media control and minor beautification software for Windows 10/11 desktops.</Description>
+    <Version>1.2.0</Version>
+    <Authors>AmorFate</Authors>
+    <Copyright>Copyright (c) 2026 AmorFate</Copyright>
+    <RepositoryUrl>https://github.com/Fervent-Tempo/AF-Media-Bar</RepositoryUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
   </PropertyGroup>
 
 <PropertyGroup Condition="'$(Configuration)' == 'Release' and '$(RuntimeIdentifier)' == 'win-x64'">

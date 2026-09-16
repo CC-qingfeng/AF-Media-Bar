@@ -51,22 +51,188 @@
                 <components:SettingsGroup
                     Header="应用"
                     Icon="{ui:SymbolIcon Info24}"
-                    StatusText="均未接入"
-                    StatusTone="Neutral">
+                    StatusText="更新已接入"
+                    StatusTone="Accent">
                     <StackPanel>
                         <components:SettingsCallout
                             Margin="0,0,0,12"
                             IsAccent="False"
                             Symbol="Info24"
-                            Text="下面三项在当前版本中尚未接入，此处仅说明计划。" />
+                            Text="开机自动启动与界面语言尚未接入，下面仅说明计划；检查更新与自动更新已可用。" />
 
                         <components:SettingsRow
-                            Badge="预留"
-                            Description="登录 Windows 后自动运行 AF Media Bar"
-                            Icon="{ui:SymbolIcon ShareScreenStart24}"
-                            Title="开机自动启动">
-                            <ui:ToggleSwitch IsEnabled="False" />
+                            Description="当前安装的版本，以及公开清单中的最新版本"
+                            Icon="{ui:SymbolIcon Info24}"
+                            Title="版本">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock
+                                    Margin="0,0,12,0"
+                                    VerticalAlignment="Center"
+                                    Style="{StaticResource AfSettingsRowValueStyle}"
+                                    Text="{Binding ViewModel.CurrentVersion, StringFormat=v{0}}" />
+                                <ui:Button
+                                    Command="{Binding ViewModel.CheckForUpdatesCommand}"
+                                    Content="检查更新"
+                                    Icon="{ui:SymbolIcon ArrowSync24}"
+                                    IsEnabled="{Binding ViewModel.CanCheck}"
+                                    Style="{StaticResource AfSettingsButtonStyle}" />
+                            </StackPanel>
                         </components:SettingsRow>
+
+                        <components:SettingsRow
+                            Description="启动约 20 秒后读取公开版本清单；成功后 24 小时内不再自动检查，失败 1 小时后重试。发现新版本时显示一次系统通知，点击通知打开本页"
+                            Icon="{ui:SymbolIcon ArrowSync24}"
+                            Title="自动检查更新">
+                            <ui:ToggleSwitch IsChecked="{Binding ViewModel.AutoCheckEnabled, Mode=TwoWay}" />
+                        </components:SettingsRow>
+
+                        <!--
+                            检查本身失败时没有清单可展示，更新区不会出现；这时失败原因必须有一条自己的状态行，
+                            否则"检查失败"和"什么都没发生"在界面上完全一样。
+                            When the check itself failed there is no manifest to show and the update section stays
+                            hidden, so the failure needs a status row of its own; otherwise "the check failed" and
+                            "nothing happened" look identical.
+                        -->
+                        <components:SettingsCallout
+                            Margin="0,0,0,8"
+                            IsAccent="False"
+                            Symbol="Warning24"
+                            Text="{Binding ViewModel.StatusText}"
+                            Visibility="{Binding ViewModel.ShowStatusNotice, Converter={StaticResource AfBooleanToVisibilityConverter}}" />
+
+                        <components:SettingsRow
+                            Badge="便携版"
+                            Description="当前不是安装版本，无法自动替换文件；请从下载页获取安装包或手动替换程序文件"
+                            Icon="{ui:SymbolIcon Warning24}"
+                            Title="自动更新不可用"
+                            Visibility="{Binding ViewModel.IsPortable, Converter={StaticResource AfBooleanToVisibilityConverter}}" />
+
+                        <!--
+                            更新区：只有确实存在可用版本时才出现，因此"已是最新"状态下这一页仍然只有两行。
+                            亮点、状态与进度都来自更新服务发布的同一个快照，页面本身不做任何判断。
+
+                            亮点逐条用嵌套设置行承载、状态用说明条承载：早期版本把它们直接放在分组的 StackPanel 里，
+                            结果是这些文字落在卡片外面，和上面每一行的卡片外观完全脱节。
+                            Update section: it only appears when a newer version really exists, so an up-to-date
+                            page still shows just two rows. The highlights, the status and the progress all come from
+                            the same snapshot published by the update service, and the page itself decides nothing.
+
+                            Each highlight is a nested settings row and the status is a callout: an earlier version put
+                            them straight into the group's StackPanel, which left that text outside the cards and
+                            visibly detached from every row above it.
+                        -->
+                        <StackPanel Visibility="{Binding ViewModel.HasUpdate, Converter={StaticResource AfBooleanToVisibilityConverter}}">
+                            <components:SettingsRow
+                                Description="{Binding ViewModel.HighlightDate}"
+                                Icon="{ui:SymbolIcon Sparkle24}"
+                                Title="{Binding ViewModel.HighlightTitle}">
+                                <StackPanel Orientation="Horizontal">
+                                    <ui:Button
+                                        Command="{Binding ViewModel.DownloadUpdateCommand}"
+                                        Content="下载并安装"
+                                        Icon="{ui:SymbolIcon ArrowDownload24}"
+                                        IsEnabled="{Binding ViewModel.CanDownload}"
+                                        Style="{StaticResource AfSettingsButtonStyle}" />
+                                    <ui:Button
+                                        Margin="8,0,0,0"
+                                        Command="{Binding ViewModel.CancelDownloadCommand}"
+                                        Content="取消"
+                                        IsEnabled="{Binding ViewModel.CanCancel}"
+                                        Style="{StaticResource AfSettingsButtonStyle}" />
+                                </StackPanel>
+                            </components:SettingsRow>
+
+                            <ItemsControl
+                                Margin="0,0,0,4"
+                                ItemsSource="{Binding ViewModel.HighlightEntries}"
+                                Visibility="{Binding ViewModel.HasHighlights, Converter={StaticResource AfBooleanToVisibilityConverter}}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <components:SettingsRow
+                                            Icon="{ui:SymbolIcon Checkmark24}"
+                                            IsNested="True"
+                                            Title="{Binding}" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <components:SettingsCallout
+                                Margin="0,0,0,8"
+                                IsAccent="True"
+                                Symbol="Info24"
+                                Text="{Binding ViewModel.StatusText}" />
+
+                            <components:SettingsRow
+                                Description="{Binding ViewModel.ChannelText}"
+                                Icon="{ui:SymbolIcon ArrowSync24}"
+                                Title="下载进度"
+                                Visibility="{Binding ViewModel.IsProgressVisible, Converter={StaticResource AfBooleanToVisibilityConverter}}">
+                                <StackPanel Orientation="Horizontal">
+                                    <ProgressBar
+                                        Width="150"
+                                        Height="4"
+                                        VerticalAlignment="Center"
+                                        Maximum="100"
+                                        Style="{StaticResource AfAccentProgressBarStyle}"
+                                        Value="{Binding ViewModel.ProgressPercent}" />
+                                    <TextBlock
+                                        Margin="10,0,0,0"
+                                        VerticalAlignment="Center"
+                                        Style="{StaticResource AfSettingsRowValueStyle}"
+                                        Text="{Binding ViewModel.ProgressPercent, StringFormat={}{0:0}%}" />
+                                </StackPanel>
+                            </components:SettingsRow>
+
+                            <components:SettingsRow
+                                Description="下载与校验完成后，下次启动程序时先安装再启动新版本；也可以现在立即安装"
+                                Icon="{ui:SymbolIcon ArrowClockwise24}"
+                                Title="安装更新">
+                                <ui:Button
+                                    Command="{Binding ViewModel.InstallAndRestartCommand}"
+                                    Content="立即重启并安装"
+                                    Icon="{ui:SymbolIcon ArrowClockwise24}"
+                                    IsEnabled="{Binding ViewModel.CanInstallNow}"
+                                    Style="{StaticResource AfSettingsButtonStyle}" />
+                            </components:SettingsRow>
+
+                            <components:SettingsRow
+                                Description="跳过只影响自动提示，手动检查仍会显示该版本"
+                                Icon="{ui:SymbolIcon Dismiss24}"
+                                Title="跳过此版本">
+                                <StackPanel Orientation="Horizontal">
+                                    <ui:Button
+                                        Command="{Binding ViewModel.SkipVersionCommand}"
+                                        Content="跳过此版本"
+                                        IsEnabled="{Binding ViewModel.CanSkip}"
+                                        Style="{StaticResource AfSettingsButtonStyle}" />
+                                    <ui:Button
+                                        Margin="8,0,0,0"
+                                        Command="{Binding ViewModel.ClearSkippedVersionCommand}"
+                                        Content="取消跳过"
+                                        IsEnabled="{Binding ViewModel.HasSkippedVersion}"
+                                        Style="{StaticResource AfSettingsButtonStyle}" />
+                                </StackPanel>
+                            </components:SettingsRow>
+
+                            <components:SettingsRow
+                                Description="GitHub 直连不可达时，可用加速站点打开同一个下载页"
+                                Icon="{ui:SymbolIcon Globe24}"
+                                Title="打开下载页">
+                                <StackPanel Orientation="Horizontal">
+                                    <ui:Button
+                                        Command="{Binding ViewModel.OpenDownloadPageCommand}"
+                                        Content="GitHub"
+                                        Icon="{ui:SymbolIcon Globe24}"
+                                        Style="{StaticResource AfSettingsButtonStyle}" />
+                                    <ui:Button
+                                        Margin="8,0,0,0"
+                                        Command="{Binding ViewModel.OpenAcceleratedDownloadPageCommand}"
+                                        Content="加速镜像"
+                                        Icon="{ui:SymbolIcon ArrowDownload24}"
+                                        Style="{StaticResource AfSettingsButtonStyle}" />
+                                </StackPanel>
+                            </components:SettingsRow>
+                        </StackPanel>
 
                         <components:SettingsRow
                             Badge="仅简体中文"
@@ -79,14 +245,11 @@
                         </components:SettingsRow>
 
                         <components:SettingsRow
-                            Badge="尚未接入"
-                            Description="本程序不联网检查版本，升级请从发布页获取"
-                            Icon="{ui:SymbolIcon ArrowSync24}"
-                            Title="检查更新">
-                            <ui:Button
-                                Content="检查更新"
-                                IsEnabled="False"
-                                Style="{StaticResource AfSettingsButtonStyle}" />
+                            Badge="预留"
+                            Description="登录 Windows 后自动运行 AF Media Bar"
+                            Icon="{ui:SymbolIcon ShareScreenStart24}"
+                            Title="开机自动启动">
+                            <ui:ToggleSwitch IsEnabled="False" />
                         </components:SettingsRow>
                     </StackPanel>
                 </components:SettingsGroup>

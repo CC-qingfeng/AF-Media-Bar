@@ -142,6 +142,20 @@
             </ui:NavigationView.MenuItems>
 
             <ui:NavigationView.FooterMenuItems>
+                <!--
+                    更新提示：它排在「应用与关于」上方，只在确有可用版本时出现（窗口代码后置按视图模型的纯数据
+                    属性显示或隐藏它）。点击它跳到「应用与关于」，亮点、进度与全部更新操作都在那一页。
+                    Update notice: it sits above "application and about" and only appears when a newer version
+                    really exists; the window's code-behind shows or hides it from the view model's plain-data
+                    property. Clicking it lands on "application and about", where the highlights, progress and every
+                    update action live.
+                -->
+                <ui:NavigationViewItem
+                    x:Name="UpdateNoticeNavItem"
+                    Click="UpdateNoticeNavItem_Click"
+                    Content="{Binding ViewModel.UpdateNoticeTitle}"
+                    Icon="{ui:SymbolIcon ArrowSync24}"
+                    Visibility="Collapsed" />
                 <ui:NavigationViewItem Content="应用与关于" Icon="{ui:SymbolIcon QuestionCircle24}"
                                        TargetPageType="{x:Type pages:AboutPage}" />
             </ui:NavigationView.FooterMenuItems>

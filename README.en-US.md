@@ -132,17 +132,27 @@ The Windows 10/11 media card is an internal Explorer/Shell surface rather than a
 ### Requirements
 
 - Windows 10 version 1809 (build 17763) or later, x64
-- No separate .NET installation is required for the recommended self-contained package
+- Both the installer and the portable package are self-contained, so no separate .NET installation is required
 
-### Recommended package
+### Option 1: installer (recommended)
 
-1. Open [Releases](https://github.com/Fervent-Tempo/AF-Media-Bar/releases).
-2. Download `AFMediaBar-vX.Y.Z-win-x64.zip`. Do not download GitHub's automatically generated source archives.
-3. Extract the package to get one self-contained `AFMediaBar.exe`; the archive no longer contains hundreds of .NET runtime files.
-4. Place it in a permanent writable directory, such as `D:\AFMediaBar`, and run it.
-5. Right-click the player or tray icon and use Display Modes, Media &amp; Notifications, Interaction, Lyrics, Appearance, and App &amp; About for light customization.
+1. Open [Releases](https://github.com/Fervent-Tempo/AF-Media-Bar/releases) and download `AFMediaBar-Setup-vX.Y.Z-win-x64.exe`. Do not download GitHub's automatically generated source archives.
+2. Run the installer. The wizard first asks for **Simplified Chinese or English**, then shows the license, lets you **choose the install location**, and lets you install for the current user or for all users; the default is `%LOCALAPPDATA%\Programs\AFMediaBar` and needs no administrator rights.
+3. A desktop shortcut is optional, the Start menu entry is always created, and the app is ready to launch when the wizard finishes.
 
-AF Media Bar is not commercially code-signed, so Windows SmartScreen may show an unknown publisher warning on first launch.
+An installed copy can check for updates while running, download them in the background, and install them silently when it exits; see "Updating and Uninstalling".
+
+### Option 2: portable package
+
+1. Download `AFMediaBar-vX.Y.Z-win-x64.zip` from the same Releases page.
+2. Extract it to get one self-contained `AFMediaBar.exe`; the archive no longer contains hundreds of .NET runtime files.
+3. Place it in a permanent writable directory, such as `D:\AFMediaBar`, and run it. The portable copy writes no registry keys and is upgraded by replacing the file manually.
+
+Both options are published on GitHub Releases only. When GitHub is slow or unreachable, the same page can be downloaded through a GH-Proxy accelerated address (`https://<proxy-host>/https://github.com/...`); the in-app update check and download also fall back to those accelerated addresses when the direct download fails.
+
+After launching, right-click the player or tray icon and use Display Modes, Media &amp; Notifications, Interaction, Lyrics, Appearance, and App &amp; About for light customization.
+
+AF Media Bar is not commercially code-signed, so Windows SmartScreen may show an unknown publisher warning when you run the installer or launch the app for the first time.
 
 ## Basic Usage
 <div align="center">
@@ -178,23 +188,25 @@ Track-change notification does not read the playback queue and is not a “next 
 
 ### Updating
 
-The app checks its version manifest shortly after startup, at most once per day. You can also check immediately and open any configured GitHub, Quark, Baidu, or Lanzou download channel there.
+About 20 seconds after startup the app reads the public version manifest (`docs/latest.json`), then no more than once every 24 hours; a failure is retried after an hour, and App &amp; About can check immediately. Once a newer version is found:
 
-> Note: `src` contains no update-check implementation at all (there is no `UpdateService` and `docs/latest.json` is never read), and the settings pages expose no update switch. This section describes the release side, not a feature of the current program.
+- the tray icon raises one system notification, and clicking it opens App &amp; About directly; the tray menu and the taskbar bar's context menu both gain a single update entry whose title follows the state (check for updates / downloading n% / ready);
+- that page shows the release highlights, the download progress and every update action, and **downloading starts only when you click "download and install"** (about 70 MB, verified with SHA-256 while streaming), so the app never spends that traffic on its own;
+- after verification it reports that the update is ready, and **the next time you start the app it installs first and then starts the new version** — no installer window appears right after you quit; "restart and install now" on that page does the same thing immediately;
+- the installer's integrity is decided by SHA-256 alone (`size` in the manifest is informational; a wrong or missing one does not affect the update).
 
-This version only retrieves update information and opens download links. It does not silently replace the running executable. To install an update:
+Downloads only use direct links: GitHub first, then the accelerated (GH-Proxy) addresses listed in the manifest, in order. When every channel fails the status shows why and offers two download-page entries, GitHub and an accelerated mirror. The installer's SHA-256 comes from the manifest, and a file that fails the check is deleted and never installed. A portable copy has no installation record, so it downloads and verifies but never installs; replace the executable by hand instead.
 
-1. Exit AF Media Bar from the tray menu.
-2. Download and extract the new version.
-3. Replace the old `AFMediaBar.exe` with the new one, then restart the app.
+The install log is written to `%LOCALAPPDATA%\AFMediaBar\updates\install-<version>.log` for diagnosing a failed silent install, and downloaded installers live in the same folder, cleaned up per version on the next start.
 
 User preferences and window state are stored in `%LOCALAPPDATA%\AFMediaBar\settings.json` using versioned JSON, atomic writes, and backup recovery. Layout profiles and component properties remain in `%LOCALAPPDATA%\AFMediaBar\profiles\layout.json`. Replacing the program file will not remove settings; the App &amp; About page can open the settings folder.
 
 ### Uninstalling
 
-1. Disable startup from the context menu, then exit the app.
-2. Delete the AF Media Bar program directory.
-3. To remove settings as well, run this in PowerShell:
+- Installed copy: uninstall AF Media Bar from Settings &gt; Apps &gt; Installed apps, or use the Start menu entry. Uninstalling removes the program directory and shortcuts only, never `%LOCALAPPDATA%\AFMediaBar`.
+- Portable copy: delete the program directory.
+
+To remove settings and any downloaded installer as well, run this in PowerShell:
 
 ```powershell
 Remove-Item "$env:LOCALAPPDATA\AFMediaBar" -Recurse -Force
@@ -205,7 +217,7 @@ Remove-Item "$env:LOCALAPPDATA\AFMediaBar" -Recurse -Force
 ## Privacy and Security
 
 - No telemetry, advertisements, accounts, or network analytics are included.
-- Update checks request the public `latest.json` manifest; lyrics and remote artwork may also request configured lyric/image services using current media metadata, but the app does not upload device information or user settings.
+- Update checks request only the two public manifest endpoints (`docs/latest.json` on `raw.githubusercontent.com` and on `jsdelivr`), never through a third-party proxy. Installer downloads happen only when automatic download is enabled or when you click download; a failed direct connection may fall back to a GH-Proxy accelerated address listed in the manifest, while the installer's SHA-256 always comes from the manifest fetched from a non-proxy endpoint. Lyrics and remote artwork may also request configured lyric/image services using current media metadata, but the app does not upload device information or user settings.
 - Media metadata, system metrics, and audio operations stay on the local machine.
 - The app runs as the current user, does not request elevation, and does not inject into Explorer.
 - Report security issues privately according to [SECURITY.md](SECURITY.md).

@@ -48,6 +48,55 @@ public sealed class ShellTrayIconService : IDisposable
     public event EventHandler? ShellRestarted;
 
     /// <summary>
+    /// 用户点击了气泡通知（不是超时或关闭）。调用方据此把用户带到相关界面。
+    /// The user clicked the balloon notification, rather than letting it time out or dismissing it. Callers use this
+    /// to take the user to the relevant surface.
+    /// </summary>
+    public event EventHandler? NotificationClicked;
+
+    /// <summary>
+    /// 弹出一次 Shell 气泡通知（Windows 10/11 上以系统通知的形式呈现）。
+    ///
+    /// 只做一次 Shell 调用，不排队也不重试：通知是"顺便告知"，失败不应该影响调用它的业务流程。
+    /// 标题与正文按 Shell 的上限截断（标题 63、正文 255），超长会让整个调用被拒绝。
+    /// Shows one Shell balloon notification, presented as a system notification on Windows 10/11.
+    ///
+    /// It is a single Shell call with no queueing and no retry: a notification is an aside, and its failure must not
+    /// disturb the flow that asked for it. Title and body are truncated to the Shell's limits (63 and 255), because
+    /// over-long text makes the whole call fail.
+    /// </summary>
+    /// <param name="title">通知标题。/ Notification title.</param>
+    /// <param name="message">通知正文。/ Notification body.</param>
+    /// <returns>Shell 是否接受了这次通知。/ Whether the Shell accepted the notification.</returns>
+    public bool TryShowNotification(string title, string message)
+    {
+        if (!_isAdded)
+        {
+            return false;
+        }
+
+        var data = CreateData();
+        data.uFlags = NativeMethods.NIF_INFO;
+        data.szInfoTitle = Truncate(title, 63);
+        data.szInfo = Truncate(message, 255);
+        data.dwInfoFlags = NativeMethods.NIIF_INFO;
+
+        // NOTIFYICON_VERSION_4 之后 Shell 自己决定停留时长，这里的取值不会被使用，但保持有意义的默认值。
+        // Since NOTIFYICON_VERSION_4 the Shell decides how long the balloon stays, so this value is unused while
+        // still carrying a meaningful default.
+        data.uTimeoutOrVersion = 10000;
+        return NativeMethods.ShellNotifyIcon(NativeMethods.NIM_MODIFY, ref data);
+    }
+
+    private static string Truncate(string? text, int maximumLength)
+    {
+        var normalized = string.IsNullOrWhiteSpace(text)
+            ? string.Empty
+            : string.Join(" ", text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)).Trim();
+        return normalized.Length <= maximumLength ? normalized : normalized[..maximumLength];
+    }
+
+    /// <summary>
     /// 查询通知图标的物理屏幕边界，图标尚未安装或 Shell 查询失败时返回 <see langword="false"/>。
     /// Queries the notification icon bounds in physical screen coordinates; returns <see langword="false"/> when unavailable.
     /// </summary>
@@ -123,6 +172,11 @@ public sealed class ShellTrayIconService : IDisposable
         else if (notification == NativeMethods.NIN_POPUPOPEN)
         {
             TooltipOpening?.Invoke(this, EventArgs.Empty);
+        }
+        else if (notification == NativeMethods.NIN_BALLOONUSERCLICK)
+        {
+            NotificationClicked?.Invoke(this, EventArgs.Empty);
+            handled = true;
         }
 
         return IntPtr.Zero;

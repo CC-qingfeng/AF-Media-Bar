@@ -1,9 +1,11 @@
 using AFMediaBar.Classes.Models;
 using AFMediaBar.Classes.Abstractions;
 using AFMediaBar.Classes.Models.Layout;
+using AFMediaBar.Classes.Models.Updates;
 using AFMediaBar.Classes.Services;
 using AFMediaBar.Classes.Settings;
 using AFMediaBar.Classes.Services.Audio;
+using AFMediaBar.Classes.Services.Updates;
 using AFMediaBar.Classes.Utils;
 using AFMediaBar.ViewModels.Windows;
 using System.ComponentModel;
@@ -47,6 +49,8 @@ namespace AFMediaBar.Views.Windows
         private readonly IDisplayMonitorService _displayMonitorService;
         private readonly TrackChangeNotificationCoordinator _trackChangeNotificationCoordinator;
         private readonly Func<TrackChangeNotificationWindow> _trackChangeNotificationFactory;
+        private readonly ShellTrayIconService _trayIconService;
+        private readonly UpdateService _updateService;
         private TaskbarWindow? _taskbarWindow;
         private DynamicIslandWindow? _dynamicIslandWindow;
         private SettingsWindow? _settingsWindow;
@@ -59,6 +63,13 @@ namespace AFMediaBar.Views.Windows
         private bool _isClosing;
         private ApplicationBackdropMode? _watchedBackdropMode;
         private CancellationTokenSource? _taskbarRecoveryCancellation;
+
+        /// <summary>
+        /// 已经用系统通知提醒过的版本。每个版本只提醒一次：否则每天一次的自动检查都会再弹一遍。
+        /// Version already announced through a system notification. Each version is announced once; otherwise every
+        /// daily automatic check would pop up again.
+        /// </summary>
+        private string? _notifiedUpdateVersion;
 
         // Explorer 重启并重建任务栏子窗口时暂停旧宿主。
         // Pause the old host while an Explorer restart rebuilds the taskbar child window.
@@ -91,7 +102,9 @@ namespace AFMediaBar.Views.Windows
             Func<TaskbarFullPanelWindow> fullPanelFactory,
             IDisplayMonitorService displayMonitorService,
             TrackChangeNotificationCoordinator trackChangeNotificationCoordinator,
-            Func<TrackChangeNotificationWindow> trackChangeNotificationFactory)
+            Func<TrackChangeNotificationWindow> trackChangeNotificationFactory,
+            ShellTrayIconService trayIconService,
+            UpdateService updateService)
         {
             ViewModel = viewModel;
             DataContext = this;
@@ -115,6 +128,8 @@ namespace AFMediaBar.Views.Windows
             _displayMonitorService = displayMonitorService;
             _trackChangeNotificationCoordinator = trackChangeNotificationCoordinator;
             _trackChangeNotificationFactory = trackChangeNotificationFactory;
+            _trayIconService = trayIconService;
+            _updateService = updateService;
 
             InitializeComponent();
             UpdateSystemThemeWatcher(SettingsManager.Current.Appearance);
@@ -149,6 +164,15 @@ namespace AFMediaBar.Views.Windows
             _audioControlViewModel.SettingsOpenRequested += ViewModel_OpenSettingsRequested;
             _mouseInputMonitor.LeftButtonPressed += MouseInputMonitor_OnLeftButtonPressed;
             ViewModel.OpenSettingsRequested += ViewModel_OpenSettingsRequested;
+            ViewModel.OpenUpdateSettingsRequested += ViewModel_OpenUpdateSettingsRequested;
+
+            // 发现新版本时由宿主弹一次系统通知，点击通知把用户带到"应用与关于"。
+            // 通知只表达"有新版本"：下载与安装都由用户在该页显式触发。
+            // The host raises one system notification when a newer version is found, and clicking it takes the user
+            // to "application and about". The notification only says "a newer version exists": both downloading and
+            // installing are started explicitly on that page.
+            _updateService.UpdateStateChanged += UpdateService_OnStateChanged;
+            _trayIconService.NotificationClicked += TrayIconService_OnNotificationClicked;
 
             // evaluate the initial state once the window is loaded
             Loaded += MainWindow_Loaded;
@@ -252,6 +276,9 @@ namespace AFMediaBar.Views.Windows
             _audioControlViewModel.SettingsOpenRequested -= ViewModel_OpenSettingsRequested;
             _mouseInputMonitor.LeftButtonPressed -= MouseInputMonitor_OnLeftButtonPressed;
             ViewModel.OpenSettingsRequested -= ViewModel_OpenSettingsRequested;
+            ViewModel.OpenUpdateSettingsRequested -= ViewModel_OpenUpdateSettingsRequested;
+            _updateService.UpdateStateChanged -= UpdateService_OnStateChanged;
+            _trayIconService.NotificationClicked -= TrayIconService_OnNotificationClicked;
             // Make sure that closing this window will begin the process of closing the application.
             Application.Current.Shutdown();
         }
@@ -725,6 +752,57 @@ namespace AFMediaBar.Views.Windows
             _settingsWindow.Closed += SettingsWindow_Closed;
             _settingsWindow.Show();
             _settingsWindow.Activate();
+        }
+
+        /// <summary>
+        /// 打开设置窗口并直接落在「应用与关于」：托盘菜单、媒体栏右键菜单与系统通知都走这条路，
+        /// 用户因此不需要自己在六个页面里再找一次。
+        /// Opens the settings window straight on "application and about": the tray menu, the media-bar context menu
+        /// and the system notification all take this path, so the user never has to find that page again among six.
+        /// </summary>
+        private void ViewModel_OpenUpdateSettingsRequested(object? sender, EventArgs e)
+        {
+            if (_isClosing)
+                return;
+
+            ViewModel_OpenSettingsRequested(sender, e);
+            if (_settingsWindow is not { } settingsWindow)
+                return;
+
+            // 新建的窗口要等布局完成才接受导航，因此把跳转排到 Loaded 之后：立刻调用时导航视图还没有内容宿主，
+            // 表现就是"点了没反应"。
+            // A freshly created window only accepts navigation once its layout exists, so the jump is queued behind
+            // Loaded: calling it immediately finds a navigation view with no content host yet, which looks exactly
+            // like a click that does nothing.
+            settingsWindow.Dispatcher.BeginInvoke(
+                System.Windows.Threading.DispatcherPriority.Loaded,
+                new Action(() => settingsWindow.Navigate(typeof(AFMediaBar.Views.Pages.AboutPage))));
+        }
+
+        private void UpdateService_OnStateChanged(UpdateState state)
+        {
+            if (_isClosing)
+                return;
+
+            if (state.Phase is not (UpdatePhase.Available or UpdatePhase.ManualOnly))
+                return;
+
+            if (state.AvailableVersion is not { } version ||
+                string.Equals(_notifiedUpdateVersion, version, StringComparison.OrdinalIgnoreCase))
+                return;
+
+            _notifiedUpdateVersion = version;
+            _trayIconService.TryShowNotification(
+                "AF Media Bar 有新版本",
+                $"发现 v{version}（当前 v{state.CurrentVersion}）。点击打开设置，查看亮点并下载安装。");
+        }
+
+        private void TrayIconService_OnNotificationClicked(object? sender, EventArgs e)
+        {
+            if (_isClosing)
+                return;
+
+            ViewModel_OpenUpdateSettingsRequested(sender, EventArgs.Empty);
         }
 
         private void SettingsWindow_Closed(object? sender, EventArgs e)
