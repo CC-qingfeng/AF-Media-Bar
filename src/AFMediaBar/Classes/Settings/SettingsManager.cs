@@ -247,6 +247,12 @@ public static class SettingsManager
         next.TaskbarTargetMonitorDeviceId = defaults.TaskbarTargetMonitorDeviceId;
         next.Position = defaults.Position; next.TaskbarBarCrossAxisOffsetDip = defaults.TaskbarBarCrossAxisOffsetDip;
         next.TaskbarBarAvoidIcons = defaults.TaskbarBarAvoidIcons; next.TaskbarBarPositionLocked = defaults.TaskbarBarPositionLocked;
+        // 灵动岛外观的 UI 现在位于显示模式页的灵动岛分区，因此它的默认值也归这一页的重置作用域；
+        // ResetAppearance 仍然重置同一份设置，两个入口重置同一组值不会互相矛盾。
+        // The island appearance UI now lives in the display-mode page's island section, so its defaults belong to
+        // this page's reset scope too; ResetAppearance still resets the same values, and both entries agreeing is
+        // what keeps "restore this page" honest.
+        next.DynamicIslandSurface = defaults.DynamicIslandSurface;
         Replace(next, SettingsResetScope.DisplayModes);
     }
     public static void ResetExtraFeatures()

@@ -80,6 +80,235 @@
     </Style>
 
     <!--
+        内联状态徽章 / Inline status badge
+
+        「当前模式 / 未实现 / 预留」这类短状态贴在行标题右侧，而不是另占一行、也不是塞进说明句里。
+        它比芯片更小更紧，因为它与标题同处一个文字块。
+        Short states such as "current / not implemented / reserved" sit beside the row title instead of taking a
+        row of their own or hiding inside the description sentence. It is smaller and tighter than a chip because
+        it shares one text block with the title.
+    -->
+
+    <Style x:Key="AfSettingsBadgeBaseStyle" TargetType="{x:Type ContentControl}">
+        <Setter Property="FontSize" Value="10" />
+        <Setter Property="Margin" Value="8,0,0,0" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type ContentControl}">
+                    <Border
+                        Padding="6,1"
+                        Background="{TemplateBinding Background}"
+                        CornerRadius="4">
+                        <ContentPresenter
+                            VerticalAlignment="Center"
+                            TextElement.Foreground="{TemplateBinding Foreground}" />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style
+        x:Key="AfSettingsBadgeAccentStyle"
+        BasedOn="{StaticResource AfSettingsBadgeBaseStyle}"
+        TargetType="{x:Type ContentControl}">
+        <Setter Property="Background" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
+    </Style>
+
+    <Style
+        x:Key="AfSettingsBadgeNeutralStyle"
+        BasedOn="{StaticResource AfSettingsBadgeBaseStyle}"
+        TargetType="{x:Type ContentControl}">
+        <Setter Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}" />
+    </Style>
+
+    <Style
+        x:Key="AfSettingsBadgeAttentionStyle"
+        BasedOn="{StaticResource AfSettingsBadgeBaseStyle}"
+        TargetType="{x:Type ContentControl}">
+        <Setter Property="Background" Value="{DynamicResource SystemFillColorCautionBackgroundBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
+    </Style>
+
+    <!--
+        设置行 / Settings row
+
+        一行一个选项、一行恰好一个控件，控件永远贴右。左侧是主色图标底片、标题与说明，
+        右侧是唯一的控件槽。行间距 4 DIP：同一分组的行贴成一条连续列表，而不是一堆独立盒子。
+        One option per row, exactly one control per row, always pinned right. The left side carries the accent
+        icon chip, title, and description; the right side is the single control slot. The 4 DIP row gap welds a
+        group's rows into one continuous list instead of a pile of separate boxes.
+    -->
+    <Style TargetType="{x:Type components:SettingsRow}">
+        <Setter Property="Margin" Value="{StaticResource AfSettingsRowGap}" />
+        <Setter Property="Padding" Value="16,13" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="Background" Value="{DynamicResource CardBackground}" />
+        <Setter Property="Foreground" Value="{DynamicResource CardForeground}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="SnapsToDevicePixels" Value="True" />
+        <Setter Property="FocusVisualStyle" Value="{DynamicResource AfFocusVisualStyle}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type components:SettingsRow}">
+                    <Border
+                        x:Name="RowSurface"
+                        Padding="{TemplateBinding Padding}"
+                        Background="{TemplateBinding Background}"
+                        BorderBrush="{TemplateBinding BorderBrush}"
+                        BorderThickness="{TemplateBinding BorderThickness}"
+                        CornerRadius="{TemplateBinding CornerRadius}"
+                        SnapsToDevicePixels="True">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <Grid
+                                x:Name="IconChip"
+                                Grid.Column="0"
+                                Width="32"
+                                Height="32"
+                                Margin="0,0,14,0"
+                                VerticalAlignment="Center"
+                                TextElement.Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}">
+                                <Border
+                                    Background="{DynamicResource AccentFillColorDefaultBrush}"
+                                    CornerRadius="8"
+                                    Opacity="0.14" />
+                                <ContentControl
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    Content="{TemplateBinding Icon}"
+                                    Focusable="False"
+                                    KeyboardNavigation.IsTabStop="False" />
+                            </Grid>
+
+                            <StackPanel
+                                Grid.Column="1"
+                                VerticalAlignment="Center">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock
+                                        Style="{StaticResource AfSettingsRowTitleStyle}"
+                                        Text="{TemplateBinding Title}" />
+                                    <ContentControl
+                                        x:Name="RowBadge"
+                                        VerticalAlignment="Center"
+                                        Content="{TemplateBinding Badge}"
+                                        Style="{StaticResource AfSettingsBadgeNeutralStyle}" />
+                                </StackPanel>
+                                <TextBlock
+                                    x:Name="RowDescription"
+                                    Style="{StaticResource AfSettingsRowDescriptionStyle}"
+                                    Text="{TemplateBinding Description}" />
+                            </StackPanel>
+
+                            <ContentPresenter
+                                x:Name="ControlHost"
+                                Grid.Column="2"
+                                Margin="16,0,0,0"
+                                VerticalAlignment="Center"
+                                Content="{TemplateBinding Content}"
+                                TextElement.Foreground="{TemplateBinding Foreground}" />
+                        </Grid>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="Icon" Value="{x:Null}">
+                            <Setter TargetName="IconChip" Property="Visibility" Value="Collapsed" />
+                            <Setter TargetName="IconChip" Property="Margin" Value="0" />
+                        </Trigger>
+                        <Trigger Property="Description" Value="">
+                            <Setter TargetName="RowDescription" Property="Visibility" Value="Collapsed" />
+                        </Trigger>
+                        <Trigger Property="Badge" Value="">
+                            <Setter TargetName="RowBadge" Property="Visibility" Value="Collapsed" />
+                        </Trigger>
+                        <Trigger Property="BadgeTone" Value="Accent">
+                            <Setter TargetName="RowBadge" Property="Style" Value="{StaticResource AfSettingsBadgeAccentStyle}" />
+                        </Trigger>
+                        <Trigger Property="BadgeTone" Value="Attention">
+                            <Setter TargetName="RowBadge" Property="Style" Value="{StaticResource AfSettingsBadgeAttentionStyle}" />
+                        </Trigger>
+                        <!--
+                            嵌套行：更小的图标、左侧缩进到父行标题下方、去掉自己的表面与圆角，只留一条发丝线。
+                            因此它读起来属于上方那一行，而不是又一张卡片。
+                            A nested row uses a smaller icon, indents under its parent's title, and drops its own
+                            surface and radius for a hairline separator, so it reads as belonging to the row above
+                            instead of being another card.
+                        -->
+                        <Trigger Property="IsNested" Value="True">
+                            <Setter Property="Background" Value="Transparent" />
+                            <Setter Property="BorderThickness" Value="0,0,0,1" />
+                            <Setter Property="BorderBrush" Value="{DynamicResource DividerStrokeColorDefaultBrush}" />
+                            <Setter Property="CornerRadius" Value="0" />
+                            <Setter Property="Padding" Value="52,12,16,12" />
+                            <Setter TargetName="IconChip" Property="Width" Value="26" />
+                            <Setter TargetName="IconChip" Property="Height" Value="26" />
+                            <Setter TargetName="IconChip" Property="Margin" Value="0,0,12,0" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.5" />
+                        </Trigger>
+                        <MultiTrigger>
+                            <MultiTrigger.Conditions>
+                                <Condition Property="IsNested" Value="False" />
+                                <Condition Property="IsMouseOver" Value="True" />
+                            </MultiTrigger.Conditions>
+                            <Setter TargetName="RowSurface" Property="BorderBrush" Value="{DynamicResource ControlStrokeColorSecondaryBrush}" />
+                        </MultiTrigger>
+                        <MultiTrigger>
+                            <MultiTrigger.Conditions>
+                                <Condition Property="IsNested" Value="False" />
+                                <Condition Property="IsKeyboardFocused" Value="True" />
+                            </MultiTrigger.Conditions>
+                            <Setter TargetName="RowSurface" Property="BorderBrush" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+                        </MultiTrigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!--
+        可展开分组 / Expander group
+
+        需要多个控件才能表达的设置放进展开器：头部还是「标题 + 说明 + 可选开关」这一行形态，
+        展开体是缩进的同构行。缩进的 52 DIP 与嵌套行的左内边距一致，因此展开体里的图标
+        正好落在父行标题的左边缘下方。
+        Settings that need several controls go into an expander: the header keeps the same title, description, and
+        optional switch shape, and the body is indented identical rows. The 52 DIP indent matches the nested
+        row's left padding, so the body icons line up under the parent title's left edge.
+    -->
+    <Style x:Key="AfSettingsExpanderStyle" TargetType="{x:Type ui:CardExpander}">
+        <Setter Property="Margin" Value="{StaticResource AfSettingsRowGap}" />
+        <Setter Property="Padding" Value="16,13" />
+        <Setter Property="Background" Value="{DynamicResource CardBackground}" />
+        <Setter Property="Foreground" Value="{DynamicResource CardForeground}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="SnapsToDevicePixels" Value="True" />
+        <Setter Property="ContentPadding" Value="0" />
+        <!--
+            Header 默认按内容宽度排布，于是头部里的开关会紧贴在说明文字后面，而不是贴到卡片右缘。
+            拉成 Stretch 后，头部那行才与普通设置行的右列落在同一条竖线上。
+            The header lays out at content width by default, which leaves a switch in it hugging the description
+            text instead of the card's right edge. Stretching it puts the header row's control on the same vertical
+            line as every ordinary settings row.
+        -->
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    </Style>
+
+    <!--
         分组容器 / Group container
 
         分组标题带一个主色底片图标，让分组在滚动时也能被一眼认出；分组标题仍然是分组标签条的唯一来源，
@@ -134,11 +363,27 @@
                                 Content="{TemplateBinding StatusText}" />
                         </Grid>
 
+                        <!--
+                            分组说明：一行白话，用来解释「静置层 / 悬停层 / 完整层」这类名字什么时候生效。
+                            缩进 36 DIP 与分组图标底片同宽，因此说明与标题左对齐起点一致。
+                            The group description: one plain line explaining when a name such as "静置层 / 悬停层 /
+                            完整层" applies. The 36 DIP indent matches the header icon plate so the description starts
+                            on the same left edge as the title.
+                        -->
+                        <TextBlock
+                            x:Name="GroupDescription"
+                            Margin="36,0,0,12"
+                            Style="{StaticResource AfSettingsRowDescriptionStyle}"
+                            Text="{TemplateBinding Description}" />
+
                         <ContentPresenter HorizontalAlignment="Stretch" />
                     </StackPanel>
                     <ControlTemplate.Triggers>
                         <Trigger Property="Icon" Value="{x:Null}">
                             <Setter TargetName="GroupIcon" Property="Visibility" Value="Collapsed" />
+                        </Trigger>
+                        <Trigger Property="Description" Value="">
+                            <Setter TargetName="GroupDescription" Property="Visibility" Value="Collapsed" />
                         </Trigger>
                         <Trigger Property="StatusText" Value="">
                             <Setter TargetName="GroupStatus" Property="Visibility" Value="Collapsed" />
@@ -160,101 +405,6 @@
                             <Setter TargetName="GroupIcon" Property="TextElement.Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}" />
                             <Setter TargetName="GroupStatus" Property="Style" Value="{StaticResource AfSettingsChipNeutralStyle}" />
                         </Trigger>
-                    </ControlTemplate.Triggers>
-                </ControlTemplate>
-            </Setter.Value>
-        </Setter>
-    </Style>
-
-    <!--
-        子区域 / Sub-region
-
-        子区域是“父项关掉就没有意义”的选项的家。它比卡片低一层：更小的圆角、更弱的底色、左侧不再有图标，
-        因此它读起来是父卡片的一部分，而不是又一张卡片。
-        A sub-region is home to options that mean nothing while their parent is off. It sits one level below a
-        card: smaller radius, weaker fill, no leading icon, so it reads as part of its parent card rather than as
-        another card.
-    -->
-
-    <Style TargetType="{x:Type components:SettingsSubRegion}">
-        <Setter Property="Margin" Value="0,14,0,0" />
-        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-        <Setter Property="Template">
-            <Setter.Value>
-                <ControlTemplate TargetType="{x:Type components:SettingsSubRegion}">
-                    <Border
-                        x:Name="RegionRoot"
-                        Padding="14,12"
-                        Background="{DynamicResource SubtleFillColorSecondaryBrush}"
-                        BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
-                        BorderThickness="1"
-                        CornerRadius="6">
-                        <StackPanel>
-                            <Grid Margin="0,0,0,4">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <TextBlock
-                                    FontSize="13"
-                                    FontWeight="{DynamicResource AppTextMediumFontWeight}"
-                                    Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                    Text="{TemplateBinding Header}" />
-                                <ContentControl
-                                    x:Name="RegionStatus"
-                                    Grid.Column="1"
-                                    Margin="12,0,0,0"
-                                    Visibility="Collapsed"
-                                    Style="{StaticResource AfSettingsChipNeutralStyle}"
-                                    Content="{TemplateBinding StatusText}" />
-                            </Grid>
-                            <TextBlock
-                                x:Name="RegionDescription"
-                                Style="{StaticResource AfSettingsHintTextStyle}"
-                                Text="{TemplateBinding Description}" />
-                            <ContentPresenter
-                                x:Name="PART_Content"
-                                Margin="0,12,0,0"
-                                HorizontalAlignment="Stretch" />
-                        </StackPanel>
-                    </Border>
-                    <ControlTemplate.Triggers>
-                        <Trigger Property="Description" Value="">
-                            <Setter TargetName="RegionDescription" Property="Visibility" Value="Collapsed" />
-                        </Trigger>
-                        <!--
-                            StatusText 是“依赖未满足时”的提示，因此它只在子区域关闭时出现。
-                            原先它在非空时始终可见，于是父项已经打开、子区域可用时，芯片还在说“需先启用”。
-                            StatusText is the unmet-dependency notice, so it appears only while the region is
-                            disabled. It used to be visible whenever it was non-empty, so an enabled region still
-                            claimed it needed enabling first.
-                        -->
-                        <Trigger Property="StatusText" Value="">
-                            <Setter TargetName="RegionStatus" Property="Content" Value="需先启用" />
-                        </Trigger>
-                        <Trigger Property="StatusTone" Value="Accent">
-                            <Setter TargetName="RegionStatus" Property="Style" Value="{StaticResource AfSettingsChipAccentStyle}" />
-                        </Trigger>
-                        <Trigger Property="StatusTone" Value="Attention">
-                            <Setter TargetName="RegionStatus" Property="Style" Value="{StaticResource AfSettingsChipAttentionStyle}" />
-                        </Trigger>
-                        <!--
-                            关闭时默认只变暗并显示芯片，让用户仍能看到“有哪些选项、需要先打开什么”。
-                            需要折叠的场景由 CollapseWhenDisabled 显式选择。
-                            While disabled the default is dim plus chip, so the user can still see which options
-                            exist and what must be turned on first. Folding is opted into explicitly.
-                        -->
-                        <Trigger Property="IsSubRegionEnabled" Value="False">
-                            <Setter TargetName="RegionRoot" Property="Opacity" Value="0.66" />
-                            <Setter TargetName="RegionStatus" Property="Visibility" Value="Visible" />
-                        </Trigger>
-                        <MultiTrigger>
-                            <MultiTrigger.Conditions>
-                                <Condition Property="IsSubRegionEnabled" Value="False" />
-                                <Condition Property="CollapseWhenDisabled" Value="True" />
-                            </MultiTrigger.Conditions>
-                            <Setter TargetName="RegionRoot" Property="Visibility" Value="Collapsed" />
-                        </MultiTrigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
@@ -308,10 +458,15 @@
     <!--
         固定页头 / Pinned page header
 
-        页头与标签条都在滚动容器之外，因此内容滚过它们时不会把它们带走。背景必须是不透明的，
-        否则滚动内容会从页头底下透出来。
-        The header and the tabs live outside the scroll container, so scrolling content cannot carry them away.
-        The background must be opaque, or the content would show through the header.
+        页头与标签条都在滚动容器之外，内容被裁剪在滚动行内，永远不会滚到页头底下。
+        因此页头**不铺任何底色**：它不承担遮挡职责，而不透明底色在亚克力/云母下会变成一条与背景冲突的
+        实色带——这正是它在深浅色下还行、在半透明材质下很突兀的原因。
+        分隔改由下方那条只在滚动后淡入的发丝线承担。
+        The header and tabs sit outside the scroll container, and content is clipped inside the scroll row, so
+        nothing ever scrolls beneath the header. The header therefore paints no background at all: it has no
+        occluding job to do, and an opaque fill turns into a band that fights the acrylic or Mica behind it,
+        which is exactly why it looked fine in light and dark and wrong over translucent material. Separation is
+        left to the hairline below, which fades in only once the content has scrolled.
     -->
 
     <Style TargetType="{x:Type components:SettingsGroupStrip}">
@@ -319,7 +474,7 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type components:SettingsGroupStrip}">
-                    <StackPanel Background="{DynamicResource ApplicationBackgroundBrush}">
+                    <StackPanel Background="Transparent">
                         <Grid Margin="0,0,0,10">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
@@ -419,6 +574,21 @@
                                 <ScaleTransform ScaleX="0" ScaleY="1" />
                             </Border.RenderTransform>
                         </Border>
+
+                        <!--
+                            滚动分隔线：静止在页面顶部时完全不可见（透明度 0），一旦开始滚动就淡入。
+                            这样页头在亚克力下没有任何永久性的实色块，只在确实有内容被滚上去时才提示分隔。
+                            Scroll divider: invisible at the top of the page (opacity 0) and faded in as soon as
+                            scrolling starts. The header therefore never paints a permanent solid block over
+                            acrylic, and only signals a boundary when content really has scrolled away above.
+                        -->
+                        <Border
+                            x:Name="PART_Divider"
+                            Height="1"
+                            Margin="0,6,0,0"
+                            HorizontalAlignment="Stretch"
+                            Background="{DynamicResource DividerStrokeColorDefaultBrush}"
+                            Opacity="0" />
                     </StackPanel>
                     <ControlTemplate.Triggers>
                         <Trigger Property="Subtitle" Value="">

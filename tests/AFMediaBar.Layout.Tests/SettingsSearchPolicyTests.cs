@@ -130,10 +130,11 @@ public sealed class SettingsSearchPolicyTests
     {
         // 分组序号必须与页面里 SettingsGroup 的声明顺序逐一对上。序号出现空洞意味着
         // 有人在 XAML 里增删了分组却没有更新索引，搜索结果就会跳到错误的分组。
+        // 显示模式页按模式切换内容，因此序号以「页面 + 模式分区」为单位计算。
         // Group indices must line up one-to-one with the declaration order of the SettingsGroup containers.
         // A hole means a group was added or removed in XAML without updating the index, and a search hit would
-        // jump to the wrong group.
-        foreach (var group in SettingsSearchIndex.Entries.GroupBy(entry => entry.Page))
+        // jump to the wrong group. The display-mode page swaps content by mode, so the unit is page plus mode.
+        foreach (var group in SettingsSearchIndex.Entries.GroupBy(entry => (entry.Page, entry.Mode)))
         {
             var indices = group.Select(entry => entry.GroupIndex).OrderBy(index => index).ToArray();
             CollectionAssert.AreEqual(
@@ -143,13 +144,57 @@ public sealed class SettingsSearchPolicyTests
         }
     }
 
+    /// <summary>
+    /// 显示模式页每种模式都必须从「选择显示模式」开始：分组序号是标签条里的位置，
+    /// 而标签条永远以模式选择为第一项，漏掉它会让所有命中都偏移一格。
+    /// Every mode on the display-mode page must start with the mode picker: a group index is a position in the tab
+    /// strip, and the strip always begins with the picker, so omitting it would shift every hit by one.
+    /// </summary>
+    [TestMethod]
+    public void Index_DisplayModePickerIsTheFirstGroupInEveryMode()
+    {
+        foreach (var mode in Enum.GetValues<SettingsSearchMode>())
+        {
+            var picker = SettingsSearchIndex.Entries.SingleOrDefault(entry =>
+                entry.Page == SettingsPageKey.DisplayModes && entry.Mode == mode && entry.GroupIndex == 0);
+
+            Assert.AreEqual("选择显示模式", picker.Title, $"{mode} 模式下序号 0 必须是模式选择分组。");
+        }
+    }
+
+    /// <summary>
+    /// 每种模式下索引覆盖的分组数必须与页面实际渲染的分组数一致：
+    /// 任务栏是「模式选择 + 五个分组」，灵动岛是「模式选择 + 一个分组」，另外两种只有模式选择。
+    /// The number of groups the index covers per mode must match what the page actually renders: taskbar is the
+    /// picker plus five groups, the island is the picker plus one, and the other two are the picker alone.
+    /// </summary>
+    [TestMethod]
+    public void Index_DisplayModeGroupCountsMatchThePageSections()
+    {
+        (SettingsSearchMode Mode, int Groups)[] expected =
+        [
+            (SettingsSearchMode.Taskbar, 6),
+            (SettingsSearchMode.DynamicIsland, 2),
+            (SettingsSearchMode.DesktopCard, 1),
+            (SettingsSearchMode.FloatingBall, 1),
+        ];
+
+        foreach (var (mode, groups) in expected)
+        {
+            var count = SettingsSearchIndex.Entries.Count(entry =>
+                entry.Page == SettingsPageKey.DisplayModes && entry.Mode == mode);
+
+            Assert.AreEqual(groups, count, $"{mode} 模式下的分组数必须与页面分区一致。");
+        }
+    }
+
     [TestMethod]
     public void Index_CoversEveryPageExactlyOncePerGroup()
     {
         var pages = SettingsSearchIndex.Entries.Select(entry => entry.Page).Distinct().ToArray();
 
         CollectionAssert.AreEquivalent(Enum.GetValues<SettingsPageKey>(), pages);
-        foreach (var group in SettingsSearchIndex.Entries.GroupBy(entry => (entry.Page, entry.GroupIndex)))
+        foreach (var group in SettingsSearchIndex.Entries.GroupBy(entry => (entry.Page, entry.Mode, entry.GroupIndex)))
         {
             Assert.AreEqual(1, group.Count(), $"{group.Key} 出现了重复条目。");
         }
@@ -160,14 +205,22 @@ public sealed class SettingsSearchPolicyTests
     {
         foreach (var entry in SettingsSearchIndex.Entries)
         {
+            // 同一分组的索引在显示模式页上按模式各有一条（序号只在各自模式内成立），而候选列表会去重，
+            // 因此同名条目只要求「同名同序号的一条命中出现」，只有独此一份的条目才要求模式也吻合。
+            // A group on the display-mode page has one index entry per mode, because an index only holds inside its
+            // own mode, while the suggestion list de-duplicates. So a name shared by several entries only has to
+            // appear once under that name, and only a uniquely named entry must also match the mode.
+            var sharesTitle = SettingsSearchIndex.Entries.Count(candidate =>
+                candidate.Page == entry.Page && candidate.Title == entry.Title) > 1;
+
             var byGroup = SettingsSearchPolicy.Search(entry.Title, SettingsSearchIndex.Entries);
             Assert.IsTrue(
-                byGroup.Any(hit => hit.Page == entry.Page && hit.GroupIndex == entry.GroupIndex),
+                byGroup.Any(hit => hit.Page == entry.Page && hit.GroupIndex == entry.GroupIndex && (sharesTitle || hit.Mode == entry.Mode)),
                 $"索引条目“{entry.Title}”无法被自己的分组名搜到。");
 
             var byPage = SettingsSearchPolicy.Search(entry.PageTitle, SettingsSearchIndex.Entries);
             Assert.IsTrue(
-                byPage.Any(hit => hit.Page == entry.Page && hit.GroupIndex == entry.GroupIndex),
+                byPage.Any(hit => hit.Page == entry.Page && hit.Title == entry.Title && (sharesTitle || hit.Mode == entry.Mode)),
                 $"索引条目“{entry.PageTitle} › {entry.Title}”无法被页面名搜到。");
         }
     }
@@ -198,5 +251,60 @@ public sealed class SettingsSearchPolicyTests
 
         Assert.IsTrue(titles.All(title => !string.IsNullOrWhiteSpace(title)), "每个页面都必须有导航名称。");
         CollectionAssert.AllItemsAreUnique(titles);
+    }
+
+    /// <summary>
+    /// 界面改名之后，旧说法必须仍然搜得到。
+    ///
+    /// 这些词出现在 README、旧截图和用户的记忆里（承载模式、修饰键、字重、信息密度…）。
+    /// 只改标题而不把旧词留进关键词，会让按旧词搜索的人一无所获，改名于是变成一次功能倒退。
+    /// After the interface is reworded, the previous terms must still be findable. They appear in the README,
+    /// in old screenshots, and in users' memory. Renaming titles without keeping the old words as keywords would
+    /// make those searches return nothing, turning a wording change into a capability regression.
+    /// </summary>
+    [TestMethod]
+    public void Index_KeepsEveryRetiredTermSearchable()
+    {
+        (string Term, SettingsPageKey Page)[] retiredTerms =
+        [
+            ("承载模式", SettingsPageKey.DisplayModes),
+            ("承载显示器", SettingsPageKey.DisplayModes),
+            ("承载与位置", SettingsPageKey.DisplayModes),
+            ("固定长度", SettingsPageKey.DisplayModes),
+            ("修饰键", SettingsPageKey.Interaction),
+            ("共用修饰键", SettingsPageKey.Interaction),
+            ("字重", SettingsPageKey.Appearance),
+            ("播放器文字", SettingsPageKey.Appearance),
+            // 灵动岛外观搬到了显示模式页，因此这两个旧词现在应当命中显示模式，而不是外观。
+            // The island appearance moved to the display-mode page, so these two retired terms must now resolve to
+            // display modes rather than appearance.
+            ("灵动岛表面", SettingsPageKey.DisplayModes),
+            ("基础表面风格", SettingsPageKey.DisplayModes),
+        ];
+
+        foreach (var (term, page) in retiredTerms)
+        {
+            var hits = SettingsSearchPolicy.Search(term, SettingsSearchIndex.Entries);
+            Assert.IsTrue(
+                hits.Any(hit => hit.Page == page),
+                $"改名后的旧词「{term}」必须仍然能搜到 {page} 页，否则按旧说法搜索的人会一无所获。");
+        }
+    }
+
+    /// <summary>界面不再使用的内部说法不能出现在任何索引标题里，只能留在关键词中。/ Internal wording the interface no longer uses must not appear as an index title, only among keywords.</summary>
+    [TestMethod]
+    public void Index_TitlesDoNotUseInternalWording()
+    {
+        string[] banned = ["承载", "修饰键", "字重", "表面"];
+
+        foreach (var entry in SettingsSearchIndex.Entries)
+        {
+            foreach (var word in banned)
+            {
+                Assert.IsFalse(
+                    entry.Title.Contains(word, StringComparison.Ordinal),
+                    $"索引标题「{entry.Title}」仍在用内部说法「{word}」，它只能出现在关键词里。");
+            }
+        }
     }
 }

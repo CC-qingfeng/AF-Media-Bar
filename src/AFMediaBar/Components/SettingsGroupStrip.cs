@@ -87,6 +87,12 @@ public class SettingsGroupStrip : Control
     /// <summary>跳转时长。滚动是移动，因此用 ease-in-out 而不是 ease-out。/ Jump duration. Scrolling is on-screen movement, so it eases in and out rather than out.</summary>
     private static readonly Duration JumpDuration = new(TimeSpan.FromMilliseconds(260));
 
+    /// <summary>滚动多少 DIP 之后分隔线完全淡入。取 24 是因为它约等于标题行高，用户看到内容明显移动即可确认“上面还有内容”。/ How far the content scrolls, in DIP, before the divider is fully faded in; 24 is about one title line, enough for the user to see that content really moved.</summary>
+    private const double DividerFadeDistanceDip = 24d;
+
+    /// <summary>分隔线淡入淡出的时长。它是状态提示，取 UI 动效的下限量级。/ The divider's fade duration; it signals state, so it sits at the low end of the UI motion range.</summary>
+    private static readonly Duration DividerFadeDuration = new(TimeSpan.FromMilliseconds(120));
+
     private static readonly DependencyPropertyKey GroupsPropertyKey = DependencyProperty.RegisterReadOnly(
         nameof(Groups),
         typeof(ObservableCollection<SettingsGroupItem>),
@@ -100,9 +106,11 @@ public class SettingsGroupStrip : Control
     private ItemsControl? _tabs;
     private FrameworkElement? _indicator;
     private FrameworkElement? _progress;
+    private FrameworkElement? _divider;
     private TranslateTransform? _indicatorTranslate;
     private ScaleTransform? _progressScale;
     private bool _isJumping;
+    private double _dividerOpacity = -1d;
 
     /// <summary>创建分组标签条并初始化跳转命令。/ Creates the group strip and its jump command.</summary>
     public SettingsGroupStrip()
@@ -172,6 +180,8 @@ public class SettingsGroupStrip : Control
         _tabs = GetTemplateChild("PART_Tabs") as ItemsControl;
         _indicator = GetTemplateChild("PART_Indicator") as FrameworkElement;
         _progress = GetTemplateChild("PART_Progress") as FrameworkElement;
+        _divider = GetTemplateChild("PART_Divider") as FrameworkElement;
+        _dividerOpacity = -1d;
 
         // 模板里的 Freezable 会被 BAML 冻结，直接改它的属性会抛“对象处于只读状态”。
         // 因此这里换成代码创建的可写变换，而不是去改模板自带的那个。
@@ -205,6 +215,50 @@ public class SettingsGroupStrip : Control
     public void JumpToGroup(int groupIndex) => JumpTo(groupIndex);
 
     /// <summary>
+    /// 滚动到目标分组并让它脉冲一次，用于搜索命中后的定位。
+    /// 脉冲只写 Opacity，且结束时先清除动画再落回终值，避免元素停在中间透明度上。
+    /// Scrolls to a group and pulses it once, for landing on a search hit.
+    /// The pulse writes only Opacity and clears the animation before landing the final value, so the group can
+    /// never be left sitting at an intermediate opacity.
+    /// </summary>
+    /// <param name="groupIndex">目标分组序号。/ Target group index.</param>
+    public void RevealGroup(int groupIndex)
+    {
+        JumpTo(groupIndex);
+
+        var groups = ResolveGroups();
+        if (groupIndex < 0 || groupIndex >= groups.Count)
+        {
+            return;
+        }
+
+        var group = groups[groupIndex];
+        var animation = new DoubleAnimationUsingKeyFrames
+        {
+            BeginTime = TimeSpan.Zero,
+            Duration = new Duration(TimeSpan.FromMilliseconds(440)),
+            FillBehavior = FillBehavior.HoldEnd
+        };
+        animation.KeyFrames.Add(new LinearDoubleKeyFrame(1d, KeyTime.FromTimeSpan(TimeSpan.Zero)));
+        animation.KeyFrames.Add(new LinearDoubleKeyFrame(0.55d, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(200))));
+        animation.KeyFrames.Add(new SplineDoubleKeyFrame(
+            1d,
+            KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(440)),
+            ResolveEaseOut()));
+        animation.Completed += (_, _) =>
+        {
+            group.BeginAnimation(UIElement.OpacityProperty, null);
+            group.Opacity = 1d;
+        };
+
+        group.BeginAnimation(UIElement.OpacityProperty, animation, HandoffBehavior.SnapshotAndReplace);
+    }
+
+    /// <summary>取与设置页外观一致的强 ease-out 曲线；资源缺失时用同一曲线的兜底实例。/ The strong ease-out curve shared with settings appearance, with a fallback of the same shape.</summary>
+    private static KeySpline ResolveEaseOut() =>
+        Application.Current?.TryFindResource("AfSplineEaseOut") as KeySpline ?? new KeySpline(0.23d, 1d, 0.32d, 1d);
+
+    /// <summary>
     /// 重新解析分组并重建标签。页面在内容变化后可以调用它；正常生命周期里
     /// <see cref="FrameworkElement.Loaded"/> 会自动调用一次。
     /// Re-resolves the groups and rebuilds the tabs. Pages may call this after their content changes; the
@@ -229,7 +283,19 @@ public class SettingsGroupStrip : Control
         UpdateState(forceRebuild: true);
     }
 
-    /// <summary>解析滚动内容里的分组容器，按声明顺序返回。/ Resolves the group containers in the scroll content, in declaration order.</summary>
+    /// <summary>
+    /// 解析滚动内容里**当前可见**的分组容器，按声明顺序返回。
+    ///
+    /// 显示模式页把每个模式的设置放在各自的容器里并互斥显示，因此这里必须跳过隐藏的容器：
+    /// 否则切到灵动岛模式后，标签条仍然会列出任务栏模式的分组，点一下就跳到看不见的内容。
+    /// 直接子级本身就是分组时也算，因此没有分区的页面不受影响。
+    /// Resolves the currently visible group containers in the scroll content, in declaration order.
+    ///
+    /// The display-mode page keeps each mode's settings in its own mutually exclusive container, so hidden
+    /// containers must be skipped: otherwise switching to the island would leave the tabs listing taskbar groups
+    /// and jumping to content that is not on screen. A direct child that is itself a group still counts, so pages
+    /// without mode sections are unaffected.
+    /// </summary>
     private IReadOnlyList<SettingsGroup> ResolveGroups()
     {
         if (Target?.Content is not Panel content)
@@ -237,7 +303,21 @@ public class SettingsGroupStrip : Control
             return [];
         }
 
-        return content.Children.OfType<SettingsGroup>().ToArray();
+        var groups = new List<SettingsGroup>();
+        foreach (var child in content.Children)
+        {
+            switch (child)
+            {
+                case SettingsGroup group:
+                    groups.Add(group);
+                    break;
+                case Panel section when section.Visibility == Visibility.Visible:
+                    groups.AddRange(section.Children.OfType<SettingsGroup>());
+                    break;
+            }
+        }
+
+        return groups;
     }
 
     private static void OnTargetChanged(DependencyObject sender, DependencyPropertyChangedEventArgs args)
@@ -331,6 +411,7 @@ public class SettingsGroupStrip : Control
             target.ViewportHeight,
             target.ExtentHeight);
         ApplyProgress(progress);
+        ApplyDivider(target.VerticalOffset);
 
         if (_groups.Count != groups.Count)
         {
@@ -367,6 +448,40 @@ public class SettingsGroupStrip : Control
         {
             _progressScale.ScaleX = progress;
         }
+    }
+
+    /// <summary>
+    /// 按滚动量淡入淡出页头下方的分隔线。静止在顶部时完全不可见，因此页头在半透明材质上不会留下
+    /// 任何永久性的实色块；只有确实有内容滚上去时才出现一条发丝线。
+    /// 只在目标透明度变化超过千分之一时才启动动画，避免每个滚动事件都重启动画。
+    /// Fades the hairline under the header according to how far the content has scrolled. It is invisible at the
+    /// top, so the header leaves no permanent solid block over translucent material, and a hairline appears only
+    /// once content really has scrolled away above. The animation restarts only when the target opacity moves by
+    /// more than a thousandth, so a stream of scroll events does not restart it continuously.
+    /// </summary>
+    private void ApplyDivider(double verticalOffset)
+    {
+        if (_divider is null)
+        {
+            return;
+        }
+
+        var offset = double.IsFinite(verticalOffset) ? Math.Max(0d, verticalOffset) : 0d;
+        var target = Math.Clamp(offset / DividerFadeDistanceDip, 0d, 1d);
+        if (Math.Abs(target - _dividerOpacity) < 0.001d)
+        {
+            return;
+        }
+
+        _dividerOpacity = target;
+        _divider.BeginAnimation(
+            UIElement.OpacityProperty,
+            new DoubleAnimation(target, DividerFadeDuration)
+            {
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+                FillBehavior = FillBehavior.HoldEnd
+            },
+            HandoffBehavior.SnapshotAndReplace);
     }
 
     /// <summary>

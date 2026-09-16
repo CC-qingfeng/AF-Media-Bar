@@ -27,7 +27,7 @@ namespace AFMediaBar.Views.Pages
 
         private async void ResetButton_Click(object sender, RoutedEventArgs e)
         {
-            if (await SettingsResetDialog.ConfirmAsync("外观页")) ViewModel.ResetAppearance();
+            if (await SettingsResetDialog.ConfirmAsync("外观")) ViewModel.ResetAppearance();
         }
     }
 }

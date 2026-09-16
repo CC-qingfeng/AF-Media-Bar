@@ -36,7 +36,7 @@
                 <StackPanel>
                     <ui:TextBlock Text="窗口模式"
                                   FontWeight="{DynamicResource AppTextStrongFontWeight}" />
-                    <ui:TextBlock Text="选择媒体栏的承载方式"
+                    <ui:TextBlock Text="选择媒体栏显示在哪里"
                                   Appearance="Secondary"
                                   FontSize="12" />
                 </StackPanel>

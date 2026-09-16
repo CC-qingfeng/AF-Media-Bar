@@ -36,7 +36,7 @@ public partial class ExtraFeaturesPage : INavigableView<ExtraFeaturesViewModel>
 
     private async void ResetButton_Click(object sender, System.Windows.RoutedEventArgs e)
     {
-        if (await SettingsResetDialog.ConfirmAsync("额外功能页"))
+        if (await SettingsResetDialog.ConfirmAsync("媒体与通知"))
             ViewModel.ResetExtraFeatures();
     }
 }

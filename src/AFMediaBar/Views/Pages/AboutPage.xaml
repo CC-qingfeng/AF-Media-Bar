@@ -10,22 +10,17 @@
     <!--
         应用与关于页 / Application and about page
 
-        它接替了原先独立的“常规”页。那一页只剩三个不可用的预留条目和一个设置文件入口，
+        它接替了原先独立的「常规」页：那一页只剩三个不可用的预留条目和一个设置文件入口，
         外加一张不解释任何可操作项的生命周期图，单独占一个导航项并不值得。
 
-        结构上的修正：
-
-        1. 三个尚未接入的功能集中到一张卡片里，每一项带一个状态芯片。原先它们是三张各带一个不可用控件的
-           独立卡片，读起来像三个坏掉的开关，而不是三条明确的路线图。
-        2. 顶部那张“登录 Windows → 自动启动（预留）→ 托盘常驻 → 退出”的流程图被删除：它不解释任何
-           当前可操作的设置，只是占掉了页面最好的位置。
-        3. 本页没有属于自己的设置，因此只保留“重置全部设置”，并写清它影响什么。
-
+        尚未接入的三项各占一行，行标题右侧带内联徽章说明状态，控件本身就是禁用的那一个。
+        这比把三项塞进一张卡片、或让三个死控件孤零零地排着，都更清楚地表达「这是路线图，不是开关」。
         It replaces the former standalone general page, which had been reduced to three unusable reserved entries,
-        one settings-file entry, and a lifecycle diagram that explained nothing actionable. The three
-        not-yet-wired features are now one card with a state chip per row rather than three cards each holding a
-        dead control, the top-of-page lifecycle flow is gone, and the page offers only a full reset with its scope
-        spelled out, because it owns no settings of its own.
+        one settings-file entry, and a lifecycle diagram that explained nothing actionable.
+
+        Each not-yet-wired feature owns one row, with an inline badge stating its state on the title line and the
+        disabled control in the control slot. That says "this is a roadmap, not a switch" far more clearly than
+        burying three rows in one card or leaving three dead controls standing alone.
     -->
     <Grid>
         <Grid.RowDefinitions>
@@ -58,143 +53,75 @@
                     Icon="{ui:SymbolIcon Info24}"
                     StatusText="均未接入"
                     StatusTone="Neutral">
-                    <ui:CardControl Margin="{StaticResource AfSettingsCardGapLast}" Style="{StaticResource AfSettingsCardStackedStyle}">
-                        <ui:CardControl.Icon>
-                            <ui:SymbolIcon Symbol="Info24" />
-                        </ui:CardControl.Icon>
-                        <ui:CardControl.Header>
-                            <StackPanel>
-                                <TextBlock Style="{StaticResource AfSettingsCardTitleStyle}" Text="尚未接入的功能" />
-                                <TextBlock
-                                    Style="{StaticResource AfSettingsCardDescriptionStyle}"
-                                    Text="下面三项在当前版本中不可用，列出它们是为了说明计划，而不是让你去点。" />
-                            </StackPanel>
-                        </ui:CardControl.Header>
-                        <StackPanel>
-                            <Grid Margin="0,0,0,10">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <StackPanel>
-                                    <TextBlock
-                                        FontSize="13"
-                                        Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                        Text="开机自动启动" />
-                                    <TextBlock
-                                        Style="{StaticResource AfSettingsHintTextStyle}"
-                                        Text="登录 Windows 后自动运行 AF Media Bar。" />
-                                </StackPanel>
-                                <ContentControl
-                                    Grid.Column="1"
-                                    Margin="12,0,0,0"
-                                    Content="预留"
-                                    Style="{StaticResource AfSettingsChipNeutralStyle}" />
-                            </Grid>
+                    <StackPanel>
+                        <components:SettingsCallout
+                            Margin="0,0,0,12"
+                            IsAccent="False"
+                            Symbol="Info24"
+                            Text="下面三项在当前版本中尚未接入，此处仅说明计划。" />
 
-                            <Grid Margin="0,0,0,10">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <StackPanel>
-                                    <TextBlock
-                                        FontSize="13"
-                                        Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                        Text="界面语言" />
-                                    <TextBlock
-                                        Style="{StaticResource AfSettingsHintTextStyle}"
-                                        Text="当前版本只有简体中文，没有其它语言资源。" />
-                                </StackPanel>
-                                <ContentControl
-                                    Grid.Column="1"
-                                    Margin="12,0,0,0"
-                                    Content="仅简体中文"
-                                    Style="{StaticResource AfSettingsChipNeutralStyle}" />
-                            </Grid>
+                        <components:SettingsRow
+                            Badge="预留"
+                            Description="登录 Windows 后自动运行 AF Media Bar"
+                            Icon="{ui:SymbolIcon ShareScreenStart24}"
+                            Title="开机自动启动">
+                            <ui:ToggleSwitch IsEnabled="False" />
+                        </components:SettingsRow>
 
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <StackPanel>
-                                    <TextBlock
-                                        FontSize="13"
-                                        Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                        Text="检查更新" />
-                                    <TextBlock
-                                        Style="{StaticResource AfSettingsHintTextStyle}"
-                                        Text="本程序不联网检查版本，升级请从发布页获取。" />
-                                </StackPanel>
-                                <ContentControl
-                                    Grid.Column="1"
-                                    Margin="12,0,0,0"
-                                    Content="尚未接入"
-                                    Style="{StaticResource AfSettingsChipNeutralStyle}" />
-                            </Grid>
-                        </StackPanel>
-                    </ui:CardControl>
+                        <components:SettingsRow
+                            Badge="仅简体中文"
+                            Description="目前仅提供简体中文"
+                            Icon="{ui:SymbolIcon Globe24}"
+                            Title="界面语言">
+                            <ComboBox IsEnabled="False" MinWidth="140" SelectedIndex="0">
+                                <ComboBoxItem Content="简体中文" />
+                            </ComboBox>
+                        </components:SettingsRow>
+
+                        <components:SettingsRow
+                            Badge="尚未接入"
+                            Description="本程序不联网检查版本，升级请从发布页获取"
+                            Icon="{ui:SymbolIcon ArrowSync24}"
+                            Title="检查更新">
+                            <ui:Button
+                                Content="检查更新"
+                                IsEnabled="False"
+                                Style="{StaticResource AfSettingsButtonStyle}" />
+                        </components:SettingsRow>
+                    </StackPanel>
                 </components:SettingsGroup>
 
                 <components:SettingsGroup Header="设置文件" Icon="{ui:SymbolIcon FolderOpen24}">
                     <StackPanel>
-                        <ui:CardControl Margin="{StaticResource AfSettingsCardGap}">
-                            <ui:CardControl.Icon>
-                                <ui:SymbolIcon Symbol="FolderOpen24" />
-                            </ui:CardControl.Icon>
-                            <ui:CardControl.Header>
-                                <StackPanel>
-                                    <TextBlock Style="{StaticResource AfSettingsCardTitleStyle}" Text="打开设置文件夹" />
-                                    <TextBlock
-                                        Style="{StaticResource AfSettingsCardDescriptionStyle}"
-                                        Text="settings.json 就在这个文件夹里，可以直接备份或替换。" />
-                                </StackPanel>
-                            </ui:CardControl.Header>
+                        <components:SettingsRow
+                            Description="打开 settings.json 所在文件夹，可直接备份或替换"
+                            Icon="{ui:SymbolIcon FolderOpen24}"
+                            Title="打开设置文件夹">
                             <ui:Button
                                 Click="OpenSettingsFolder_Click"
                                 Content="打开文件夹"
                                 Icon="{ui:SymbolIcon FolderOpen24}"
                                 Style="{StaticResource AfSettingsButtonStyle}" />
-                        </ui:CardControl>
+                        </components:SettingsRow>
 
-                        <ui:CardControl Margin="{StaticResource AfSettingsCardGapLast}">
-                            <ui:CardControl.Icon>
-                                <ui:SymbolIcon Symbol="ArrowReset24" />
-                            </ui:CardControl.Icon>
-                            <ui:CardControl.Header>
-                                <StackPanel>
-                                    <TextBlock Style="{StaticResource AfSettingsCardTitleStyle}" Text="重置全部设置" />
-                                    <TextBlock
-                                        Style="{StaticResource AfSettingsCardDescriptionStyle}"
-                                        Text="显示模式、交互、歌词、外观、媒体与通知全部回到默认值。此操作无法撤销。" />
-                                </StackPanel>
-                            </ui:CardControl.Header>
+                        <components:SettingsRow
+                            Description="显示模式、交互、歌词、外观与媒体通知全部恢复默认值"
+                            Icon="{ui:SymbolIcon ArrowReset24}"
+                            Title="重置全部设置">
                             <ui:Button
                                 Click="ResetAllButton_Click"
-                                Content="重置全部设置"
+                                Content="重置全部"
                                 Icon="{ui:SymbolIcon ArrowReset24}"
                                 Style="{StaticResource AfSettingsButtonStyle}" />
-                        </ui:CardControl>
+                        </components:SettingsRow>
                     </StackPanel>
                 </components:SettingsGroup>
 
-                <components:SettingsGroup Header="项目信息" Icon="{ui:SymbolIcon Heart24}">
-                    <ui:CardControl Margin="{StaticResource AfSettingsCardGapLast}" Style="{StaticResource AfSettingsCardStackedStyle}">
-                        <ui:CardControl.Icon>
-                            <ui:SymbolIcon Symbol="Info24" />
-                        </ui:CardControl.Icon>
-                        <ui:CardControl.Header>
-                            <StackPanel>
-                                <TextBlock
-                                    FontSize="14"
-                                    Style="{StaticResource AfSettingsCardTitleStyle}"
-                                    Text="AF Media Bar" />
-                                <TextBlock
-                                    Style="{StaticResource AfSettingsCardDescriptionStyle}"
-                                    Text="Windows 任务栏媒体体验 · 版本 1.0.0" />
-                            </StackPanel>
-                        </ui:CardControl.Header>
+                <components:SettingsGroup Header="项目信息" Icon="{ui:SymbolIcon Info24}">
+                    <components:SettingsRow
+                        Description="Windows 任务栏媒体体验 · 版本 1.0.0"
+                        Icon="{ui:SymbolIcon Info24}"
+                        Title="AF Media Bar">
                         <WrapPanel>
                             <ui:Anchor
                                 Margin="0,0,10,0"
@@ -206,26 +133,18 @@
                                 Icon="{ui:SymbolIcon Bug24}"
                                 NavigateUri="https://github.com/Fervent-Tempo/AF-Media-Bar/issues" />
                         </WrapPanel>
-                    </ui:CardControl>
+                    </components:SettingsRow>
                 </components:SettingsGroup>
 
                 <components:SettingsGroup Header="赞助支持" Icon="{ui:SymbolIcon Heart24}">
-                    <ui:CardControl Margin="{StaticResource AfSettingsCardGapLast}">
-                        <ui:CardControl.Icon>
-                            <ui:SymbolIcon Symbol="Heart24" />
-                        </ui:CardControl.Icon>
-                        <ui:CardControl.Header>
-                            <StackPanel>
-                                <TextBlock Style="{StaticResource AfSettingsCardTitleStyle}" Text="暂无赞助者" />
-                                <TextBlock
-                                    Style="{StaticResource AfSettingsCardDescriptionStyle}"
-                                    Text="赞助目录随版本发布，不会在后台联网读取。" />
-                            </StackPanel>
-                        </ui:CardControl.Header>
+                    <components:SettingsRow
+                        Description="赞助名单随版本发布，不会联网读取"
+                        Icon="{ui:SymbolIcon Heart24}"
+                        Title="暂无赞助者">
                         <TextBlock
-                            Style="{StaticResource AfSettingsHintTextStyle}"
+                            Style="{StaticResource AfSettingsRowValueStyle}"
                             Text="成为第一位支持者" />
-                    </ui:CardControl>
+                    </components:SettingsRow>
                 </components:SettingsGroup>
             </StackPanel>
         </ScrollViewer>

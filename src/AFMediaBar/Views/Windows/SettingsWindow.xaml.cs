@@ -36,9 +36,6 @@ namespace AFMediaBar.Views.Windows
                 [SettingsPageKey.AppAndAbout] = typeof(AboutPage),
             };
 
-        /// <summary>候选项文本到命中的反查表；候选文案在列表里唯一，因此可以直接做键。/ Maps suggestion text back to its hit; the label is unique within a result list, so it works as a key.</summary>
-        private readonly Dictionary<string, SettingsSearchHit> _searchHits = new(StringComparer.Ordinal);
-
         public SettingsWindowViewModel ViewModel { get; }
 
         /// <summary>
@@ -69,68 +66,51 @@ namespace AFMediaBar.Views.Windows
         #region Search
 
         /// <summary>
-        /// 按当前输入重建候选项。WPF-UI 的 AutoSuggestBox 会在 OriginalItemsSource 上再按文本过滤一次，
-        /// 因此每条候选文案都被构造成包含输入本身——否则关键词命中会在显示前被它自己的过滤器丢掉。
-        /// Rebuilds the suggestions for the current input. WPF-UI's AutoSuggestBox filters OriginalItemsSource by
-        /// the text again, so every label is built to contain the query; otherwise a keyword hit would be dropped
-        /// by the control's own filter before it could be shown.
+        /// 按当前输入过滤候选并直接写入 ItemsSource。
+        ///
+        /// 上一版把候选写进 <c>OriginalItemsSource</c>，让控件自己再按文本过滤一遍；那层过滤只比较候选项
+        /// 自身的文本，于是所有靠关键词命中的条目都会被它丢掉，当时只能把关键词拼进候选文案里绕开。
+        /// 自己过滤、自己控制下拉框开合之后，候选文案就只是一句人话。
+        /// Filters the suggestions for the current input and writes ItemsSource directly.
+        ///
+        /// The previous version wrote them into <c>OriginalItemsSource</c> and let the control filter again; that
+        /// filter only compares an item's own text, so every keyword hit was dropped and the keyword had to be
+        /// spliced into the label to survive. Filtering here keeps a label a plain phrase.
         /// </summary>
         private void OnSearchTextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
         {
-            var query = AutoSuggestBox.Text;
-            _searchHits.Clear();
-
-            var hits = SettingsSearchPolicy.Search(query, SettingsSearchIndex.Entries);
-            if (hits.Count == 0)
+            if (args.Reason != AutoSuggestionBoxTextChangeReason.UserInput)
             {
-                // 空数组而不是 null：该属性在 WPF-UI 里标注为非空，而且空集合本来就更准确地表达“没有候选”。
-                // An empty array rather than null: the property is annotated non-null in WPF-UI, and an empty
-                // collection expresses "no suggestions" more accurately anyway.
-                AutoSuggestBox.OriginalItemsSource = System.Array.Empty<string>();
                 return;
             }
 
-            var labels = new List<string>(hits.Count);
+            var hits = SettingsSearchPolicy.Search(sender.Text, SettingsSearchIndex.Entries);
+            var suggestions = new List<SettingsSearchSuggestion>(hits.Count);
             foreach (var hit in hits)
             {
-                var label = BuildSuggestionLabel(hit, query);
-                labels.Add(label);
-                _searchHits[label] = hit;
+                suggestions.Add(new SettingsSearchSuggestion(hit));
             }
 
-            AutoSuggestBox.OriginalItemsSource = labels;
-        }
-
-        /// <summary>构造候选项文案：页面 › 分组；输入未出现在其中时补一个括号，说明它是凭什么命中的。/ Builds "page › group", appending the query in brackets when it does not appear, so the list says why an entry matched.</summary>
-        private static string BuildSuggestionLabel(SettingsSearchHit hit, string? query)
-        {
-            var label = $"{hit.PageTitle} › {hit.Title}";
-            var term = query?.Trim();
-            if (string.IsNullOrEmpty(term) ||
-                label.Contains(term, StringComparison.OrdinalIgnoreCase))
-            {
-                return label;
-            }
-
-            return $"{label}（{term}）";
+            sender.ItemsSource = suggestions;
+            sender.IsSuggestionListOpen = suggestions.Count > 0;
         }
 
         /// <summary>
-        /// 选中候选项后先导航到目标页面，再让该页的分组标签条滚到命中的分组。
+        /// 选中候选后先导航到目标页面，再让该页的分组标签条滚到命中的分组并脉冲一次。
         /// 跳转必须等到新页面完成布局，否则分组位置还是上一次的。
         /// Selecting a suggestion navigates to the page and then asks that page's group strip to scroll to the
-        /// matching group. The jump waits for the new page to finish layout, because group positions would
-        /// otherwise still belong to the previous page.
+        /// matching group and pulse it. The jump waits for the new page to finish layout, because group positions
+        /// would otherwise still belong to the previous page.
         /// </summary>
         private void OnSearchSuggestionChosen(AutoSuggestBox sender, AutoSuggestBoxSuggestionChosenEventArgs args)
         {
-            if (args.SelectedItem is not string label ||
-                !_searchHits.TryGetValue(label, out var hit) ||
-                !SearchPageTypes.TryGetValue(hit.Page, out var pageType))
+            if (args.SelectedItem is not SettingsSearchSuggestion suggestion ||
+                !SearchPageTypes.TryGetValue(suggestion.Hit.Page, out var pageType))
             {
                 return;
             }
 
+            var hit = suggestion.Hit;
             if (!Navigate(pageType))
             {
                 return;
@@ -138,7 +118,36 @@ namespace AFMediaBar.Views.Windows
 
             Dispatcher.BeginInvoke(
                 DispatcherPriority.Loaded,
-                new Action(() => FindDescendant<SettingsGroupStrip>(RootNavigation)?.JumpToGroup(hit.GroupIndex)));
+                new Action(() =>
+                {
+                    // 显示模式页的分组序号只在该模式的分区内成立，因此必须先切到命中所属的模式，
+                    // 再让标签条跳到该分区内的分组序号。模式选择是页面自己的状态，因此交给页面处理，
+                    // 而不是在这里从容器里取视图模型。
+                    // A display-mode group index only holds inside its own mode's section, so the hit's mode is
+                    // selected first and only then does the strip jump to that index within the section. Mode
+                    // selection is the page's own state, so the page handles it rather than this window reaching
+                    // into the container for a view model.
+                    FindDescendant<DisplayModesPage>(RootNavigation)?.SelectMode(hit.Mode);
+                    FindDescendant<SettingsGroupStrip>(RootNavigation)?.RevealGroup(hit.GroupIndex);
+                }));
+        }
+
+        /// <summary>
+        /// 搜索候选项：主文案是「页面 › 分组」，副文案说明该分组能改什么。
+        /// Search suggestion: the primary line is "page › group" and the secondary line says what it changes.
+        /// </summary>
+        private sealed class SettingsSearchSuggestion
+        {
+            public SettingsSearchSuggestion(SettingsSearchHit hit) => Hit = hit;
+
+            /// <summary>命中的分组。/ The matched group.</summary>
+            public SettingsSearchHit Hit { get; }
+
+            /// <summary>主文案。/ Primary line.</summary>
+            public string Title => $"{Hit.PageTitle} › {Hit.Title}";
+
+            /// <summary>副文案。/ Secondary line.</summary>
+            public string Subtitle => Hit.Description;
         }
 
         /// <summary>按深度优先在可视树中查找第一个指定类型后代。/ Finds the first descendant of a type, depth first.</summary>

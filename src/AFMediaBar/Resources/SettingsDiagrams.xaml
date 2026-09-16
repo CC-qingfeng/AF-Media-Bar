@@ -129,7 +129,7 @@
                 <TextBlock
                     Margin="0,8,0,0"
                     Style="{StaticResource AfDiagramCaptionStyle}"
-                    Text="常驻显示封面与标题歌手；频谱和性能组件叠加在右侧。两个组件的开关与参数在「媒体与通知 → 静置层组件」。" />
+                    Text="始终显示封面与标题；频谱和性能组件叠加在右侧，其开关位于「媒体与通知 → 静置层组件」。" />
             </StackPanel>
         </Border>
     </ControlTemplate>
@@ -191,7 +191,7 @@
                 <TextBlock
                     Margin="0,8,0,0"
                     Style="{StaticResource AfDiagramCaptionStyle}"
-                    Text="鼠标移入媒体栏时展开。五个圆形按钮依次是播放暂停、上下首、输出设备、音频控制和进度；设备、音量与进度默认显示。" />
+                    Text="鼠标移入时出现播放、切换、输出设备、音量与进度控制，可在下页逐项开关。" />
             </StackPanel>
         </Border>
     </ControlTemplate>
@@ -250,7 +250,7 @@
                 <TextBlock
                     Margin="0,8,0,0"
                     Style="{StaticResource AfDiagramCaptionStyle}"
-                    Text="点击媒体栏展开的完整面板。四个分区可以分别关闭，但至少保留一个：只剩一个时它的开关会被禁用。" />
+                    Text="点击媒体栏展开的面板，四个分区可分别关闭，至少保留一个。" />
             </StackPanel>
         </Border>
     </ControlTemplate>
@@ -318,17 +318,17 @@
                 <Border Height="1" Background="{DynamicResource DividerStrokeColorDefaultBrush}" />
 
                 <Grid Margin="0,8,0,0">
-                    <TextBlock Style="{StaticResource AfDiagramLabelStyle}" Text="任务栏图标区" />
+                    <TextBlock Style="{StaticResource AfDiagramLabelStyle}" Text="任务栏图标" />
                     <TextBlock
                         HorizontalAlignment="Right"
                         Style="{StaticResource AfDiagramLabelStyle}"
-                        Text="边缘偏移 −20 ~ +20 DIP" />
+                        Text="边缘偏移 −20 ~ +20 像素" />
                 </Grid>
 
                 <TextBlock
                     Margin="0,8,0,0"
                     Style="{StaticResource AfDiagramCaptionStyle}"
-                    Text="「避开任务栏图标」保证媒体栏不会盖住图标；边缘偏移微调它与图标区之间的间距，箭头方向随偏移正负变化。" />
+                    Text="媒体栏自动避开任务栏图标；边缘偏移用于调整它与图标区之间的间距。" />
             </StackPanel>
         </Border>
     </ControlTemplate>
@@ -366,7 +366,7 @@
                         CornerRadius="1" />
                 </Grid>
                 <Grid Margin="0,8,0,0">
-                    <TextBlock Style="{StaticResource AfDiagramLabelStyle}" Text="悬停层所需最小长度" />
+                    <TextBlock Style="{StaticResource AfDiagramLabelStyle}" Text="所需最小宽度" />
                     <TextBlock
                         HorizontalAlignment="Right"
                         Style="{StaticResource AfDiagramLabelStyle}"
@@ -379,7 +379,7 @@
                 <TextBlock
                     Margin="0,8,0,0"
                     Style="{StaticResource AfDiagramCaptionStyle}"
-                    Text="跟随媒体文字长度时宽度随内容变化；取消跟随才启用固定长度滑杆，滑杆范围被夹取在两端标记之间。" />
+                    Text="跟随内容时宽度自动变化；关闭跟随后可指定固定宽度，取值范围由当前任务栏决定。" />
             </StackPanel>
         </Border>
     </ControlTemplate>
@@ -439,7 +439,7 @@
                 <TextBlock
                     Margin="0,8,0,0"
                     Style="{StaticResource AfDiagramCaptionStyle}"
-                    Text="静置层只有这两个可绑定区域，可以分别指向不同结果；完整层里的按钮不读取这两个绑定。" />
+                    Text="媒体栏上仅这两个区域可以点击，并且可分别设置；展开面板中的按钮不受影响。" />
             </StackPanel>
         </Border>
     </ControlTemplate>
@@ -456,7 +456,7 @@
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Style="{StaticResource AfDiagramLabelStyle}" Text="程序内" />
+                    <TextBlock Style="{StaticResource AfDiagramLabelStyle}" Text="媒体栏上" />
                     <StackPanel
                         Grid.Column="1"
                         Margin="12,0,0,0"
@@ -475,7 +475,7 @@
                         Grid.Column="2"
                         Margin="12,0,0,0"
                         Style="{StaticResource AfDiagramLabelStyle}"
-                        Text="含义由绑定决定：上下首、切换设备或媒体源、调节音量" />
+                        Text="四种结果都能绑：上下首、切换设备或播放器、调节音量" />
                 </Grid>
                 <Grid Margin="0,8,0,0">
                     <Grid.ColumnDefinitions>
@@ -502,7 +502,7 @@
                         Grid.Column="2"
                         Margin="12,0,0,0"
                         Style="{StaticResource AfDiagramLabelStyle}"
-                        Text="只有切换输出设备与调节当前媒体音量两种结果" />
+                        Text="只有切换设备和调节音量两种结果" />
                 </Grid>
                 <Border
                     Height="1"
@@ -511,7 +511,7 @@
                 <TextBlock
                     Margin="0,8,0,0"
                     Style="{StaticResource AfDiagramCaptionStyle}"
-                    Text="向上与向下没有固定含义，取决于绑定的动作。切换输出设备时先显示候选，停止滚动约 1.2 秒后才应用。" />
+                    Text="向上与向下没有固定含义，取决于绑定的动作。切换设备时先显示候选，停止滚动约 1.2 秒后应用。" />
             </StackPanel>
         </Border>
     </ControlTemplate>
@@ -527,11 +527,11 @@
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Style="{StaticResource AfDiagramLabelStyle}" Text="任务栏托盘区" />
+                    <TextBlock Style="{StaticResource AfDiagramLabelStyle}" Text="托盘区" />
                     <TextBlock
                         Grid.Column="1"
                         Style="{StaticResource AfDiagramLabelStyle}"
-                        Text="隐藏图标溢出区" />
+                        Text="收进小箭头" />
                 </Grid>
                 <Grid Margin="0,8,0,0">
                     <Border
@@ -571,7 +571,7 @@
                 <TextBlock
                     Margin="0,8,0,0"
                     Style="{StaticResource AfDiagramCaptionStyle}"
-                    Text="高亮方块是本程序，默认被收在溢出区。只有在 Windows 任务栏设置里把它拖到任务栏上，下面两张卡片的点击与滚轮才会直接生效。" />
+                    Text="高亮方块为本程序，默认位于隐藏图标区；需在 Windows 任务栏设置中将其拖出，托盘点击与滚轮才会生效。" />
             </StackPanel>
         </Border>
     </ControlTemplate>
@@ -626,7 +626,7 @@
                 <TextBlock
                     Margin="0,8,0,0"
                     Style="{StaticResource AfDiagramCaptionStyle}"
-                    Text="第一行始终是当前句；第二行取自下面选的内容，静置层空间不足时不会显示。" />
+                    Text="第一行为当前句；第二行为下一句或翻译，静置层空间不足时不显示。" />
             </StackPanel>
         </Border>
     </ControlTemplate>
@@ -688,7 +688,7 @@
                 <TextBlock
                     Margin="0,8,0,0"
                     Style="{StaticResource AfDiagramCaptionStyle}"
-                    Text="只决定歌词贴在静置层的哪一侧。标题与歌手的对齐是另一项设置，在「显示模式 → 静置层 → 信息布局」。" />
+                    Text="仅决定歌词靠哪一侧；标题与歌手的对齐是「显示模式」页中的另一项设置。" />
             </StackPanel>
         </Border>
     </ControlTemplate>
@@ -758,11 +758,11 @@
                         Grid.Column="1"
                         Margin="14,0,0,0"
                         VerticalAlignment="Center">
-                        <TextBlock Style="{StaticResource AfDiagramLabelStyle}" Text="通知落在目标显示器的可用区域内" />
+                        <TextBlock Style="{StaticResource AfDiagramLabelStyle}" Text="通知出现在选中的显示器内" />
                         <TextBlock
                             Margin="0,5,0,0"
                             Style="{StaticResource AfDiagramLabelStyle}"
-                            Text="底部锚点会让开任务栏" />
+                            Text="底部位置会自动避开任务栏" />
                     </StackPanel>
                 </Grid>
                 <Border
@@ -772,7 +772,7 @@
                 <TextBlock
                     Margin="0,8,0,0"
                     Style="{StaticResource AfDiagramCaptionStyle}"
-                    Text="上下两排共六个锚点，高亮方块是当前位置。换显示器只改变落点，不改变通知内容。" />
+                    Text="共六个位置可选，高亮方块为当前选择；切换显示器只改变出现位置。" />
             </StackPanel>
         </Border>
     </ControlTemplate>
@@ -873,7 +873,7 @@
                 <TextBlock
                     Margin="0,8,0,0"
                     Style="{StaticResource AfDiagramCaptionStyle}"
-                    Text="柱数决定显示几根频谱柱：这里画了 9 根，最右一根是关闭状态。刷新率决定响应快慢，灵敏度决定相同音量下的柱高；暂停时保留槽位并清零。" />
+                    Text="图示为 9 根频谱柱，最右一根处于关闭状态。刷新率决定响应速度，灵敏度决定相同音量下的柱高。" />
             </StackPanel>
         </Border>
     </ControlTemplate>
@@ -921,7 +921,7 @@
                 <TextBlock
                     Margin="0,8,0,0"
                     Style="{StaticResource AfDiagramCaptionStyle}"
-                    Text="灵动岛模式尚未实现，因此下面三项当前只读。它的基础表面、背景不透明度与圆角与任务栏互不影响。" />
+                    Text="灵动岛模式尚未实现，因此下面三项当前只读；它的外观与任务栏互不影响。" />
             </StackPanel>
         </Border>
     </ControlTemplate>

@@ -64,6 +64,19 @@ public class SettingsGroup : HeaderedContentControl
         typeof(SettingsGroup),
         new PropertyMetadata(SettingsChipTone.Neutral));
 
+    /// <summary>
+    /// 分组说明，一行白话，标题正下方。用于解释「静置层 / 悬停层 / 完整层」这类名字：
+    /// 名字本身保留，因为它同时是分组标签与代码里的层名，但新手需要一句话才知道它指什么。
+    /// Group description: one plain line directly under the header. It exists to explain names such as
+    /// "静置层 / 悬停层 / 完整层", which are kept because they are both the tab labels and the layer names used in
+    /// code, while a newcomer needs one line to know what they mean.
+    /// </summary>
+    public static readonly DependencyProperty DescriptionProperty = DependencyProperty.Register(
+        nameof(Description),
+        typeof(string),
+        typeof(SettingsGroup),
+        new PropertyMetadata(string.Empty));
+
     /// <summary>分组标题左侧的图标。/ Icon shown to the left of the group header.</summary>
     public IconElement? Icon
     {
@@ -83,6 +96,13 @@ public class SettingsGroup : HeaderedContentControl
     {
         get => (string)GetValue(StatusTextProperty);
         set => SetValue(StatusTextProperty, value);
+    }
+
+    /// <summary>分组说明。/ Group description.</summary>
+    public string Description
+    {
+        get => (string)GetValue(DescriptionProperty);
+        set => SetValue(DescriptionProperty, value);
     }
 
     /// <summary>状态芯片语气。/ Tone of the status chip.</summary>

@@ -37,10 +37,10 @@ namespace AFMediaBar.Views.Pages
 
         private async void ResetAllButton_Click(object sender, RoutedEventArgs e)
         {
-            // 本页没有属于自己的设置，因此只提供“全部重置”，不再提供一个语义含糊的“本页默认”。
+            // 本页没有属于自己的设置，因此只提供“重置全部”，不再提供一个语义含糊的“本页默认”。
             // This page owns no settings of its own, so it offers only a full reset instead of an ambiguous
             // "this page's defaults".
-            if (await SettingsResetDialog.ConfirmAsync("全部设置")) ViewModel.ResetAll();
+            if (await SettingsResetDialog.ConfirmAsync("所有设置")) ViewModel.ResetAll();
         }
     }
 }

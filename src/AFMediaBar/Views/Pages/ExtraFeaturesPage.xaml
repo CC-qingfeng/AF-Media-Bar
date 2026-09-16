@@ -11,62 +11,52 @@
     <!--
         媒体与通知页 / Media and notifications page
 
-        原页面叫“额外功能”，但它实际只管四件事：媒体来源、快速启动、静置层组件、切歌通知。
-        页面名与分组名都改成能读出内容的说法。
+        排布规则：一行一个选项，一行恰好一个控件。列表用展开器承载，列表行仍然是一行一个来源；
+        频谱与性能这种「一个开关 + 若干参数」的分组进展开器，展开体是同样的行。
 
-        结构上的修正：
+        本页曾经把开关放在显示模式页、参数放在这里，也曾经把四个指标勾选框和满宽滑杆塞进同一张卡片；
+        现在两项都改了：开关与参数同处一个展开器，指标各占一行。
 
-        1. 频谱与性能的“开关”原先在显示模式页、“参数”在这里，同一个组件的两半被拆到两个页面。
-           现在开关与参数同处一张卡片，重置作用域也已经覆盖这两项。
-        2. 最后一个性能指标不能取消勾选，但复选框原先照常可点、点击被静默忽略；现在最后一个勾选项
-           的复选框被禁用，并在卡片里说明原因。
-        3. “加入快速启动”按钮在无法解析启动方式时一直是禁用的，现在标题给出原因，
-           并且提示文字会说明发生了什么。
-        4. 快速启动的三个图标按钮补上提示文字；到达列表首尾时说明原因，而不是静默无响应。
-        5. 通知细节嵌进“启用通知”的子区域；位置图移入位置卡片，不再夹在两张卡片之间。
+        Layout rule: one option per row, exactly one control per row. Lists live behind expanders and each list
+        row still holds one item; groups shaped like "one switch plus several parameters", such as the spectrum
+        and performance components, become expanders whose body holds the same rows.
 
-        The page used to be called "extra features" while actually owning four things: media sources, quick
-        launch, rest-layer components, and track-change notifications. Page and group names now say what they
-        contain. The structural fixes: the spectrum and performance switches no longer live on a different page
-        from their parameters; the last performance metric's checkbox is now disabled instead of silently
-        ignoring the click; the quick-launch add button explains why it is unavailable; the quick-launch icon
-        buttons gained tooltips and report why a move did nothing; and the notification details moved into a
-        sub-region of the notification card with the placement diagram inside the position card.
+        This page used to keep the component switches on the display page while the parameters lived here, and to
+        cram four metric checkboxes together with a full-width slider into one card. Both are fixed: each switch
+        sits with its own parameters, and each metric gets its own row.
     -->
 
     <Page.Resources>
-        <!--  行内图标按钮的提示：三个按钮原先只有图标，没有任何文字说明它们是什么。  -->
-        <!--  Tooltips for the inline icon buttons, which previously carried no text at all.  -->
-        <Style
-            x:Key="AfSettingsToolTipStyle"
-            BasedOn="{StaticResource {x:Type ToolTip}}"
-            TargetType="{x:Type ToolTip}">
-            <Setter Property="Placement" Value="Mouse" />
-        </Style>
-
         <!--
-            两个组件的前置条件芯片：只在组件关闭时出现。用触发器而不是取反转换器，避免为一个提示新增类型。
-            Precondition chips for the two components, shown only while the component is off. A trigger is used
-            rather than an inverse converter so a chip does not justify a new converter type.
+            依赖未满足时才出现的徽章：组件关闭时它的参数行只读。
+            父项开关就在行内，因此徽章只需要一句话。
+            A badge that appears only while its dependency is unmet: a component's parameter rows are read-only
+            while the component is off. The parent switch is on the same card, so one short phrase is enough.
         -->
         <Style
-            x:Key="SpectrumGateChipStyle"
-            BasedOn="{StaticResource AfSettingsChipAttentionStyle}"
-            TargetType="{x:Type ContentControl}">
+            x:Key="SpectrumParameterRowStyle"
+            BasedOn="{StaticResource {x:Type components:SettingsRow}}"
+            TargetType="{x:Type components:SettingsRow}">
+            <Setter Property="Badge" Value="" />
+            <Setter Property="IsEnabled" Value="{Binding ViewModel.SpectrumVisible}" />
             <Style.Triggers>
-                <DataTrigger Binding="{Binding ViewModel.SpectrumVisible}" Value="True">
-                    <Setter Property="Visibility" Value="Collapsed" />
+                <DataTrigger Binding="{Binding ViewModel.SpectrumVisible}" Value="False">
+                    <Setter Property="Badge" Value="需先启用" />
+                    <Setter Property="BadgeTone" Value="Attention" />
                 </DataTrigger>
             </Style.Triggers>
         </Style>
 
         <Style
-            x:Key="PerformanceGateChipStyle"
-            BasedOn="{StaticResource AfSettingsChipAttentionStyle}"
-            TargetType="{x:Type ContentControl}">
+            x:Key="PerformanceParameterRowStyle"
+            BasedOn="{StaticResource {x:Type components:SettingsRow}}"
+            TargetType="{x:Type components:SettingsRow}">
+            <Setter Property="Badge" Value="" />
+            <Setter Property="IsEnabled" Value="{Binding ViewModel.PerformanceVisible}" />
             <Style.Triggers>
-                <DataTrigger Binding="{Binding ViewModel.PerformanceVisible}" Value="True">
-                    <Setter Property="Visibility" Value="Collapsed" />
+                <DataTrigger Binding="{Binding ViewModel.PerformanceVisible}" Value="False">
+                    <Setter Property="Badge" Value="需先启用" />
+                    <Setter Property="BadgeTone" Value="Attention" />
                 </DataTrigger>
             </Style.Triggers>
         </Style>
@@ -83,7 +73,7 @@
             Margin="{StaticResource AfSettingsHeaderMargin}"
             MaxWidth="{StaticResource AfSettingsContentMaxWidth}"
             PageIcon="{ui:SymbolIcon PuzzlePiece24}"
-            Subtitle="媒体来源、快速启动、静置层组件与切歌通知"
+            Subtitle="媒体来源、快速启动、静置层组件与曲目通知"
             Target="{Binding ElementName=PageScroll}"
             Title="媒体与通知" />
 
@@ -100,489 +90,370 @@
 
                 <components:SettingsGroup Header="媒体来源" Icon="{ui:SymbolIcon Filter24}">
                     <StackPanel>
-                        <ui:CardControl Margin="{StaticResource AfSettingsCardGap}">
-                            <ui:CardControl.Icon>
-                                <ui:SymbolIcon Symbol="Filter24" />
-                            </ui:CardControl.Icon>
-                            <ui:CardControl.Header>
-                                <StackPanel>
-                                    <TextBlock Style="{StaticResource AfSettingsCardTitleStyle}" Text="只接收允许的来源" />
-                                    <TextBlock
-                                        Style="{StaticResource AfSettingsCardDescriptionStyle}"
-                                        Text="开启后只有下方勾选的来源会被当作媒体来源；关闭时保留勾选，方便随时再打开。" />
-                                </StackPanel>
-                            </ui:CardControl.Header>
+                        <components:SettingsRow
+                            Description="仅接收列表内的应用；关闭后列表仍然保留"
+                            Icon="{ui:SymbolIcon Filter24}"
+                            Title="来源允许列表">
                             <ui:ToggleSwitch IsChecked="{Binding ViewModel.SmtcFilterEnabled, Mode=TwoWay}" />
-                        </ui:CardControl>
+                        </components:SettingsRow>
 
-                        <ui:CardControl Margin="{StaticResource AfSettingsCardGapLast}" Style="{StaticResource AfSettingsCardStackedStyle}">
-                            <ui:CardControl.Icon>
-                                <ui:SymbolIcon Symbol="AppsList24" />
-                            </ui:CardControl.Icon>
-                            <ui:CardControl.Header>
+                        <ui:CardExpander
+                            Style="{StaticResource AfSettingsExpanderStyle}"
+                            Icon="{ui:SymbolIcon AppsList24}"
+                            IsExpanded="True">
+                            <ui:CardExpander.Header>
                                 <StackPanel>
-                                    <TextBlock Style="{StaticResource AfSettingsCardTitleStyle}" Text="已检测来源" />
-                                    <TextBlock
-                                        Style="{StaticResource AfSettingsCardDescriptionStyle}"
-                                        Text="先运行一次播放器，它才会出现在这里。勾选决定允许，右侧按钮把它加入快速启动。" />
+                                    <TextBlock Style="{StaticResource AfSettingsRowTitleStyle}" Text="已检测来源" />
+                                    <TextBlock Style="{StaticResource AfSettingsRowDescriptionStyle}" Text="先运行一次播放器，它才会出现在这里" />
                                 </StackPanel>
-                            </ui:CardControl.Header>
+                            </ui:CardExpander.Header>
                             <ItemsControl ItemsSource="{Binding ViewModel.Sources}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                        <Border Style="{StaticResource AfSettingsRowStyle}">
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="*" />
-                                                    <ColumnDefinition Width="Auto" />
-                                                    <ColumnDefinition Width="Auto" />
-                                                </Grid.ColumnDefinitions>
-                                                <StackPanel>
-                                                    <TextBlock
-                                                        FontSize="13"
-                                                        Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                                        Text="{Binding Descriptor.DisplayName}" />
-                                                    <TextBlock
-                                                        FontSize="10"
-                                                        Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                                                        Text="{Binding Descriptor.SourceId}"
-                                                        TextTrimming="CharacterEllipsis" />
-                                                </StackPanel>
-                                                <CheckBox
-                                                    Grid.Column="1"
-                                                    Margin="12,0"
-                                                    VerticalAlignment="Center"
+                                        <components:SettingsRow
+                                            Description="{Binding Descriptor.SourceId}"
+                                            IsNested="True"
+                                            Title="{Binding Descriptor.DisplayName}">
+                                            <StackPanel Orientation="Horizontal">
+                                                <ui:ToggleSwitch
                                                     Content="允许"
                                                     IsChecked="{Binding IsAllowed, Mode=TwoWay}" />
                                                 <ui:Button
-                                                    Grid.Column="2"
+                                                    Margin="12,0,0,0"
                                                     Command="{Binding DataContext.ViewModel.AddDetectedSourceCommand, RelativeSource={RelativeSource AncestorType=Page}}"
                                                     CommandParameter="{Binding}"
                                                     Content="加入快速启动"
                                                     IsEnabled="{Binding Descriptor.CanQuickLaunch}"
                                                     Style="{StaticResource AfSettingsButtonStyle}"
-                                                    ToolTip="只有能解析出安全启动方式的来源才能加入；无法解析时请用下面的「浏览 EXE 或 LNK」。"
+                                                    ToolTip="只有能自动找到启动方式的播放器才能加入；找不到时请用「浏览程序或快捷方式」。"
                                                     ToolTipService.ShowOnDisabled="True" />
-                                            </Grid>
-                                        </Border>
+                                            </StackPanel>
+                                        </components:SettingsRow>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
-                        </ui:CardControl>
+                        </ui:CardExpander>
                     </StackPanel>
                 </components:SettingsGroup>
 
                 <components:SettingsGroup Header="快速启动" Icon="{ui:SymbolIcon Rocket24}">
                     <StackPanel>
-                        <ui:CardControl Margin="{StaticResource AfSettingsCardGapLast}" Style="{StaticResource AfSettingsCardStackedStyle}">
-                            <ui:CardControl.Icon>
-                                <ui:SymbolIcon Symbol="Rocket24" />
-                            </ui:CardControl.Icon>
-                            <ui:CardControl.Header>
-                                <StackPanel>
-                                    <TextBlock Style="{StaticResource AfSettingsCardTitleStyle}" Text="没有媒体时从音符启动播放器" />
-                                    <TextBlock
-                                        Style="{StaticResource AfSettingsCardDescriptionStyle}"
-                                        Text="单击音符打开这个列表；滚轮停止约 1.2 秒后启动最后预览的那一项。" />
-                                </StackPanel>
-                            </ui:CardControl.Header>
-                            <StackPanel>
-                                <ui:Button
-                                    HorizontalAlignment="Left"
-                                    Click="BrowseQuickLaunch_Click"
-                                    Content="浏览 EXE 或 LNK"
-                                    Icon="{ui:SymbolIcon FolderOpen24}"
-                                    Style="{StaticResource AfSettingsButtonStyle}" />
+                        <components:SettingsRow
+                            Description="点击音符打开快速启动列表；滚轮预览，停止约 1.2 秒后启动最后一项"
+                            Icon="{ui:SymbolIcon Rocket24}"
+                            Title="无媒体时从音符启动">
+                            <ui:Button
+                                Click="BrowseQuickLaunch_Click"
+                                Content="浏览程序或快捷方式"
+                                Icon="{ui:SymbolIcon FolderOpen24}"
+                                Style="{StaticResource AfSettingsButtonStyle}" />
+                        </components:SettingsRow>
 
-                                <ItemsControl Margin="0,10,0,0" ItemsSource="{Binding ViewModel.QuickLaunchEntries}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <Border Style="{StaticResource AfSettingsRowStyle}">
-                                                <Grid>
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="*" />
-                                                        <ColumnDefinition Width="Auto" />
-                                                        <ColumnDefinition Width="Auto" />
-                                                        <ColumnDefinition Width="Auto" />
-                                                    </Grid.ColumnDefinitions>
-                                                    <StackPanel>
-                                                        <TextBlock
-                                                            FontSize="13"
-                                                            Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                                            Text="{Binding DisplayName}" />
-                                                        <TextBlock
-                                                            FontSize="10"
-                                                            Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                                                            Text="{Binding Target}"
-                                                            TextTrimming="CharacterEllipsis" />
-                                                    </StackPanel>
-                                                    <ui:Button
-                                                        Grid.Column="1"
-                                                        Command="{Binding DataContext.ViewModel.MoveQuickLaunchUpCommand, RelativeSource={RelativeSource AncestorType=Page}}"
-                                                        CommandParameter="{Binding}"
-                                                        Icon="{ui:SymbolIcon ArrowUp24}"
-                                                        Style="{StaticResource AfSettingsIconButtonStyle}"
-                                                        ToolTip="上移一位" />
-                                                    <ui:Button
-                                                        Grid.Column="2"
-                                                        Margin="4,0,0,0"
-                                                        Command="{Binding DataContext.ViewModel.MoveQuickLaunchDownCommand, RelativeSource={RelativeSource AncestorType=Page}}"
-                                                        CommandParameter="{Binding}"
-                                                        Icon="{ui:SymbolIcon ArrowDown24}"
-                                                        Style="{StaticResource AfSettingsIconButtonStyle}"
-                                                        ToolTip="下移一位" />
-                                                    <ui:Button
-                                                        Grid.Column="3"
-                                                        Margin="4,0,0,0"
-                                                        Command="{Binding DataContext.ViewModel.RemoveQuickLaunchCommand, RelativeSource={RelativeSource AncestorType=Page}}"
-                                                        CommandParameter="{Binding}"
-                                                        Icon="{ui:SymbolIcon Delete24}"
-                                                        Style="{StaticResource AfSettingsIconButtonStyle}"
-                                                        ToolTip="从快速启动中移除" />
-                                                </Grid>
-                                            </Border>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
+                        <components:SettingsRow
+                            Description="调整顺序只影响本列表的启动优先级"
+                            Icon="{ui:SymbolIcon AppsListDetail24}"
+                            Title="已添加的启动项">
+                            <TextBlock
+                                Style="{StaticResource AfSettingsRowValueStyle}"
+                                Text="{Binding ViewModel.QuickLaunchEntries.Count, StringFormat={}{0} 项}" />
+                        </components:SettingsRow>
 
-                                <TextBlock
-                                    Margin="0,8,0,0"
-                                    Style="{StaticResource AfSettingsHintTextStyle}"
-                                    Text="{Binding ViewModel.StatusText}" />
-                            </StackPanel>
-                        </ui:CardControl>
+                        <ItemsControl Margin="0,0,0,4" ItemsSource="{Binding ViewModel.QuickLaunchEntries}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <components:SettingsRow
+                                        Description="{Binding Target}"
+                                        IsNested="True"
+                                        Title="{Binding DisplayName}">
+                                        <StackPanel Orientation="Horizontal">
+                                            <ui:Button
+                                                Command="{Binding DataContext.ViewModel.MoveQuickLaunchUpCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                CommandParameter="{Binding}"
+                                                Icon="{ui:SymbolIcon ArrowUp24}"
+                                                Style="{StaticResource AfSettingsIconButtonStyle}"
+                                                ToolTip="上移一位" />
+                                            <ui:Button
+                                                Margin="4,0,0,0"
+                                                Command="{Binding DataContext.ViewModel.MoveQuickLaunchDownCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                CommandParameter="{Binding}"
+                                                Icon="{ui:SymbolIcon ArrowDown24}"
+                                                Style="{StaticResource AfSettingsIconButtonStyle}"
+                                                ToolTip="下移一位" />
+                                            <ui:Button
+                                                Margin="4,0,0,0"
+                                                Command="{Binding DataContext.ViewModel.RemoveQuickLaunchCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                CommandParameter="{Binding}"
+                                                Icon="{ui:SymbolIcon Delete24}"
+                                                Style="{StaticResource AfSettingsIconButtonStyle}"
+                                                ToolTip="从快速启动中移除" />
+                                        </StackPanel>
+                                    </components:SettingsRow>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <TextBlock
+                            Margin="0,4,0,0"
+                            Style="{StaticResource AfSettingsHintTextStyle}"
+                            Text="{Binding ViewModel.StatusText}" />
                     </StackPanel>
                 </components:SettingsGroup>
 
-                <components:SettingsGroup Header="静置层组件" Icon="{ui:SymbolIcon DataHistogram24}">
+                <components:SettingsGroup
+                    Description="叠加在静置层右侧的两个小组件"
+                    Header="静置层组件"
+                    Icon="{ui:SymbolIcon DataHistogram24}">
                     <StackPanel>
-                        <ui:CardControl Margin="{StaticResource AfSettingsCardGap}" Style="{StaticResource AfSettingsCardStackedStyle}">
-                            <ui:CardControl.Icon>
-                                <ui:SymbolIcon Symbol="DataHistogram24" />
-                            </ui:CardControl.Icon>
-                            <ui:CardControl.Header>
+                        <components:SettingsDiagram Margin="0,0,0,12" Kind="Spectrum" />
+
+                        <components:SettingsRow
+                            Description="在静置层右侧显示实时音频频谱"
+                            Icon="{ui:SymbolIcon DataHistogram24}"
+                            Title="显示频谱">
+                            <ui:ToggleSwitch IsChecked="{Binding ViewModel.SpectrumVisible, Mode=TwoWay}" />
+                        </components:SettingsRow>
+
+                        <ui:CardExpander
+                            Style="{StaticResource AfSettingsExpanderStyle}"
+                            Icon="{ui:SymbolIcon DataBarVertical24}"
+                            IsExpanded="{Binding ViewModel.SpectrumVisible, Mode=OneWay}">
+                            <ui:CardExpander.Header>
                                 <StackPanel>
-                                    <TextBlock Style="{StaticResource AfSettingsCardTitleStyle}" Text="频谱" />
-                                    <TextBlock
-                                        Style="{StaticResource AfSettingsCardDescriptionStyle}"
-                                        Text="在静置层右侧显示实时频谱；断开媒体或暂停时保留槽位并清零柱高。" />
+                                    <TextBlock Style="{StaticResource AfSettingsRowTitleStyle}" Text="频谱参数" />
+                                    <TextBlock Style="{StaticResource AfSettingsRowDescriptionStyle}" Text="柱数、刷新率与灵敏度" />
                                 </StackPanel>
-                            </ui:CardControl.Header>
+                            </ui:CardExpander.Header>
                             <StackPanel>
-                                <WrapPanel Margin="0,0,0,14">
-                                    <ui:ToggleSwitch
-                                        Margin="0,0,16,0"
-                                        Content="显示频谱组件"
-                                        IsChecked="{Binding ViewModel.SpectrumVisible, Mode=TwoWay}" />
-                                    <ContentControl
-                                        Content="需先启用"
-                                        Style="{StaticResource SpectrumGateChipStyle}" />
-                                </WrapPanel>
-
-                                <StackPanel IsEnabled="{Binding ViewModel.SpectrumVisible}">
-                                    <components:SettingsDiagram Margin="0,0,0,14" Kind="Spectrum" />
-
-                                    <TextBlock
-                                        Margin="{StaticResource AfSettingsFieldLabelGap}"
-                                        Style="{StaticResource AfSettingsFieldLabelStyle}"
-                                        Text="柱数" />
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
+                                <components:SettingsRow
+                                    Description="频谱柱的数量（1–9）"
+                                    Icon="{ui:SymbolIcon DataBarVertical24}"
+                                    IsNested="True"
+                                    Style="{StaticResource SpectrumParameterRowStyle}"
+                                    Title="柱数">
+                                    <StackPanel Orientation="Horizontal">
                                         <Slider
                                             IsSnapToTickEnabled="True"
                                             Maximum="9"
                                             Minimum="1"
+                                            Style="{StaticResource AfSettingsRowSliderStyle}"
                                             TickFrequency="1"
                                             Value="{Binding ViewModel.SpectrumBandCount, Mode=TwoWay}" />
-                                        <TextBlock
-                                            Grid.Column="1"
-                                            Margin="12,0,0,0"
-                                            Style="{StaticResource AfSettingsFieldValueStyle}"
-                                            Text="{Binding ViewModel.SpectrumBandCount, StringFormat={}{0} 根}" />
-                                    </Grid>
-
-                                    <TextBlock
-                                        Margin="0,10,0,6"
-                                        Style="{StaticResource AfSettingsFieldLabelStyle}"
-                                        Text="刷新率（Hz）" />
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Style="{StaticResource AfSettingsRowValueStyle}" Text="{Binding ViewModel.SpectrumBandCount, StringFormat={}{0} 根}" />
+                                    </StackPanel>
+                                </components:SettingsRow>
+                                <components:SettingsRow
+                                    Description="频谱刷新频率（5–30 Hz）"
+                                    Icon="{ui:SymbolIcon Timer24}"
+                                    IsNested="True"
+                                    Style="{StaticResource SpectrumParameterRowStyle}"
+                                    Title="刷新率">
+                                    <StackPanel Orientation="Horizontal">
                                         <Slider
                                             IsSnapToTickEnabled="True"
                                             Maximum="30"
                                             Minimum="5"
+                                            Style="{StaticResource AfSettingsRowSliderStyle}"
                                             TickFrequency="1"
                                             Value="{Binding ViewModel.SpectrumRefreshRateHz, Mode=TwoWay}" />
-                                        <TextBlock
-                                            Grid.Column="1"
-                                            Margin="12,0,0,0"
-                                            Style="{StaticResource AfSettingsFieldValueStyle}"
-                                            Text="{Binding ViewModel.SpectrumRefreshRateHz, StringFormat={}{0} Hz}" />
-                                    </Grid>
-
-                                    <TextBlock
-                                        Margin="0,10,0,6"
-                                        Style="{StaticResource AfSettingsFieldLabelStyle}"
-                                        Text="灵敏度（%）" />
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Style="{StaticResource AfSettingsRowValueStyle}" Text="{Binding ViewModel.SpectrumRefreshRateHz, StringFormat={}{0} Hz}" />
+                                    </StackPanel>
+                                </components:SettingsRow>
+                                <components:SettingsRow
+                                    Description="频谱柱达到最大高度时对应的音频音量"
+                                    Icon="{ui:SymbolIcon TopSpeed24}"
+                                    IsNested="True"
+                                    Style="{StaticResource SpectrumParameterRowStyle}"
+                                    Title="灵敏度">
+                                    <StackPanel Orientation="Horizontal">
                                         <Slider
                                             IsSnapToTickEnabled="True"
                                             Maximum="400"
                                             Minimum="1"
+                                            Style="{StaticResource AfSettingsRowSliderStyle}"
                                             TickFrequency="1"
                                             Value="{Binding ViewModel.SpectrumSensitivityPercent, Mode=TwoWay}" />
-                                        <TextBlock
-                                            Grid.Column="1"
-                                            Margin="12,0,0,0"
-                                            Style="{StaticResource AfSettingsFieldValueStyle}"
-                                            Text="{Binding ViewModel.SpectrumSensitivityPercent, StringFormat={}{0}%}" />
-                                    </Grid>
-                                </StackPanel>
+                                        <TextBlock Style="{StaticResource AfSettingsRowValueStyle}" Text="{Binding ViewModel.SpectrumSensitivityPercent, StringFormat={}{0}%}" />
+                                    </StackPanel>
+                                </components:SettingsRow>
                             </StackPanel>
-                        </ui:CardControl>
+                        </ui:CardExpander>
 
-                        <ui:CardControl Margin="{StaticResource AfSettingsCardGapLast}" Style="{StaticResource AfSettingsCardStackedStyle}">
-                            <ui:CardControl.Icon>
-                                <ui:SymbolIcon Symbol="Gauge24" />
-                            </ui:CardControl.Icon>
-                            <ui:CardControl.Header>
+                        <components:SettingsRow
+                            Description="在静置层右侧轮换显示选中的指标"
+                            Icon="{ui:SymbolIcon Gauge24}"
+                            Title="显示性能组件">
+                            <ui:ToggleSwitch IsChecked="{Binding ViewModel.PerformanceVisible, Mode=TwoWay}" />
+                        </components:SettingsRow>
+
+                        <ui:CardExpander
+                            Style="{StaticResource AfSettingsExpanderStyle}"
+                            Icon="{ui:SymbolIcon Gauge24}"
+                            IsExpanded="{Binding ViewModel.PerformanceVisible, Mode=OneWay}">
+                            <ui:CardExpander.Header>
                                 <StackPanel>
-                                    <TextBlock Style="{StaticResource AfSettingsCardTitleStyle}" Text="性能" />
-                                    <TextBlock
-                                        Style="{StaticResource AfSettingsCardDescriptionStyle}"
-                                        Text="在静置层右侧轮换显示选中的指标，每三个采样周期换一个。" />
+                                    <TextBlock Style="{StaticResource AfSettingsRowTitleStyle}" Text="显示哪些指标" />
+                                    <TextBlock Style="{StaticResource AfSettingsRowDescriptionStyle}" Text="选中多个时轮流显示" />
                                 </StackPanel>
-                            </ui:CardControl.Header>
+                            </ui:CardExpander.Header>
                             <StackPanel>
-                                <WrapPanel Margin="0,0,0,14">
+                                <components:SettingsRow
+                                    Description="至少保留一项，最后一项无法取消"
+                                    Icon="{ui:SymbolIcon Storage24}"
+                                    IsNested="True"
+                                    Style="{StaticResource PerformanceParameterRowStyle}"
+                                    Title="系统内存">
                                     <ui:ToggleSwitch
-                                        Margin="0,0,16,0"
-                                        Content="显示性能组件"
-                                        IsChecked="{Binding ViewModel.PerformanceVisible, Mode=TwoWay}" />
-                                    <ContentControl
-                                        Content="需先启用"
-                                        Style="{StaticResource PerformanceGateChipStyle}" />
-                                </WrapPanel>
-
-                                <StackPanel IsEnabled="{Binding ViewModel.PerformanceVisible}">
-                                    <TextBlock
-                                        Margin="{StaticResource AfSettingsFieldLabelGap}"
-                                        Style="{StaticResource AfSettingsFieldLabelStyle}"
-                                        Text="显示的指标（至少保留一项）" />
-                                    <WrapPanel>
-                                        <CheckBox
-                                            Margin="0,0,16,0"
-                                            Content="系统内存"
-                                            IsChecked="{Binding ViewModel.ShowSystemMemory, Mode=TwoWay}"
-                                            IsEnabled="{Binding ViewModel.CanUncheckSystemMemory}" />
-                                        <CheckBox
-                                            Margin="0,0,16,0"
-                                            Content="CPU"
-                                            IsChecked="{Binding ViewModel.ShowSystemCpu, Mode=TwoWay}"
-                                            IsEnabled="{Binding ViewModel.CanUncheckSystemCpu}" />
-                                        <CheckBox
-                                            Margin="0,0,16,0"
-                                            Content="GPU"
-                                            IsChecked="{Binding ViewModel.ShowSystemGpu, Mode=TwoWay}"
-                                            IsEnabled="{Binding ViewModel.CanUncheckSystemGpu}" />
-                                        <CheckBox
-                                            Content="本程序内存"
-                                            IsChecked="{Binding ViewModel.ShowProcessMemory, Mode=TwoWay}"
-                                            IsEnabled="{Binding ViewModel.CanUncheckProcessMemory}" />
-                                    </WrapPanel>
-                                    <TextBlock
-                                        Margin="0,6,0,0"
-                                        Style="{StaticResource AfSettingsHintTextStyle}"
-                                        Text="只剩最后一项时它的复选框会被禁用，因为性能组件至少要显示一个指标。" />
-
-                                    <TextBlock
-                                        Margin="0,10,0,6"
-                                        Style="{StaticResource AfSettingsFieldLabelStyle}"
-                                        Text="刷新间隔（毫秒）" />
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
+                                        IsChecked="{Binding ViewModel.ShowSystemMemory, Mode=TwoWay}"
+                                        IsEnabled="{Binding ViewModel.CanUncheckSystemMemory}" />
+                                </components:SettingsRow>
+                                <components:SettingsRow
+                                    Icon="{ui:SymbolIcon DeveloperBoard24}"
+                                    IsNested="True"
+                                    Style="{StaticResource PerformanceParameterRowStyle}"
+                                    Title="CPU">
+                                    <ui:ToggleSwitch
+                                        IsChecked="{Binding ViewModel.ShowSystemCpu, Mode=TwoWay}"
+                                        IsEnabled="{Binding ViewModel.CanUncheckSystemCpu}" />
+                                </components:SettingsRow>
+                                <components:SettingsRow
+                                    Icon="{ui:SymbolIcon VideoClip24}"
+                                    IsNested="True"
+                                    Style="{StaticResource PerformanceParameterRowStyle}"
+                                    Title="GPU">
+                                    <ui:ToggleSwitch
+                                        IsChecked="{Binding ViewModel.ShowSystemGpu, Mode=TwoWay}"
+                                        IsEnabled="{Binding ViewModel.CanUncheckSystemGpu}" />
+                                </components:SettingsRow>
+                                <components:SettingsRow
+                                    Icon="{ui:SymbolIcon Apps24}"
+                                    IsNested="True"
+                                    Style="{StaticResource PerformanceParameterRowStyle}"
+                                    Title="本程序内存">
+                                    <ui:ToggleSwitch
+                                        IsChecked="{Binding ViewModel.ShowProcessMemory, Mode=TwoWay}"
+                                        IsEnabled="{Binding ViewModel.CanUncheckProcessMemory}" />
+                                </components:SettingsRow>
+                                <components:SettingsRow
+                                    Description="采样间隔，越小越灵敏（250–60000 毫秒）"
+                                    Icon="{ui:SymbolIcon Timer24}"
+                                    IsNested="True"
+                                    Style="{StaticResource PerformanceParameterRowStyle}"
+                                    Title="刷新间隔">
+                                    <StackPanel Orientation="Horizontal">
                                         <Slider
                                             IsSnapToTickEnabled="True"
                                             Maximum="60000"
                                             Minimum="250"
+                                            Style="{StaticResource AfSettingsRowSliderStyle}"
                                             TickFrequency="250"
                                             Value="{Binding ViewModel.PerformanceRefreshIntervalMilliseconds, Mode=TwoWay}" />
-                                        <TextBlock
-                                            Grid.Column="1"
-                                            Margin="12,0,0,0"
-                                            Style="{StaticResource AfSettingsFieldValueStyle}"
-                                            Text="{Binding ViewModel.PerformanceRefreshIntervalMilliseconds, StringFormat={}{0} ms}" />
-                                    </Grid>
-
-                                    <ui:ToggleSwitch
-                                        Margin="0,12,0,0"
-                                        Content="点击性能组件打开任务管理器"
-                                        IsChecked="{Binding ViewModel.OpenTaskManagerOnMetricsClick, Mode=TwoWay}" />
-                                </StackPanel>
+                                        <TextBlock Style="{StaticResource AfSettingsRowValueStyle}" Text="{Binding ViewModel.PerformanceRefreshIntervalMilliseconds, StringFormat={}{0} ms}" />
+                                    </StackPanel>
+                                </components:SettingsRow>
+                                <components:SettingsRow
+                                    Icon="{ui:SymbolIcon CursorClick24}"
+                                    IsNested="True"
+                                    Style="{StaticResource PerformanceParameterRowStyle}"
+                                    Title="点击性能组件时打开任务管理器">
+                                    <ui:ToggleSwitch IsChecked="{Binding ViewModel.OpenTaskManagerOnMetricsClick, Mode=TwoWay}" />
+                                </components:SettingsRow>
                             </StackPanel>
-                        </ui:CardControl>
+                        </ui:CardExpander>
                     </StackPanel>
                 </components:SettingsGroup>
 
                 <components:SettingsGroup Header="曲目切换通知" Icon="{ui:SymbolIcon MusicNote220}">
                     <StackPanel>
-                        <ui:CardControl Margin="{StaticResource AfSettingsCardGapLast}">
-                            <ui:CardControl.Icon>
-                                <ui:SymbolIcon Symbol="MusicNote220" />
-                            </ui:CardControl.Icon>
-                            <ui:CardControl.Header>
-                                <StackPanel>
-                                    <TextBlock Style="{StaticResource AfSettingsCardTitleStyle}" Text="启用通知" />
-                                    <TextBlock
-                                        Style="{StaticResource AfSettingsCardDescriptionStyle}"
-                                        Text="切歌时在屏幕角落短暂提示刚切换到的曲目；关闭后下面的细节不生效。" />
-                                </StackPanel>
-                            </ui:CardControl.Header>
+                        <components:SettingsRow
+                            Description="曲目切换并开始播放时显示当前曲目"
+                            Icon="{ui:SymbolIcon MusicNote220}"
+                            Title="启用通知">
                             <ui:ToggleSwitch IsChecked="{Binding ViewModel.TrackChangeNotificationEnabled, Mode=TwoWay}" />
-                        </ui:CardControl>
+                        </components:SettingsRow>
 
-                        <components:SettingsSubRegion
-                            Description="决定通知出现在哪里、停留多久，以及在什么情况下不出现。"
-                            Header="通知细节"
-                            IsSubRegionEnabled="{Binding ViewModel.TrackChangeNotificationEnabled}"
-                            StatusText="需先启用通知"
-                            StatusTone="Attention">
-                            <StackPanel IsEnabled="{Binding ViewModel.TrackChangeNotificationEnabled}">
-                                <ui:CardControl Margin="{StaticResource AfSettingsCardGap}">
-                                    <ui:CardControl.Icon>
-                                        <ui:SymbolIcon Symbol="FullScreenMaximize24" />
-                                    </ui:CardControl.Icon>
-                                    <ui:CardControl.Header>
-                                        <StackPanel>
-                                            <TextBlock Style="{StaticResource AfSettingsCardTitleStyle}" Text="全屏时仍然显示" />
-                                            <TextBlock
-                                                Style="{StaticResource AfSettingsCardDescriptionStyle}"
-                                                Text="默认在全屏窗口前抑制通知，避免打断游戏或演示。" />
-                                        </StackPanel>
-                                    </ui:CardControl.Header>
+                        <ui:CardExpander
+                            Style="{StaticResource AfSettingsExpanderStyle}"
+                            Icon="{ui:SymbolIcon Settings24}"
+                            IsExpanded="{Binding ViewModel.TrackChangeNotificationEnabled, Mode=OneWay}">
+                            <ui:CardExpander.Header>
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource AfSettingsRowTitleStyle}" Text="通知细节" />
+                                    <TextBlock Style="{StaticResource AfSettingsRowDescriptionStyle}" Text="选择位置、停留时间与目标显示器" />
+                                </StackPanel>
+                            </ui:CardExpander.Header>
+                            <StackPanel>
+                                <components:SettingsDiagram Margin="0,0,0,12" Kind="NotificationPlacement" />
+
+                                <components:SettingsRow
+                                    Description="默认在全屏窗口前抑制通知"
+                                    Icon="{ui:SymbolIcon FullScreenMaximize24}"
+                                    IsNested="True"
+                                    Title="全屏时仍然显示">
                                     <ui:ToggleSwitch IsChecked="{Binding ViewModel.ShowTrackChangeNotificationWhenFullscreen, Mode=TwoWay}" />
-                                </ui:CardControl>
-
-                                <ui:CardControl Margin="{StaticResource AfSettingsCardGap}" Style="{StaticResource AfSettingsCardStackedStyle}">
-                                    <ui:CardControl.Icon>
-                                        <ui:SymbolIcon Symbol="PositionToBack20" />
-                                    </ui:CardControl.Icon>
-                                    <ui:CardControl.Header>
-                                        <StackPanel>
-                                            <TextBlock Style="{StaticResource AfSettingsCardTitleStyle}" Text="位置与停留时间" />
-                                            <TextBlock
-                                                Style="{StaticResource AfSettingsCardDescriptionStyle}"
-                                                Text="通知落在目标显示器的可用区域内，不会盖住任务栏；鼠标移入会立即隐藏。" />
-                                        </StackPanel>
-                                    </ui:CardControl.Header>
-                                    <StackPanel>
-                                        <components:SettingsDiagram Margin="0,0,0,14" Kind="NotificationPlacement" />
-
-                                        <TextBlock
-                                            Margin="{StaticResource AfSettingsFieldLabelGap}"
-                                            Style="{StaticResource AfSettingsFieldLabelStyle}"
-                                            Text="屏幕位置" />
-                                        <ComboBox
-                                            HorizontalAlignment="Left"
-                                            MinWidth="{StaticResource AfSettingsSelectMinWidth}"
-                                            SelectedValue="{Binding ViewModel.TrackChangeNotificationPosition, Mode=TwoWay}"
-                                            SelectedValuePath="Tag">
-                                            <ComboBoxItem Content="左上" Tag="{x:Static settings:TrackChangeNotificationPosition.TopLeft}" />
-                                            <ComboBoxItem Content="中上" Tag="{x:Static settings:TrackChangeNotificationPosition.TopCenter}" />
-                                            <ComboBoxItem Content="右上" Tag="{x:Static settings:TrackChangeNotificationPosition.TopRight}" />
-                                            <ComboBoxItem Content="左下" Tag="{x:Static settings:TrackChangeNotificationPosition.BottomLeft}" />
-                                            <ComboBoxItem Content="中下" Tag="{x:Static settings:TrackChangeNotificationPosition.BottomCenter}" />
-                                            <ComboBoxItem Content="右下" Tag="{x:Static settings:TrackChangeNotificationPosition.BottomRight}" />
-                                        </ComboBox>
-
-                                        <TextBlock
-                                            Margin="0,10,0,6"
-                                            Style="{StaticResource AfSettingsFieldLabelStyle}"
-                                            Text="停留时间" />
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="Auto" />
-                                            </Grid.ColumnDefinitions>
-                                            <Slider
-                                                IsSnapToTickEnabled="True"
-                                                Maximum="10"
-                                                Minimum="1"
-                                                TickFrequency="1"
-                                                Value="{Binding ViewModel.TrackChangeNotificationDurationSeconds, Mode=TwoWay}" />
-                                            <TextBlock
-                                                Grid.Column="1"
-                                                Margin="12,0,0,0"
-                                                Style="{StaticResource AfSettingsFieldValueStyle}"
-                                                Text="{Binding ViewModel.TrackChangeNotificationDurationSeconds, StringFormat={}{0} 秒}" />
-                                        </Grid>
+                                </components:SettingsRow>
+                                <components:SettingsRow
+                                    Icon="{ui:SymbolIcon Pin24}"
+                                    IsNested="True"
+                                    Title="显示位置">
+                                    <ComboBox
+                                        MinWidth="140"
+                                        SelectedValue="{Binding ViewModel.TrackChangeNotificationPosition, Mode=TwoWay}"
+                                        SelectedValuePath="Tag">
+                                        <ComboBoxItem Content="左上" Tag="{x:Static settings:TrackChangeNotificationPosition.TopLeft}" />
+                                        <ComboBoxItem Content="中上" Tag="{x:Static settings:TrackChangeNotificationPosition.TopCenter}" />
+                                        <ComboBoxItem Content="右上" Tag="{x:Static settings:TrackChangeNotificationPosition.TopRight}" />
+                                        <ComboBoxItem Content="左下" Tag="{x:Static settings:TrackChangeNotificationPosition.BottomLeft}" />
+                                        <ComboBoxItem Content="中下" Tag="{x:Static settings:TrackChangeNotificationPosition.BottomCenter}" />
+                                        <ComboBoxItem Content="右下" Tag="{x:Static settings:TrackChangeNotificationPosition.BottomRight}" />
+                                    </ComboBox>
+                                </components:SettingsRow>
+                                <components:SettingsRow
+                                    Icon="{ui:SymbolIcon Timer24}"
+                                    IsNested="True"
+                                    Title="停留时间">
+                                    <StackPanel Orientation="Horizontal">
+                                        <Slider
+                                            IsSnapToTickEnabled="True"
+                                            Maximum="10"
+                                            Minimum="1"
+                                            Style="{StaticResource AfSettingsRowSliderStyle}"
+                                            TickFrequency="1"
+                                            Value="{Binding ViewModel.TrackChangeNotificationDurationSeconds, Mode=TwoWay}" />
+                                        <TextBlock Style="{StaticResource AfSettingsRowValueStyle}" Text="{Binding ViewModel.TrackChangeNotificationDurationSeconds, StringFormat={}{0} 秒}" />
                                     </StackPanel>
-                                </ui:CardControl>
-
-                                <ui:CardControl Margin="0,0,0,0" Style="{StaticResource AfSettingsCardStackedStyle}">
-                                    <ui:CardControl.Icon>
-                                        <ui:SymbolIcon Symbol="ProjectionScreen24" />
-                                    </ui:CardControl.Icon>
-                                    <ui:CardControl.Header>
-                                        <StackPanel>
-                                            <TextBlock Style="{StaticResource AfSettingsCardTitleStyle}" Text="通知目标显示器" />
-                                            <TextBlock
-                                                Style="{StaticResource AfSettingsCardDescriptionStyle}"
-                                                Text="前台模式每次通知前都会重新判断当前前台窗口在哪块显示器上。" />
-                                        </StackPanel>
-                                    </ui:CardControl.Header>
-                                    <StackPanel>
-                                        <TextBlock
-                                            Margin="{StaticResource AfSettingsFieldLabelGap}"
-                                            Style="{StaticResource AfSettingsFieldLabelStyle}"
-                                            Text="目标选择方式" />
-                                        <ComboBox
-                                            HorizontalAlignment="Left"
-                                            MinWidth="{StaticResource AfSettingsSelectMinWidth}"
-                                            SelectedValue="{Binding ViewModel.TrackChangeNotificationTargetMode, Mode=TwoWay}"
-                                            SelectedValuePath="Tag">
-                                            <ComboBoxItem Content="固定显示器" Tag="{x:Static settings:NotificationTargetMode.Fixed}" />
-                                            <ComboBoxItem Content="前台窗口所在显示器" Tag="{x:Static settings:NotificationTargetMode.ForegroundWindow}" />
-                                        </ComboBox>
-
-                                        <TextBlock
-                                            Margin="0,10,0,6"
-                                            Style="{StaticResource AfSettingsFieldLabelStyle}"
-                                            Text="固定到哪一块显示器" />
-                                        <ComboBox
-                                            HorizontalAlignment="Left"
-                                            DisplayMemberPath="DisplayName"
-                                            IsEnabled="{Binding ViewModel.CanSelectTrackChangeNotificationMonitor}"
-                                            ItemsSource="{Binding ViewModel.MonitorOptions}"
-                                            MinWidth="{StaticResource AfSettingsFieldWidthWide}"
-                                            SelectedValue="{Binding ViewModel.TrackChangeNotificationFixedMonitorDeviceId, Mode=TwoWay}"
-                                            SelectedValuePath="DeviceId" />
-                                        <TextBlock
-                                            Margin="0,6,0,0"
-                                            Style="{StaticResource AfSettingsHintTextStyle}"
-                                            Text="只有选择「固定显示器」时这一项才可用。" />
-                                    </StackPanel>
-                                </ui:CardControl>
+                                </components:SettingsRow>
+                                <components:SettingsRow
+                                    Description="固定显示器，或跟随前台窗口所在显示器"
+                                    Icon="{ui:SymbolIcon ProjectionScreen24}"
+                                    IsNested="True"
+                                    Title="目标显示器">
+                                    <ComboBox
+                                        MinWidth="200"
+                                        SelectedValue="{Binding ViewModel.TrackChangeNotificationTargetMode, Mode=TwoWay}"
+                                        SelectedValuePath="Tag">
+                                        <ComboBoxItem Content="固定显示器" Tag="{x:Static settings:NotificationTargetMode.Fixed}" />
+                                        <ComboBoxItem Content="跟随前台窗口所在显示器" Tag="{x:Static settings:NotificationTargetMode.ForegroundWindow}" />
+                                    </ComboBox>
+                                </components:SettingsRow>
+                                <components:SettingsRow
+                                    Icon="{ui:SymbolIcon Desktop24}"
+                                    IsEnabled="{Binding ViewModel.CanSelectTrackChangeNotificationMonitor}"
+                                    IsNested="True"
+                                    Title="固定到哪一块显示器">
+                                    <ComboBox
+                                        DisplayMemberPath="DisplayName"
+                                        ItemsSource="{Binding ViewModel.MonitorOptions}"
+                                        MinWidth="240"
+                                        SelectedValue="{Binding ViewModel.TrackChangeNotificationFixedMonitorDeviceId, Mode=TwoWay}"
+                                        SelectedValuePath="DeviceId" />
+                                </components:SettingsRow>
                             </StackPanel>
-                        </components:SettingsSubRegion>
+                        </ui:CardExpander>
                     </StackPanel>
                 </components:SettingsGroup>
 
                 <ui:Button
-                    Margin="0,20,0,40"
+                    Margin="0,16,0,40"
                     HorizontalAlignment="Left"
                     Click="ResetButton_Click"
                     Content="恢复本页默认设置"

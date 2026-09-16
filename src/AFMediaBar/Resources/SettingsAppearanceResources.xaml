@@ -41,6 +41,58 @@
     <sys:Double x:Key="AfSettingsSelectLabelWidth">190</sys:Double>
 
     <!--
+        行排布令牌 / Row layout tokens
+
+        设置页的每一行都是「一行一个选项、一行一个控件」：控件永远落在同一条竖线上，
+        眼睛只需要沿一列往下扫。行间距取 4 DIP，让同一分组的行贴成一条连续列表；分组之间才用 20 DIP 拉开。
+        Every settings row holds one option and exactly one control, so controls always land on the same vertical
+        line and the eye travels down a single column. A 4 DIP row gap welds the rows of one group into a
+        continuous list; only groups get 20 DIP.
+    -->
+    <Thickness x:Key="AfSettingsRowGap">0,0,0,4</Thickness>
+    <Thickness x:Key="AfSettingsRowGapLast">0,0,0,20</Thickness>
+    <sys:Double x:Key="AfSettingsRowSliderWidth">150</sys:Double>
+    <sys:Double x:Key="AfSettingsRowValueWidth">58</sys:Double>
+
+    <Style x:Key="AfSettingsRowTitleStyle" TargetType="{x:Type TextBlock}">
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="FontWeight" Value="Normal" />
+        <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style x:Key="AfSettingsRowDescriptionStyle" TargetType="{x:Type TextBlock}">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="LineHeight" Value="17" />
+        <Setter Property="LineStackingStrategy" Value="BlockLineHeight" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+        <Setter Property="Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}" />
+        <Setter Property="Margin" Value="0,3,0,0" />
+    </Style>
+
+    <!--
+        行内滑杆与数值读出成对出现。读出用固定宽度，拖动时右列不会跟着数字宽度左右跳动；
+        滑杆固定 150 DIP，因此所有滑杆的左右端点都落在同一条竖线上。
+        An in-row slider and its value readout travel in pairs. The readout has a fixed width so the right column
+        does not jitter with the number's width while dragging, and the slider is fixed at 150 DIP so every
+        slider's endpoints land on the same two vertical lines.
+    -->
+    <Style x:Key="AfSettingsRowSliderStyle" TargetType="{x:Type Slider}">
+        <Setter Property="Width" Value="{StaticResource AfSettingsRowSliderWidth}" />
+        <Setter Property="IsMoveToPointEnabled" Value="True" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style x:Key="AfSettingsRowValueStyle" TargetType="{x:Type TextBlock}">
+        <Setter Property="Width" Value="{StaticResource AfSettingsRowValueWidth}" />
+        <Setter Property="Margin" Value="12,0,0,0" />
+        <Setter Property="TextAlignment" Value="Right" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+    </Style>
+
+    <!--
         动效曲线：0.23,1 0.32,1 是强 ease-out，用于入场揭示与选择过渡。
         WPF 没有任意贝塞尔缓动函数（只有 CubicEase 等具名曲线），因此以 KeySpline 形式提供，
         由 SettingsRevealAnimator 通过 SplineDoubleKeyFrame 使用。
@@ -261,111 +313,6 @@
     <!--  隐式应用：设置页里的卡片不再逐一声明样式，LayoutPage 等历史页面共用同一外观。  -->
     <!--  Implicit application: settings cards declare no style, and the legacy LayoutPage shares the look.  -->
     <Style BasedOn="{StaticResource AfSettingsCardStyle}" TargetType="{x:Type ui:CardControl}" />
-
-    <!--
-        纵向卡片 / Stacked card
-
-        默认卡片把标题与控件左右并排，适合“一个开关放右边”这类单行卡片。
-        但一张卡片里同时有滑杆、开关、图示和按钮时，控件列被压到 380 DIP，标题列同时被挤成三行——两边都难受。
-        纵向卡片把标题放上、控件放下并占满整行，用于多控件卡片。
-        The default card puts title and control side by side, which suits a one-row card with a single switch on
-        the right. Once a card holds a slider, switches, a diagram, and a button, the control column is squeezed
-        to 380 DIP while the title column wraps to three lines and both sides suffer. The stacked card puts the
-        title on top and the controls below at full width, and is meant for multi-control cards.
-    -->
-    <Style
-        x:Key="AfSettingsCardStackedStyle"
-        BasedOn="{StaticResource AfSettingsCardStyle}"
-        TargetType="{x:Type ui:CardControl}">
-        <Setter Property="Template">
-            <Setter.Value>
-                <ControlTemplate TargetType="{x:Type ui:CardControl}">
-                    <Border
-                        x:Name="CardBorder"
-                        Padding="{TemplateBinding Padding}"
-                        Background="{TemplateBinding Background}"
-                        BorderBrush="{TemplateBinding BorderBrush}"
-                        BorderThickness="{TemplateBinding BorderThickness}"
-                        CornerRadius="{TemplateBinding CornerRadius}"
-                        SnapsToDevicePixels="True">
-                        <Grid>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                            </Grid.RowDefinitions>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-
-                            <Grid
-                                x:Name="IconChip"
-                                Grid.Row="0"
-                                Grid.Column="0"
-                                Width="32"
-                                Height="32"
-                                Margin="0,0,14,0"
-                                VerticalAlignment="Top"
-                                TextElement.Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}">
-                                <Border
-                                    Background="{DynamicResource AccentFillColorDefaultBrush}"
-                                    CornerRadius="8"
-                                    Opacity="0.14" />
-                                <ContentControl
-                                    HorizontalAlignment="Center"
-                                    VerticalAlignment="Center"
-                                    Content="{TemplateBinding Icon}"
-                                    Focusable="False"
-                                    KeyboardNavigation.IsTabStop="False" />
-                            </Grid>
-
-                            <ContentPresenter
-                                x:Name="HeaderHost"
-                                Grid.Row="0"
-                                Grid.Column="1"
-                                VerticalAlignment="Top"
-                                Content="{TemplateBinding Header}"
-                                TextElement.Foreground="{TemplateBinding Foreground}" />
-
-                            <ContentPresenter
-                                x:Name="ContentHost"
-                                Grid.Row="1"
-                                Grid.Column="0"
-                                Grid.ColumnSpan="2"
-                                Margin="0,14,0,0"
-                                HorizontalAlignment="Stretch"
-                                Content="{TemplateBinding Content}"
-                                TextElement.Foreground="{TemplateBinding Foreground}" />
-                        </Grid>
-                    </Border>
-                    <ControlTemplate.Triggers>
-                        <Trigger Property="Icon" Value="{x:Null}">
-                            <Setter TargetName="IconChip" Property="Margin" Value="0" />
-                            <Setter TargetName="IconChip" Property="Visibility" Value="Collapsed" />
-                        </Trigger>
-                        <Trigger Property="Header" Value="{x:Null}">
-                            <Setter TargetName="IconChip" Property="Margin" Value="0" />
-                        </Trigger>
-                        <Trigger Property="Header" Value="">
-                            <Setter TargetName="IconChip" Property="Margin" Value="0" />
-                        </Trigger>
-                        <Trigger Property="Content" Value="{x:Null}">
-                            <Setter TargetName="ContentHost" Property="Margin" Value="0" />
-                        </Trigger>
-                        <Trigger Property="Content" Value="">
-                            <Setter TargetName="ContentHost" Property="Margin" Value="0" />
-                        </Trigger>
-                        <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="CardBorder" Property="BorderBrush" Value="{DynamicResource ControlStrokeColorSecondaryBrush}" />
-                        </Trigger>
-                        <Trigger Property="IsKeyboardFocused" Value="True">
-                            <Setter TargetName="CardBorder" Property="BorderBrush" Value="{DynamicResource AccentFillColorDefaultBrush}" />
-                        </Trigger>
-                    </ControlTemplate.Triggers>
-                </ControlTemplate>
-            </Setter.Value>
-        </Setter>
-    </Style>
 
     <!--
         禁用卡片：用于功能预留和当前模式不可用的分组，让禁用状态看起来是刻意的。

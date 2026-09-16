@@ -3,7 +3,6 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:components="clr-namespace:AFMediaBar.Components"
-    xmlns:converters="clr-namespace:AFMediaBar.Classes.Converters"
     xmlns:settings="clr-namespace:AFMediaBar.Classes.Settings"
     xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
     Foreground="{DynamicResource TextFillColorPrimaryBrush}"
@@ -12,36 +11,24 @@
     <!--
         外观页 / Appearance page
 
-        分组改为字体 / 主题与材质 / 播放器文字 / 灵动岛表面（未实现）。
+        四个分组：字体、主题与材质、播放器文字、灵动岛表面（未实现）。全部是一行一个选项。
 
-        结构上的修正：
+        上一版把字体、字重和字样预览合并成一张纵向大卡，又给主题/材质/文字颜色用了分段药丸；
+        现在字体的三项各占一行，枚举项统一用下拉框，预览与对照图作为该分组的插图放在行下方。
+        Four groups: font, theme and material, player text, and the unimplemented island surface. Every one of
+        them is one option per row.
 
-        1. 字体、字重、字样预览合并成一张卡片。原先它们是三张独立卡片，“字体预览”与它所预览的控件
-           之间隔着一张卡，滑字重的时候看不到任何变化。
-        2. 字重滑杆的上下限改绑 AppearanceSettings 的常量，不再写死 300/900。
-        3. 两个字体下拉框补上标签，之前谁也不知道哪一个是西文、哪一个是中文。
-        4. 分组标题“应用主题”与它唯一一张卡片标题重名，分组改名为“主题与材质”。
-        5. 播放器文字颜色加了深/浅两种模拟背景的对照预览，让选项的效果在选择前就能看出来。
-        6. 三个永远禁用的灵动岛表面卡片合并成一张卡片 + 一个变暗子区域 + 状态芯片；
-           原先配的“四种表面预设”图会让人以为这里有四个可选表面。
-        7. 页尾重置改为与其余五页一致的裸按钮，不再单独是一张卡片。
-
-        Groups became font / theme and material / player text / island surface (unimplemented). The structural
-        fixes: font, weight, and specimen share one card instead of three, so changing the weight is visible
-        immediately; the weight slider bounds bind to the settings constants; the two font selects gained labels;
-        the section header no longer duplicates its only card's title; the text colour choice gained a
-        two-backdrop preview; the three permanently disabled island cards collapsed into one card with a dimmed
-        sub-region and a chip; and the reset control is now a plain button like the other five pages.
+        The previous version merged font, weight, and specimen into one tall stacked card and used segmented
+        pills for theme, material, and text colour. Now the three font settings each own a row, enumerations use
+        selects, and the specimen and contrast preview sit below the rows as that group's illustration.
     -->
 
     <Page.Resources>
-        <converters:GenericEnumToBooleanConverter x:Key="EnumToBooleanConverter" />
-
         <!--
             对照预览：两块模拟背景，用来展示当前文字颜色选项在深色与浅色壁纸上的结果。
             这里的黑白色是刻意的硬编码——它模拟的是任意壁纸，而不是主题表面，因此不应该跟随主题。
             Contrast preview: two simulated backdrops showing what the chosen text colour produces on a dark and
-            a light wallpaper. White and black are deliberately hardcoded here because they simulate an arbitrary
+            a light wallpaper. White and black are deliberately hardcoded because they simulate an arbitrary
             wallpaper rather than a themed surface, and must not follow the theme.
         -->
         <Style x:Key="ForegroundPreviewTextStyle" TargetType="{x:Type TextBlock}">
@@ -50,8 +37,6 @@
             <Setter Property="Text" Value="AF Media Bar" />
             <Style.Triggers>
                 <DataTrigger Binding="{Binding ViewModel.PlayerForegroundMode}" Value="Automatic">
-                    <!--  自动模式在深色背景上取浅色文字：预览按最可能的结果显示，并注明它取决于背景。  -->
-                    <!--  Automatic picks light text on a dark backdrop; the preview shows the likely outcome and the caption says it depends on the backdrop.  -->
                     <Setter Property="Foreground" Value="White" />
                 </DataTrigger>
                 <DataTrigger Binding="{Binding ViewModel.PlayerForegroundMode}" Value="LightText">
@@ -63,7 +48,10 @@
             </Style.Triggers>
         </Style>
 
-        <Style x:Key="ForegroundPreviewOnLightTextStyle" BasedOn="{StaticResource ForegroundPreviewTextStyle}" TargetType="{x:Type TextBlock}">
+        <Style
+            x:Key="ForegroundPreviewOnLightTextStyle"
+            BasedOn="{StaticResource ForegroundPreviewTextStyle}"
+            TargetType="{x:Type TextBlock}">
             <Style.Triggers>
                 <DataTrigger Binding="{Binding ViewModel.PlayerForegroundMode}" Value="Automatic">
                     <Setter Property="Foreground" Value="#FF1A1A1A" />
@@ -83,7 +71,7 @@
             Margin="{StaticResource AfSettingsHeaderMargin}"
             MaxWidth="{StaticResource AfSettingsContentMaxWidth}"
             PageIcon="{ui:SymbolIcon PaintBrush24}"
-            Subtitle="字体、主题材质与播放器文字"
+            Subtitle="字体、主题、窗口背景与媒体栏文字"
             Target="{Binding ElementName=PageScroll}"
             Title="外观" />
 
@@ -99,392 +87,201 @@
                 Loaded="OnPageLoaded">
 
                 <components:SettingsGroup Header="字体" Icon="{ui:SymbolIcon TextFont24}">
-                    <ui:CardControl Margin="{StaticResource AfSettingsCardGapLast}" Style="{StaticResource AfSettingsCardStackedStyle}">
-                        <ui:CardControl.Icon>
-                            <ui:SymbolIcon Symbol="TextFont24" />
-                        </ui:CardControl.Icon>
-                        <ui:CardControl.Header>
-                            <StackPanel>
-                                <TextBlock Style="{StaticResource AfSettingsCardTitleStyle}" Text="界面字体与字重" />
-                                <TextBlock
-                                    Style="{StaticResource AfSettingsCardDescriptionStyle}"
-                                    Text="同时作用于设置窗口、任务栏媒体栏和通知；下面的字样就是当前效果。" />
-                            </StackPanel>
-                        </ui:CardControl.Header>
-                        <StackPanel>
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="16" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <components:SettingsRow
+                            Description="字母与数字使用的字体"
+                            Icon="{ui:SymbolIcon TextFont24}"
+                            Title="西文字体">
+                            <ComboBox
+                                MinWidth="200"
+                                SelectedValue="{Binding ViewModel.LatinFont, Mode=TwoWay}"
+                                SelectedValuePath="Tag">
+                                <ComboBoxItem Content="Segoe UI" Tag="{x:Static settings:LatinFontPreset.SegoeUi}" />
+                                <ComboBoxItem Content="Arial" Tag="{x:Static settings:LatinFontPreset.Arial}" />
+                                <ComboBoxItem Content="Calibri" Tag="{x:Static settings:LatinFontPreset.Calibri}" />
+                                <ComboBoxItem Content="Verdana" Tag="{x:Static settings:LatinFontPreset.Verdana}" />
+                                <ComboBoxItem Content="Consolas" Tag="{x:Static settings:LatinFontPreset.Consolas}" />
+                                <ComboBoxItem Content="Times New Roman" Tag="{x:Static settings:LatinFontPreset.TimesNewRoman}" />
+                            </ComboBox>
+                        </components:SettingsRow>
 
-                                <StackPanel Grid.Column="0">
-                                    <TextBlock
-                                        Margin="{StaticResource AfSettingsFieldLabelGap}"
-                                        Style="{StaticResource AfSettingsFieldLabelStyle}"
-                                        Text="西文字体" />
-                                    <ComboBox
-                                        HorizontalAlignment="Stretch"
-                                        SelectedValue="{Binding ViewModel.LatinFont, Mode=TwoWay}"
-                                        SelectedValuePath="Tag">
-                                        <ComboBoxItem Content="Segoe UI" Tag="{x:Static settings:LatinFontPreset.SegoeUi}" />
-                                        <ComboBoxItem Content="Arial" Tag="{x:Static settings:LatinFontPreset.Arial}" />
-                                        <ComboBoxItem Content="Calibri" Tag="{x:Static settings:LatinFontPreset.Calibri}" />
-                                        <ComboBoxItem Content="Verdana" Tag="{x:Static settings:LatinFontPreset.Verdana}" />
-                                        <ComboBoxItem Content="Consolas" Tag="{x:Static settings:LatinFontPreset.Consolas}" />
-                                        <ComboBoxItem Content="Times New Roman" Tag="{x:Static settings:LatinFontPreset.TimesNewRoman}" />
-                                    </ComboBox>
-                                </StackPanel>
+                        <components:SettingsRow
+                            Description="汉字使用的字体"
+                            Icon="{ui:SymbolIcon LocalLanguage24}"
+                            Title="中文字体">
+                            <ComboBox
+                                MinWidth="200"
+                                SelectedValue="{Binding ViewModel.CjkFont, Mode=TwoWay}"
+                                SelectedValuePath="Tag">
+                                <ComboBoxItem Content="跟随系统" Tag="{x:Static settings:CjkFontPreset.SystemDefault}" />
+                                <ComboBoxItem Content="微软雅黑" Tag="{x:Static settings:CjkFontPreset.MicrosoftYaHei}" />
+                                <ComboBoxItem Content="等线" Tag="{x:Static settings:CjkFontPreset.DengXian}" />
+                                <ComboBoxItem Content="宋体" Tag="{x:Static settings:CjkFontPreset.SimSun}" />
+                                <ComboBoxItem Content="黑体" Tag="{x:Static settings:CjkFontPreset.SimHei}" />
+                                <ComboBoxItem Content="楷体" Tag="{x:Static settings:CjkFontPreset.KaiTi}" />
+                                <ComboBoxItem Content="仿宋" Tag="{x:Static settings:CjkFontPreset.FangSong}" />
+                            </ComboBox>
+                        </components:SettingsRow>
 
-                                <StackPanel Grid.Column="2">
-                                    <TextBlock
-                                        Margin="{StaticResource AfSettingsFieldLabelGap}"
-                                        Style="{StaticResource AfSettingsFieldLabelStyle}"
-                                        Text="中文字体" />
-                                    <ComboBox
-                                        HorizontalAlignment="Stretch"
-                                        SelectedValue="{Binding ViewModel.CjkFont, Mode=TwoWay}"
-                                        SelectedValuePath="Tag">
-                                        <ComboBoxItem Content="跟随系统" Tag="{x:Static settings:CjkFontPreset.SystemDefault}" />
-                                        <ComboBoxItem Content="微软雅黑" Tag="{x:Static settings:CjkFontPreset.MicrosoftYaHei}" />
-                                        <ComboBoxItem Content="等线" Tag="{x:Static settings:CjkFontPreset.DengXian}" />
-                                        <ComboBoxItem Content="宋体" Tag="{x:Static settings:CjkFontPreset.SimSun}" />
-                                        <ComboBoxItem Content="黑体" Tag="{x:Static settings:CjkFontPreset.SimHei}" />
-                                        <ComboBoxItem Content="楷体" Tag="{x:Static settings:CjkFontPreset.KaiTi}" />
-                                        <ComboBoxItem Content="仿宋" Tag="{x:Static settings:CjkFontPreset.FangSong}" />
-                                    </ComboBox>
-                                </StackPanel>
-                            </Grid>
-
-                            <TextBlock
-                                Margin="0,12,0,6"
-                                Style="{StaticResource AfSettingsFieldLabelStyle}"
-                                Text="字重" />
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <!--
-                                    上下限用 Binding 而不是 x:Static：x:Static 返回的是装箱的 int，
-                                    RangeBase.Maximum 需要 double，标记扩展不会做这个转换，而绑定会。
-                                    The bounds use Binding rather than x:Static because x:Static yields a boxed
-                                    int, RangeBase.Maximum wants a double, and the markup extension performs no
-                                    conversion while the binding engine does.
-                                -->
+                        <!--
+                            上下限用 Binding 而不是 x:Static：x:Static 返回装箱的 int，
+                            RangeBase.Maximum 需要 double，标记扩展不做这个转换，而绑定会。
+                            The bounds use Binding rather than x:Static because x:Static yields a boxed int,
+                            RangeBase.Maximum wants a double, and the markup extension performs no conversion
+                            while the binding engine does.
+                        -->
+                        <components:SettingsRow
+                            Description="设置窗口、媒体栏与通知共用的文字粗细"
+                            Icon="{ui:SymbolIcon TextBold24}"
+                            Title="字体粗细">
+                            <StackPanel Orientation="Horizontal">
                                 <Slider
                                     IsSnapToTickEnabled="True"
                                     Maximum="{Binding Source={x:Static settings:AppearanceSettings.MaximumFontWeight}}"
                                     Minimum="{Binding Source={x:Static settings:AppearanceSettings.MinimumFontWeight}}"
+                                    Style="{StaticResource AfSettingsRowSliderStyle}"
                                     TickFrequency="50"
                                     Value="{Binding ViewModel.FontWeight, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                <TextBlock Style="{StaticResource AfSettingsRowValueStyle}" Text="{Binding ViewModel.FontWeight}" />
+                            </StackPanel>
+                        </components:SettingsRow>
+
+                        <Border
+                            Margin="0,4,0,0"
+                            Padding="16,13"
+                            Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                            BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                            BorderThickness="1"
+                            CornerRadius="6">
+                            <StackPanel>
                                 <TextBlock
-                                    Grid.Column="1"
-                                    Margin="12,0,0,0"
-                                    Style="{StaticResource AfSettingsFieldValueStyle}"
-                                    Text="{Binding ViewModel.FontWeight}" />
-                            </Grid>
-
-                            <Border
-                                Margin="0,14,0,0"
-                                Padding="14,12"
-                                Background="{DynamicResource SubtleFillColorSecondaryBrush}"
-                                CornerRadius="6">
-                                <StackPanel>
-                                    <TextBlock
-                                        Margin="0,0,0,8"
-                                        Style="{StaticResource AfSettingsFieldLabelStyle}"
-                                        Text="字样预览" />
-                                    <TextBlock
-                                        FontFamily="{DynamicResource AppTextFontFamily}"
-                                        FontSize="20"
-                                        FontWeight="{DynamicResource AppTextFontWeight}"
-                                        Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                        Text="AF Media Bar · 你是我的一切" />
-                                    <TextBlock
-                                        Margin="0,8,0,0"
-                                        FontFamily="{DynamicResource AppTextFontFamily}"
-                                        FontSize="16"
-                                        FontWeight="{DynamicResource AppTextFontWeight}"
-                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                        Text="You are my everything · 君は私のすべて" />
-                                    <TextBlock
-                                        Margin="0,8,0,0"
-                                        FontFamily="{DynamicResource AppTextFontFamily}"
-                                        FontSize="13"
-                                        FontWeight="{DynamicResource AppTextFontWeight}"
-                                        Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                                        Text="당신은 나의 전부 · You are my everything · 你是我的一切" />
-                                </StackPanel>
-                            </Border>
-                        </StackPanel>
-                    </ui:CardControl>
-                </components:SettingsGroup>
-
-                <components:SettingsGroup Header="主题与材质" Icon="{ui:SymbolIcon Color24}">
-                    <StackPanel>
-                        <ui:CardControl Margin="{StaticResource AfSettingsCardGap}" Style="{StaticResource AfSettingsCardStackedStyle}">
-                            <ui:CardControl.Icon>
-                                <ui:SymbolIcon Symbol="Color24" />
-                            </ui:CardControl.Icon>
-                            <ui:CardControl.Header>
-                                <StackPanel>
-                                    <TextBlock Style="{StaticResource AfSettingsCardTitleStyle}" Text="应用主题" />
-                                    <TextBlock
-                                        Style="{StaticResource AfSettingsCardDescriptionStyle}"
-                                        Text="整个程序界面的明暗外观；自动跟随 Windows 的浅色/深色设置。" />
-                                </StackPanel>
-                            </ui:CardControl.Header>
-                            <WrapPanel>
-                                <RadioButton
-                                    GroupName="ApplicationThemeMode"
-                                    Command="{Binding ViewModel.SetApplicationThemeModeCommand}"
-                                    CommandParameter="{x:Static settings:ApplicationThemeMode.Automatic}"
-                                    Content="自动（跟随系统）"
-                                    IsChecked="{Binding ViewModel.ApplicationThemeMode, Mode=OneWay, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Automatic}"
-                                    Style="{StaticResource AfSettingsChoiceRadioStyle}" />
-                                <RadioButton
-                                    GroupName="ApplicationThemeMode"
-                                    Command="{Binding ViewModel.SetApplicationThemeModeCommand}"
-                                    CommandParameter="{x:Static settings:ApplicationThemeMode.Light}"
-                                    Content="浅色"
-                                    IsChecked="{Binding ViewModel.ApplicationThemeMode, Mode=OneWay, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Light}"
-                                    Style="{StaticResource AfSettingsChoiceRadioStyle}" />
-                                <RadioButton
-                                    GroupName="ApplicationThemeMode"
-                                    Command="{Binding ViewModel.SetApplicationThemeModeCommand}"
-                                    CommandParameter="{x:Static settings:ApplicationThemeMode.Dark}"
-                                    Content="深色"
-                                    IsChecked="{Binding ViewModel.ApplicationThemeMode, Mode=OneWay, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Dark}"
-                                    Style="{StaticResource AfSettingsChoiceRadioStyle}" />
-                            </WrapPanel>
-                        </ui:CardControl>
-
-                        <ui:CardControl Margin="{StaticResource AfSettingsCardGap}" Style="{StaticResource AfSettingsCardStackedStyle}">
-                            <ui:CardControl.Icon>
-                                <ui:SymbolIcon Symbol="WindowConsole20" />
-                            </ui:CardControl.Icon>
-                            <ui:CardControl.Header>
-                                <StackPanel>
-                                    <TextBlock Style="{StaticResource AfSettingsCardTitleStyle}" Text="窗口背景材质" />
-                                    <TextBlock
-                                        Style="{StaticResource AfSettingsCardDescriptionStyle}"
-                                        Text="统一设置窗口、托盘弹窗和右键菜单的背衬效果；系统禁用透明效果时会自动退回纯色。" />
-                                </StackPanel>
-                            </ui:CardControl.Header>
-                            <WrapPanel>
-                                <RadioButton
-                                    GroupName="BackdropMode"
-                                    Command="{Binding ViewModel.SetBackdropModeCommand}"
-                                    CommandParameter="{x:Static settings:ApplicationBackdropMode.FluentSolid}"
-                                    Content="Fluent 纯色"
-                                    IsChecked="{Binding ViewModel.BackdropMode, Mode=OneWay, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=FluentSolid}"
-                                    Style="{StaticResource AfSettingsChoiceRadioStyle}" />
-                                <RadioButton
-                                    GroupName="BackdropMode"
-                                    Command="{Binding ViewModel.SetBackdropModeCommand}"
-                                    CommandParameter="{x:Static settings:ApplicationBackdropMode.Mica}"
-                                    Content="Mica 云母"
-                                    IsChecked="{Binding ViewModel.BackdropMode, Mode=OneWay, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Mica}"
-                                    Style="{StaticResource AfSettingsChoiceRadioStyle}" />
-                                <RadioButton
-                                    GroupName="BackdropMode"
-                                    Command="{Binding ViewModel.SetBackdropModeCommand}"
-                                    CommandParameter="{x:Static settings:ApplicationBackdropMode.Acrylic}"
-                                    Content="Acrylic 亚克力"
-                                    IsChecked="{Binding ViewModel.BackdropMode, Mode=OneWay, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Acrylic}"
-                                    Style="{StaticResource AfSettingsChoiceRadioStyle}" />
-                            </WrapPanel>
-                        </ui:CardControl>
-
-                        <ui:CardControl Margin="{StaticResource AfSettingsCardGapLast}">
-                            <ui:CardControl.Icon>
-                                <ui:SymbolIcon Symbol="ArrowSync24" />
-                            </ui:CardControl.Icon>
-                            <ui:CardControl.Header>
-                                <StackPanel>
-                                    <TextBlock Style="{StaticResource AfSettingsCardTitleStyle}" Text="交互动效" />
-                                    <TextBlock
-                                        Style="{StaticResource AfSettingsCardDescriptionStyle}"
-                                        Text="由系统动画设置、高对比度和渲染能力自动决定，不需要手动配置。" />
-                                </StackPanel>
-                            </ui:CardControl.Header>
-                            <StackPanel MinWidth="{StaticResource AfSettingsFieldWidth}">
-                                <ContentControl
-                                    HorizontalAlignment="Left"
-                                    Content="{Binding ViewModel.MotionModeText}"
-                                    Style="{StaticResource AfSettingsChipAccentStyle}" />
+                                    Margin="0,0,0,8"
+                                    Style="{StaticResource AfSettingsRowDescriptionStyle}"
+                                    Text="字样预览" />
+                                <TextBlock
+                                    FontFamily="{DynamicResource AppTextFontFamily}"
+                                    FontSize="20"
+                                    FontWeight="{DynamicResource AppTextFontWeight}"
+                                    Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                    Text="AF Media Bar · 你是我的一切" />
                                 <TextBlock
                                     Margin="0,8,0,0"
-                                    Style="{StaticResource AfSettingsHintTextStyle}"
-                                    Text="{Binding ViewModel.MotionDetailText}" />
+                                    FontFamily="{DynamicResource AppTextFontFamily}"
+                                    FontSize="16"
+                                    FontWeight="{DynamicResource AppTextFontWeight}"
+                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                    Text="You are my everything · 君は私のすべて" />
+                                <TextBlock
+                                    Margin="0,8,0,0"
+                                    FontFamily="{DynamicResource AppTextFontFamily}"
+                                    FontSize="13"
+                                    FontWeight="{DynamicResource AppTextFontWeight}"
+                                    Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                    Text="당신은 나의 전부 · You are my everything · 你是我的一切" />
                             </StackPanel>
-                        </ui:CardControl>
+                        </Border>
                     </StackPanel>
                 </components:SettingsGroup>
 
-                <components:SettingsGroup Header="播放器文字" Icon="{ui:SymbolIcon TextColor24}">
-                    <ui:CardControl Margin="{StaticResource AfSettingsCardGapLast}" Style="{StaticResource AfSettingsCardStackedStyle}">
-                        <ui:CardControl.Icon>
-                            <ui:SymbolIcon Symbol="TextColor24" />
-                        </ui:CardControl.Icon>
-                        <ui:CardControl.Header>
-                            <StackPanel>
-                                <TextBlock Style="{StaticResource AfSettingsCardTitleStyle}" Text="任务栏文字颜色" />
-                                <TextBlock
-                                    Style="{StaticResource AfSettingsCardDescriptionStyle}"
-                                    Text="自动模式会读取文字背后任务栏的实际颜色来选深浅；强制模式在高对比度下仍然生效。" />
-                            </StackPanel>
-                        </ui:CardControl.Header>
-                        <StackPanel>
-                            <WrapPanel>
-                                <RadioButton
-                                    GroupName="ForegroundMode"
-                                    Command="{Binding ViewModel.SetPlayerForegroundModeCommand}"
-                                    CommandParameter="{x:Static settings:PlayerForegroundMode.Automatic}"
-                                    Content="自动（根据背景）"
-                                    IsChecked="{Binding ViewModel.PlayerForegroundMode, Mode=OneWay, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=Automatic}"
-                                    Style="{StaticResource AfSettingsChoiceRadioStyle}" />
-                                <RadioButton
-                                    GroupName="ForegroundMode"
-                                    Command="{Binding ViewModel.SetPlayerForegroundModeCommand}"
-                                    CommandParameter="{x:Static settings:PlayerForegroundMode.LightText}"
-                                    Content="始终浅色文字"
-                                    IsChecked="{Binding ViewModel.PlayerForegroundMode, Mode=OneWay, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=LightText}"
-                                    Style="{StaticResource AfSettingsChoiceRadioStyle}" />
-                                <RadioButton
-                                    GroupName="ForegroundMode"
-                                    Command="{Binding ViewModel.SetPlayerForegroundModeCommand}"
-                                    CommandParameter="{x:Static settings:PlayerForegroundMode.DarkText}"
-                                    Content="始终深色文字"
-                                    IsChecked="{Binding ViewModel.PlayerForegroundMode, Mode=OneWay, Converter={StaticResource EnumToBooleanConverter}, ConverterParameter=DarkText}"
-                                    Style="{StaticResource AfSettingsChoiceRadioStyle}" />
-                            </WrapPanel>
+                <components:SettingsGroup Header="主题与背景" Icon="{ui:SymbolIcon Color24}">
+                    <StackPanel>
+                        <components:SettingsRow
+                            Description="自动跟随 Windows 的浅色 / 深色设置"
+                            Icon="{ui:SymbolIcon Color24}"
+                            Title="应用主题">
+                            <ComboBox
+                                MinWidth="180"
+                                SelectedValue="{Binding ViewModel.ApplicationThemeMode, Mode=TwoWay}"
+                                SelectedValuePath="Tag">
+                                <ComboBoxItem Content="自动（跟随系统）" Tag="{x:Static settings:ApplicationThemeMode.Automatic}" />
+                                <ComboBoxItem Content="浅色" Tag="{x:Static settings:ApplicationThemeMode.Light}" />
+                                <ComboBoxItem Content="深色" Tag="{x:Static settings:ApplicationThemeMode.Dark}" />
+                            </ComboBox>
+                        </components:SettingsRow>
 
-                            <Grid Margin="0,14,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="12" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
-                                <Border
-                                    Grid.Column="0"
-                                    Padding="14,10"
-                                    Background="#FF202020"
-                                    CornerRadius="6">
-                                    <StackPanel>
-                                        <TextBlock Style="{StaticResource ForegroundPreviewTextStyle}" />
-                                        <TextBlock
-                                            Margin="0,4,0,0"
-                                            FontSize="11"
-                                            Foreground="#B3FFFFFF"
-                                            Text="深色壁纸" />
-                                    </StackPanel>
-                                </Border>
-                                <Border
-                                    Grid.Column="2"
-                                    Padding="14,10"
-                                    Background="#FFF2F2F2"
-                                    CornerRadius="6">
-                                    <StackPanel>
-                                        <TextBlock Style="{StaticResource ForegroundPreviewOnLightTextStyle}" />
-                                        <TextBlock
-                                            Margin="0,4,0,0"
-                                            FontSize="11"
-                                            Foreground="#B3000000"
-                                            Text="浅色壁纸" />
-                                    </StackPanel>
-                                </Border>
-                            </Grid>
-                            <TextBlock
-                                Margin="0,8,0,0"
-                                Style="{StaticResource AfSettingsHintTextStyle}"
-                                Text="自动模式的结果取决于任务栏那一块的实际颜色，因此两块预览是示意；强制模式在两块上都会用同一种文字颜色。" />
-                        </StackPanel>
-                    </ui:CardControl>
+                        <components:SettingsRow
+                            Description="统一设置窗口、托盘弹窗与右键菜单的背衬"
+                            Icon="{ui:SymbolIcon WindowConsole20}"
+                            Title="窗口背景材质">
+                            <ComboBox
+                                MinWidth="180"
+                                SelectedValue="{Binding ViewModel.BackdropMode, Mode=TwoWay}"
+                                SelectedValuePath="Tag">
+                                <ComboBoxItem Content="纯色" Tag="{x:Static settings:ApplicationBackdropMode.FluentSolid}" />
+                                <ComboBoxItem Content="云母（Mica）" Tag="{x:Static settings:ApplicationBackdropMode.Mica}" />
+                                <ComboBoxItem Content="亚克力（Acrylic）" Tag="{x:Static settings:ApplicationBackdropMode.Acrylic}" />
+                            </ComboBox>
+                        </components:SettingsRow>
+
+                        <components:SettingsRow
+                            Badge="{Binding ViewModel.MotionModeText}"
+                            BadgeTone="Accent"
+                            Description="{Binding ViewModel.MotionDetailText}"
+                            Icon="{ui:SymbolIcon ArrowSync24}"
+                            Title="交互动效" />
+                    </StackPanel>
                 </components:SettingsGroup>
 
-                <components:SettingsGroup
-                    Header="灵动岛表面（未实现）"
-                    Icon="{ui:SymbolIcon WindowConsole20}"
-                    StatusText="未实现"
-                    StatusTone="Neutral"
-                    Tint="Muted">
-                    <ui:CardControl Margin="{StaticResource AfSettingsCardGapLast}" IsEnabled="False" Style="{StaticResource AfSettingsCardStackedStyle}">
-                        <ui:CardControl.Icon>
-                            <ui:SymbolIcon Symbol="Square24" />
-                        </ui:CardControl.Icon>
-                        <ui:CardControl.Header>
-                            <StackPanel>
-                                <TextBlock Style="{StaticResource AfSettingsCardTitleStyle}" Text="灵动岛的独立表面" />
-                                <TextBlock
-                                    Style="{StaticResource AfSettingsCardDescriptionStyle}"
-                                    Text="这三项只影响灵动岛模式，与任务栏的透明主体互不影响；灵动岛尚未实现，因此当前只读。" />
-                            </StackPanel>
-                        </ui:CardControl.Header>
-                        <StackPanel>
-                            <components:SettingsDiagram Margin="0,0,0,14" Kind="DynamicIslandSurface" />
-
-                            <TextBlock
-                                Margin="{StaticResource AfSettingsFieldLabelGap}"
-                                Style="{StaticResource AfSettingsFieldLabelStyle}"
-                                Text="基础表面风格" />
+                <components:SettingsGroup Header="媒体栏文字" Icon="{ui:SymbolIcon TextColor24}">
+                    <StackPanel>
+                        <components:SettingsRow
+                            Description="自动依据文字背后的实际颜色选择深浅"
+                            Icon="{ui:SymbolIcon TextColor24}"
+                            Title="文字颜色">
                             <ComboBox
-                                HorizontalAlignment="Left"
-                                MinWidth="{StaticResource AfSettingsSelectMinWidth}"
-                                SelectedValue="{Binding ViewModel.SurfaceStyle, Mode=TwoWay}"
+                                MinWidth="200"
+                                SelectedValue="{Binding ViewModel.PlayerForegroundMode, Mode=TwoWay}"
                                 SelectedValuePath="Tag">
-                                <ComboBoxItem Content="自动" Tag="{x:Static settings:PlayerSurfaceStyle.Automatic}" />
-                                <ComboBoxItem Content="纯色" Tag="{x:Static settings:PlayerSurfaceStyle.Solid}" />
-                                <ComboBoxItem Content="主题色调" Tag="{x:Static settings:PlayerSurfaceStyle.ThemeTint}" />
+                                <ComboBoxItem Content="自动（根据背景）" Tag="{x:Static settings:PlayerForegroundMode.Automatic}" />
+                                <ComboBoxItem Content="始终浅色文字" Tag="{x:Static settings:PlayerForegroundMode.LightText}" />
+                                <ComboBoxItem Content="始终深色文字" Tag="{x:Static settings:PlayerForegroundMode.DarkText}" />
                             </ComboBox>
+                        </components:SettingsRow>
 
-                            <TextBlock
-                                Margin="0,10,0,6"
-                                Style="{StaticResource AfSettingsFieldLabelStyle}"
-                                Text="背景不透明度" />
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <Slider
-                                    Maximum="100"
-                                    Minimum="0"
-                                    Value="{Binding ViewModel.SurfaceOpacityPercent, Mode=TwoWay}" />
-                                <TextBlock
-                                    Grid.Column="1"
-                                    Margin="12,0,0,0"
-                                    Style="{StaticResource AfSettingsFieldValueStyle}"
-                                    Text="{Binding ViewModel.SurfaceOpacityPercent, StringFormat={}{0}%}" />
-                            </Grid>
-
-                            <TextBlock
-                                Margin="0,10,0,6"
-                                Style="{StaticResource AfSettingsFieldLabelStyle}"
-                                Text="圆角半径" />
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <Slider
-                                    Maximum="24"
-                                    Minimum="0"
-                                    Value="{Binding ViewModel.SurfaceCornerRadiusDip, Mode=TwoWay}" />
-                                <TextBlock
-                                    Grid.Column="1"
-                                    Margin="12,0,0,0"
-                                    Style="{StaticResource AfSettingsFieldValueStyle}"
-                                    Text="{Binding ViewModel.SurfaceCornerRadiusDip, StringFormat={}{0:0.#} DIP}" />
-                            </Grid>
-                        </StackPanel>
-                    </ui:CardControl>
+                        <Grid Margin="0,4,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="12" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border
+                                Grid.Column="0"
+                                Padding="14,10"
+                                Background="#FF202020"
+                                CornerRadius="6">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource ForegroundPreviewTextStyle}" />
+                                    <TextBlock
+                                        Margin="0,4,0,0"
+                                        FontSize="11"
+                                        Foreground="#B3FFFFFF"
+                                        Text="深色壁纸" />
+                                </StackPanel>
+                            </Border>
+                            <Border
+                                Grid.Column="2"
+                                Padding="14,10"
+                                Background="#FFF2F2F2"
+                                CornerRadius="6">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource ForegroundPreviewOnLightTextStyle}" />
+                                    <TextBlock
+                                        Margin="0,4,0,0"
+                                        FontSize="11"
+                                        Foreground="#B3000000"
+                                        Text="浅色壁纸" />
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+                        <TextBlock
+                            Margin="0,8,0,0"
+                            Style="{StaticResource AfSettingsHintTextStyle}"
+                            Text="自动模式的结果取决于任务栏那一块的实际颜色，因此两块预览为示意；强制模式在两块上使用同一种文字颜色。" />
+                    </StackPanel>
                 </components:SettingsGroup>
 
                 <ui:Button
-                    Margin="0,20,0,40"
+                    Margin="0,16,0,40"
                     HorizontalAlignment="Left"
                     Click="ResetButton_Click"
                     Content="恢复本页默认设置"

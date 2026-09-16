@@ -33,13 +33,13 @@ public partial class DisplayModesViewModel : ObservableObject
     public bool IsUnimplementedMode => !IsTaskbarMode;
 
     /// <summary>
-    /// 实际承载模式的文本，供页头状态芯片显示。它读的是真实 <see cref="WindowMode"/>，
+    /// 当前显示模式的文本，供页头状态芯片显示。它读的是真实 <see cref="WindowMode"/>，
     /// 而不是本页的预览选择——页内选择只改变高亮，从不切换窗口，两者不能混为一谈。
     /// Text for the header status chip. It reads the real <see cref="WindowMode"/> rather than this page's
     /// preview selection, because the in-page selection only changes the highlight and never switches the
     /// window; the two must not be conflated.
     /// </summary>
-    public string HostingModeText => CurrentWindowMode == WindowMode.Taskbar ? "当前承载：任务栏" : "当前承载：灵动岛";
+    public string HostingModeText => CurrentWindowMode == WindowMode.Taskbar ? "当前：任务栏" : "当前：灵动岛";
 
     /// <summary>
     /// 任务栏是否就是当前运行模式。模式卡片用它决定“当前模式”芯片是否显示，
@@ -287,6 +287,43 @@ public partial class DisplayModesViewModel : ObservableObject
 
     private TaskbarFullPanelSettings FullPanelSettings => SettingsManager.Current.TaskbarExperience.FullPanel.Normalize();
 
+    /// <summary>
+    /// 灵动岛模式自己的背景样式。它写在 <c>DynamicIslandSurface</c> 上，与任务栏表面互相独立。
+    /// 界面位于显示模式页的灵动岛分区，因此属性也归这里，避免同一份设置被两个视图模型各写一次。
+    /// The dynamic island's own background style, stored on <c>DynamicIslandSurface</c> and independent of the
+    /// taskbar surface. The interface lives in the display-mode page's island section, so the property lives here
+    /// too and one setting is never written from two view models.
+    /// </summary>
+    public PlayerSurfaceStyle IslandSurfaceStyle
+    {
+        get => IslandSurface.Style;
+        set => PublishIslandSurface(IslandSurface with { Style = value });
+    }
+
+    /// <inheritdoc cref="IslandSurfaceStyle" />
+    public int IslandSurfaceOpacityPercent
+    {
+        get => IslandSurface.BackgroundOpacityPercent;
+        set => PublishIslandSurface(IslandSurface with { BackgroundOpacityPercent = value });
+    }
+
+    /// <inheritdoc cref="IslandSurfaceStyle" />
+    public double IslandSurfaceCornerRadiusDip
+    {
+        get => IslandSurface.CornerRadiusDip;
+        set => PublishIslandSurface(IslandSurface with { CornerRadiusDip = value });
+    }
+
+    private static ModeSurfaceSettings IslandSurface => SettingsManager.Current.DynamicIslandSurface;
+
+    private void PublishIslandSurface(ModeSurfaceSettings settings)
+    {
+        SettingsManager.Current.DynamicIslandSurface = settings.Normalize();
+        OnPropertyChanged(nameof(IslandSurfaceStyle));
+        OnPropertyChanged(nameof(IslandSurfaceOpacityPercent));
+        OnPropertyChanged(nameof(IslandSurfaceCornerRadiusDip));
+    }
+
     public LayoutOrientationMode Orientation
     {
         get => SettingsManager.Current.LayoutOrientationMode;
@@ -489,6 +526,8 @@ public partial class DisplayModesViewModel : ObservableObject
             OnPropertyChanged(nameof(IsDesktopCardMode)); OnPropertyChanged(nameof(IsFloatingBallMode)); OnPropertyChanged(nameof(IsUnimplementedMode));
             OnPropertyChanged(nameof(HostingModeText)); OnPropertyChanged(nameof(IsTaskbarHostingActive));
             OnPropertyChanged(nameof(DynamicIslandBackgroundMode)); OnPropertyChanged(nameof(DynamicIslandEdge));
+            OnPropertyChanged(nameof(IslandSurfaceStyle)); OnPropertyChanged(nameof(IslandSurfaceOpacityPercent));
+            OnPropertyChanged(nameof(IslandSurfaceCornerRadiusDip));
             RaiseExperience(); OnPropertyChanged(nameof(Orientation)); OnPropertyChanged(nameof(IsTaskbarPositionLocked));
             OnPropertyChanged(nameof(IsTaskbarAvoidingIcons)); OnPropertyChanged(nameof(TaskbarCrossAxisOffsetDip));
             OnPropertyChanged(nameof(TaskbarTargetMonitorDeviceId));

@@ -28,12 +28,6 @@ public partial class AppearanceViewModel : ObservableObject
         _applicationThemeMode = appearance.ApplicationThemeMode;
         _backdropMode = appearance.BackdropMode;
         SettingsManager.SettingsChanged += OnSettingsChanged;
-        SettingsManager.LayoutSettingsChanged += (_, _) =>
-        {
-            OnPropertyChanged(nameof(CurrentSurfaceName)); OnPropertyChanged(nameof(SurfaceStyle));
-            OnPropertyChanged(nameof(SurfaceOpacityPercent)); OnPropertyChanged(nameof(SurfaceCornerRadiusDip));
-            OnPropertyChanged(nameof(CanCustomizeCurrentSurface));
-        };
     }
 
     public LatinFontPreset LatinFont
@@ -73,10 +67,16 @@ public partial class AppearanceViewModel : ObservableObject
         }
     }
 
+    /// <summary>
+    /// 播放器文字颜色模式。写入即发布设置，因此下拉框可以直接双向绑定；
+    /// 原有的 <c>SetPlayerForegroundModeCommand</c> 仍走同一条写入路径，两条入口行为一致。
+    /// Player text colour mode. Writing publishes the setting, so a select can bind two-way; the existing
+    /// <c>SetPlayerForegroundModeCommand</c> still runs through the same write path, so both entries behave alike.
+    /// </summary>
     public PlayerForegroundMode PlayerForegroundMode
     {
         get => _playerForegroundMode;
-        private set
+        set
         {
             if (SetProperty(ref _playerForegroundMode, value))
             {
@@ -85,10 +85,11 @@ public partial class AppearanceViewModel : ObservableObject
         }
     }
 
+    /// <summary>应用主题模式。写入即发布设置，供下拉框双向绑定。/ Application theme mode. Writing publishes the setting for a two-way select.</summary>
     public ApplicationThemeMode ApplicationThemeMode
     {
         get => _applicationThemeMode;
-        private set
+        set
         {
             if (SetProperty(ref _applicationThemeMode, value))
             {
@@ -97,10 +98,11 @@ public partial class AppearanceViewModel : ObservableObject
         }
     }
 
+    /// <summary>窗口背景材质。写入即发布设置，供下拉框双向绑定。/ Window backdrop material. Writing publishes the setting for a two-way select.</summary>
     public ApplicationBackdropMode BackdropMode
     {
         get => _backdropMode;
-        private set
+        set
         {
             if (SetProperty(ref _backdropMode, value))
             {
@@ -108,9 +110,6 @@ public partial class AppearanceViewModel : ObservableObject
             }
         }
     }
-
-    public string CurrentSurfaceName => SettingsManager.Current.WindowMode == WindowMode.Taskbar ? "任务栏模式" : "灵动岛模式";
-    public bool CanCustomizeCurrentSurface => SettingsManager.Current.WindowMode != WindowMode.Taskbar;
 
     /// <summary>当前桌面环境的动效级别。/ Current motion level for the desktop environment.</summary>
     public string MotionModeText => MotionPolicy.ResolveCurrent().Mode switch
@@ -127,39 +126,6 @@ public partial class AppearanceViewModel : ObservableObject
         MotionMode.Reduced => "已关闭模糊、跑马灯和连续频谱",
         _ => "跟随系统设置，避免过渡延迟"
     };
-
-    public PlayerSurfaceStyle SurfaceStyle
-    {
-        get => CurrentSurface.Style;
-        set => PublishSurface(CurrentSurface with { Style = value });
-    }
-
-    public int SurfaceOpacityPercent
-    {
-        get => CurrentSurface.BackgroundOpacityPercent;
-        set => PublishSurface(CurrentSurface with { BackgroundOpacityPercent = value });
-    }
-
-    public double SurfaceCornerRadiusDip
-    {
-        get => CurrentSurface.CornerRadiusDip;
-        set => PublishSurface(CurrentSurface with { CornerRadiusDip = value });
-    }
-
-    private static ModeSurfaceSettings CurrentSurface => SettingsManager.Current.WindowMode == WindowMode.Taskbar
-        ? SettingsManager.Current.TaskbarSurface
-        : SettingsManager.Current.DynamicIslandSurface;
-
-    private void PublishSurface(ModeSurfaceSettings settings)
-    {
-        if (SettingsManager.Current.WindowMode == WindowMode.Taskbar)
-            SettingsManager.Current.TaskbarSurface = settings.Normalize();
-        else
-            SettingsManager.Current.DynamicIslandSurface = settings.Normalize();
-        OnPropertyChanged(nameof(SurfaceStyle));
-        OnPropertyChanged(nameof(SurfaceOpacityPercent));
-        OnPropertyChanged(nameof(SurfaceCornerRadiusDip));
-    }
 
     [RelayCommand]
     private void SetPlayerForegroundMode(PlayerForegroundMode mode) => PlayerForegroundMode = mode;
@@ -194,11 +160,6 @@ public partial class AppearanceViewModel : ObservableObject
             PlayerForegroundMode = appearance.PlayerForegroundMode;
             ApplicationThemeMode = appearance.ApplicationThemeMode;
             BackdropMode = appearance.BackdropMode;
-            OnPropertyChanged(nameof(CurrentSurfaceName));
-            OnPropertyChanged(nameof(SurfaceStyle));
-            OnPropertyChanged(nameof(SurfaceOpacityPercent));
-            OnPropertyChanged(nameof(SurfaceCornerRadiusDip));
-            OnPropertyChanged(nameof(CanCustomizeCurrentSurface));
         }
         finally { _isRefreshing = false; }
     }

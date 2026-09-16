@@ -63,6 +63,26 @@ public static class SettingsRevealAnimator
         }
     }
 
+    /// <summary>
+    /// 重新播放一次揭示，用于同一页面内的内容切换（例如显示模式页切换承载模式）。
+    /// 它会先清掉已揭示标记，因此调用方必须只在内容确实换成新的一组块时调用，
+    /// 否则同一次进入页面会被播放两遍。
+    /// Replays the reveal, for swapping content inside one page, such as switching the hosting mode on the
+    /// display-mode page. It clears the revealed flag first, so callers must only invoke it when the content
+    /// really is a new set of blocks; otherwise one page visit would animate twice.
+    /// </summary>
+    /// <param name="host">刚刚显示出来的内容容器。/ The content container that has just become visible.</param>
+    public static void Replay(Panel? host)
+    {
+        if (host is null)
+        {
+            return;
+        }
+
+        host.ClearValue(HasRevealedProperty);
+        Play(host);
+    }
+
     private static void PlayBlock(UIElement block, SettingsReveal reveal, KeySpline spline)
     {
         block.BeginAnimation(UIElement.OpacityProperty, null);

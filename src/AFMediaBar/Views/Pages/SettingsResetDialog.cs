@@ -14,7 +14,7 @@ internal static class SettingsResetDialog
         var dialog = new ContentDialog
         {
             Title = "恢复默认设置",
-            Content = $"确定要恢复{scope}默认设置吗？\n当前媒体播放不会受到影响。",
+            Content = $"将重置「{scope}」中的全部选项，其它页面与当前播放不受影响。",
             PrimaryButtonText = "恢复",
             CloseButtonText = "取消",
             DefaultButton = ContentDialogButton.Close

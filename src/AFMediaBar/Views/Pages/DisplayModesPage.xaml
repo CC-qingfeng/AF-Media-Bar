@@ -11,24 +11,19 @@
     <!--
         显示模式页 / Display modes page
 
-        本页承担任务栏媒体栏的承载、位置、尺寸和三层体验。结构上的四个决定：
+        页面分成两段：顶部四张模式卡片，下面只显示所选模式的设置。
+        每个模式一个独立分区（`*ModeSection`），互斥显示；未实现的模式显示占位提示。
+        分区而不是独立页面，是为了让“每个模式一个设置页”这条路线可以机械地推进：
+        将来把某个分区的内容整体搬到一个新 Page 即可，本页则只留下模式卡片。
 
-        1. 模式选择从页面顶部移到最后一个分组，并且不再门控任务栏设置。以前点“灵动岛”会把整页任务栏设置
-           换成一张“尚未实现”的卡片，用户想回去只能再点回“任务栏”。
-        2. “当前模式”芯片读真实 WindowMode，而不是写死在任务栏卡片上。
-        3. 静置层/悬停层/完整层各自带一张只解释自己那一层的图，取代页面顶部一张抽象的“三层总览”。
-        4. 悬停层与完整层的详细设置在父卡片内部的子区域里，跟随开关折叠；关闭时不再只是平级卡片变灰。
+        Two bands: four mode cards at the top, and below them only the selected mode's settings. Each mode owns a
+        separate section (`*ModeSection`) and exactly one is visible; an unimplemented mode shows a placeholder
+        notice. Sections rather than separate pages keep "one settings page per mode" a mechanical step later:
+        move a section's content into a new Page and this page keeps only the cards.
 
-        This page owns how the taskbar bar is hosted, positioned, sized, and layered. Four structural decisions:
+        排布规则：一行一个选项，一行恰好一个控件，控件永远贴右。
 
-        1. The mode picker moved from the top of the page to the last group and no longer gates the taskbar
-           settings. Clicking "dynamic island" used to replace every taskbar setting with a single
-           "not implemented" card, leaving the only way back as clicking "taskbar" again.
-        2. The "current mode" chip reads the real WindowMode instead of being hardcoded on the taskbar card.
-        3. Each of the rest, hover, and full layers carries a diagram that explains only itself, replacing one
-           abstract three-layer overview at the top of the page.
-        4. Hover and full layer details live in a sub-region inside their parent card and fold with the switch,
-           instead of greyed-out sibling cards.
+        Layout rule: one option per row, exactly one control per row, always pinned right.
     -->
 
     <!--
@@ -46,43 +41,67 @@
     <Page.Resources>
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
 
-        <!--  模式选择卡片：仍使用原 RadioButton、GroupName、Command 与 CommandParameter 绑定，只替换外观。  -->
-        <!--  Mode choice cards keep the original RadioButton, GroupName, Command, and CommandParameter bindings.  -->
+        <!--
+            模式卡片：四个选项各自需要模式名、状态徽章和一行说明，因此用卡片网格而不是行。
+            这是本页唯一允许偏离“一行一个选项”的地方：它选的是整页的上下文，不是某个参数。
+            Mode cards: four choices each need a name, a status badge, and a caption, so they are a card grid
+            rather than rows. This is the one place the page may deviate from "one option per row", because the
+            choice selects the context for the whole page rather than setting a parameter.
+        -->
         <Style
             x:Key="ModeChoiceStyle"
             BasedOn="{StaticResource AfSettingsChoiceCardStyle}"
             TargetType="RadioButton">
-            <Setter Property="MinHeight" Value="92" />
+            <Setter Property="MinHeight" Value="96" />
             <Setter Property="Padding" Value="16,14" />
+            <Setter Property="Margin" Value="0,0,8,8" />
         </Style>
 
-        <!--  模式卡片内的说明：与模式名分开，避免名称和说明挤在同一层级上。  -->
-        <!--  Mode card captions, kept separate so name and detail do not collapse into one level.  -->
         <Style x:Key="ModeCaptionStyle" TargetType="TextBlock">
             <Setter Property="FontSize" Value="12" />
             <Setter Property="LineHeight" Value="17" />
             <Setter Property="LineStackingStrategy" Value="BlockLineHeight" />
             <Setter Property="TextWrapping" Value="Wrap" />
-            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}" />
         </Style>
 
         <!--
-            只读提示：只在页面高亮了一个未实现的承载模式时出现。
-            那种状态下任务栏专属设置拒绝写入（受测试保护的既有不变量），因此必须让用户看见原因，
-            而不是让十几个开关看起来能用、点了却不保存。
-            The read-only notice appears only while an unimplemented hosting mode is highlighted. In that state
-            taskbar-only settings refuse writes, which is an existing invariant guarded by a test, so the reason
-            has to be visible rather than leaving a dozen switches that look usable but do not save.
+            依赖未满足时才出现的徽章：固定宽度需要先关闭「跟随内容长度」。
+            父项开关就在紧邻上方，因此徽章只需一句话。
+            A badge that appears only while its dependency is unmet: a fixed width requires turning off content
+            following first. The parent switch sits directly above, so one short phrase is enough.
         -->
         <Style
-            x:Key="ReadOnlyNoticeStyle"
-            TargetType="{x:Type components:SettingsCallout}">
+            x:Key="FixedLengthRowStyle"
+            BasedOn="{StaticResource {x:Type components:SettingsRow}}"
+            TargetType="{x:Type components:SettingsRow}">
+            <Setter Property="Badge" Value="" />
+            <Setter Property="IsEnabled" Value="{Binding ViewModel.UsesFixedTaskbarLength}" />
             <Style.Triggers>
-                <DataTrigger Binding="{Binding ViewModel.IsUnimplementedMode}" Value="False">
-                    <Setter Property="Visibility" Value="Collapsed" />
+                <DataTrigger Binding="{Binding ViewModel.FollowMediaTextLength}" Value="True">
+                    <Setter Property="Badge" Value="需先关闭跟随" />
+                    <Setter Property="BadgeTone" Value="Attention" />
                 </DataTrigger>
             </Style.Triggers>
         </Style>
+
+        <!--  「当前模式」徽章只在任务栏确实是运行宿主时出现，读的是真实 WindowMode。  -->
+        <!--  The "current mode" badge appears only when the taskbar really is the running host.  -->
+        <Style
+            x:Key="TaskbarModeRowStyle"
+            BasedOn="{StaticResource {x:Type components:SettingsRow}}"
+            TargetType="{x:Type components:SettingsRow}">
+            <Setter Property="Badge" Value="" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding ViewModel.IsTaskbarHostingActive}" Value="True">
+                    <Setter Property="Badge" Value="当前模式" />
+                    <Setter Property="BadgeTone" Value="Accent" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="RowSliderStyle" BasedOn="{StaticResource AfSettingsRowSliderStyle}" TargetType="{x:Type Slider}" />
+        <Style x:Key="RowValueStyle" BasedOn="{StaticResource AfSettingsRowValueStyle}" TargetType="{x:Type TextBlock}" />
     </Page.Resources>
 
     <Grid>
@@ -92,12 +111,13 @@
         </Grid.RowDefinitions>
 
         <components:SettingsGroupStrip
+            x:Name="Strip"
             Grid.Row="0"
             Margin="{StaticResource AfSettingsHeaderMargin}"
             MaxWidth="{StaticResource AfSettingsContentMaxWidth}"
             PageIcon="{ui:SymbolIcon Desktop24}"
             StatusText="{Binding ViewModel.HostingModeText}"
-            Subtitle="任务栏媒体栏的承载位置、尺寸与三层体验"
+            Subtitle="媒体栏的显示位置、宽度与三种显示状态"
             Target="{Binding ElementName=PageScroll}"
             Title="显示模式" />
 
@@ -112,408 +132,8 @@
                 MaxWidth="{StaticResource AfSettingsContentMaxWidth}"
                 Loaded="OnPageLoaded">
 
-                <components:SettingsCallout
-                    Margin="0,0,0,4"
-                    IsAccent="False"
-                    Style="{StaticResource ReadOnlyNoticeStyle}"
-                    Symbol="Info24"
-                    Text="你高亮的是一个尚未实现的承载模式，因此下面这些任务栏设置暂时只读、改动不会被保存。点回最后一张卡片里的「任务栏」即可继续编辑。" />
-
-                <components:SettingsGroup Header="承载与位置" Icon="{ui:SymbolIcon Desktop24}">
+                <components:SettingsGroup Header="选择显示模式" Icon="{ui:SymbolIcon WindowConsole20}">
                     <StackPanel>
-                        <ui:CardControl Margin="{StaticResource AfSettingsCardGap}">
-                            <ui:CardControl.Icon>
-                                <ui:SymbolIcon Symbol="Desktop24" />
-                            </ui:CardControl.Icon>
-                            <ui:CardControl.Header>
-                                <StackPanel>
-                                    <TextBlock Style="{StaticResource AfSettingsCardTitleStyle}" Text="承载显示器" />
-                                    <TextBlock
-                                        Style="{StaticResource AfSettingsCardDescriptionStyle}"
-                                        Text="选择哪一块显示器的任务栏承载媒体栏；列出的是显示器，不是任务栏本身。" />
-                                </StackPanel>
-                            </ui:CardControl.Header>
-                            <ComboBox
-                                HorizontalAlignment="Left"
-                                DisplayMemberPath="DisplayName"
-                                ItemsSource="{Binding ViewModel.MonitorOptions}"
-                                MinWidth="{StaticResource AfSettingsFieldWidthWide}"
-                                SelectedValue="{Binding ViewModel.TaskbarTargetMonitorDeviceId, Mode=TwoWay}"
-                                SelectedValuePath="DeviceId" />
-                        </ui:CardControl>
-
-                        <ui:CardControl Margin="{StaticResource AfSettingsCardGap}">
-                            <ui:CardControl.Icon>
-                                <ui:SymbolIcon Symbol="Orientation24" />
-                            </ui:CardControl.Icon>
-                            <ui:CardControl.Header>
-                                <StackPanel>
-                                    <TextBlock Style="{StaticResource AfSettingsCardTitleStyle}" Text="排列方向" />
-                                    <TextBlock
-                                        Style="{StaticResource AfSettingsCardDescriptionStyle}"
-                                        Text="媒体栏内部组件的排列方向；自动会跟随任务栏的实际方向。" />
-                                </StackPanel>
-                            </ui:CardControl.Header>
-                            <ComboBox
-                                HorizontalAlignment="Left"
-                                Width="{StaticResource AfSettingsSelectMinWidth}"
-                                SelectedValue="{Binding ViewModel.Orientation, Mode=TwoWay}"
-                                SelectedValuePath="Tag">
-                                <ComboBoxItem Content="自动（跟随任务栏）" Tag="{x:Static settings:LayoutOrientationMode.Auto}" />
-                                <ComboBoxItem Content="强制横向" Tag="{x:Static settings:LayoutOrientationMode.Horizontal}" />
-                                <ComboBoxItem Content="强制纵向" Tag="{x:Static settings:LayoutOrientationMode.Vertical}" />
-                            </ComboBox>
-                        </ui:CardControl>
-
-                        <ui:CardControl Margin="{StaticResource AfSettingsCardGap}" Style="{StaticResource AfSettingsCardStackedStyle}">
-                            <ui:CardControl.Icon>
-                                <ui:SymbolIcon Symbol="LockClosed24" />
-                            </ui:CardControl.Icon>
-                            <ui:CardControl.Header>
-                                <StackPanel>
-                                    <TextBlock Style="{StaticResource AfSettingsCardTitleStyle}" Text="位置与自动避让" />
-                                    <TextBlock
-                                        Style="{StaticResource AfSettingsCardDescriptionStyle}"
-                                        Text="决定媒体栏贴在任务栏的哪一段，以及它与图标区之间的间距。" />
-                                </StackPanel>
-                            </ui:CardControl.Header>
-                            <StackPanel>
-                                <components:SettingsDiagram Margin="0,0,0,14" Kind="TaskbarPlacement" />
-
-                                <WrapPanel>
-                                    <ui:ToggleSwitch
-                                        Margin="0,0,20,10"
-                                        Content="避开任务栏图标"
-                                        IsChecked="{Binding ViewModel.IsTaskbarAvoidingIcons, Mode=TwoWay}" />
-                                    <ui:ToggleSwitch
-                                        Margin="0,0,20,10"
-                                        Content="锁定位置"
-                                        IsChecked="{Binding ViewModel.IsTaskbarPositionLocked, Mode=TwoWay}" />
-                                </WrapPanel>
-
-                                <TextBlock
-                                    Margin="0,4,0,6"
-                                    Style="{StaticResource AfSettingsFieldLabelStyle}"
-                                    Text="边缘偏移（DIP）" />
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <Slider
-                                        IsSnapToTickEnabled="True"
-                                        Maximum="20"
-                                        Minimum="-20"
-                                        TickFrequency="1"
-                                        Value="{Binding ViewModel.TaskbarCrossAxisOffsetDip, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                                    <TextBlock
-                                        Grid.Column="1"
-                                        Margin="12,0,0,0"
-                                        Style="{StaticResource AfSettingsFieldValueStyle}"
-                                        Text="{Binding ViewModel.TaskbarCrossAxisOffsetDip, StringFormat={}{0:0} DIP}" />
-                                </Grid>
-
-                                <ui:Button
-                                    Margin="0,14,0,0"
-                                    HorizontalAlignment="Left"
-                                    Command="{Binding ViewModel.ResetTaskbarPositionCommand}"
-                                    Content="重置位置"
-                                    Icon="{ui:SymbolIcon ArrowReset24}"
-                                    Style="{StaticResource AfSettingsButtonStyle}" />
-                            </StackPanel>
-                        </ui:CardControl>
-
-                        <ui:CardControl Margin="{StaticResource AfSettingsCardGap}" Style="{StaticResource AfSettingsCardStackedStyle}">
-                            <ui:CardControl.Icon>
-                                <ui:SymbolIcon Symbol="ResizeLarge24" />
-                            </ui:CardControl.Icon>
-                            <ui:CardControl.Header>
-                                <StackPanel>
-                                    <TextBlock Style="{StaticResource AfSettingsCardTitleStyle}" Text="媒体栏长度" />
-                                    <TextBlock
-                                        Style="{StaticResource AfSettingsCardDescriptionStyle}"
-                                        Text="跟随媒体文字长度时宽度随内容变化；取消跟随才使用固定长度。" />
-                                </StackPanel>
-                            </ui:CardControl.Header>
-                            <StackPanel>
-                                <ui:ToggleSwitch Content="跟随媒体文字长度" IsChecked="{Binding ViewModel.FollowMediaTextLength, Mode=TwoWay}" />
-
-                                <components:SettingsSubRegion
-                                    Description="固定长度会被夹取在悬停层所需最小长度与任务栏安全上限之间。"
-                                    Header="固定长度"
-                                    IsSubRegionEnabled="{Binding ViewModel.UsesFixedTaskbarLength}"
-                                    StatusText="需先取消跟随"
-                                    StatusTone="Attention">
-                                    <StackPanel>
-                                        <components:SettingsDiagram Margin="0,0,0,12" Kind="TaskbarLength" />
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="Auto" />
-                                            </Grid.ColumnDefinitions>
-                                            <Slider
-                                                Maximum="{Binding ViewModel.FixedTaskbarLengthMaximum}"
-                                                Minimum="{Binding ViewModel.FixedTaskbarLengthMinimum}"
-                                                Value="{Binding ViewModel.FixedTaskbarLengthDip, Mode=TwoWay}" />
-                                            <TextBlock
-                                                Grid.Column="1"
-                                                Margin="12,0,0,0"
-                                                Style="{StaticResource AfSettingsFieldValueStyle}"
-                                                Text="{Binding ViewModel.FixedTaskbarLengthDip, StringFormat={}{0:0} DIP}" />
-                                        </Grid>
-                                        <TextBlock
-                                            Margin="0,6,0,0"
-                                            Style="{StaticResource AfSettingsHintTextStyle}"
-                                            Text="{Binding ViewModel.FixedTaskbarLengthRangeText}" />
-                                    </StackPanel>
-                                </components:SettingsSubRegion>
-                            </StackPanel>
-                        </ui:CardControl>
-
-                        <ui:CardControl Margin="{StaticResource AfSettingsCardGapLast}">
-                            <ui:CardControl.Icon>
-                                <ui:SymbolIcon Symbol="PaddingLeft24" />
-                            </ui:CardControl.Icon>
-                            <ui:CardControl.Header>
-                                <StackPanel>
-                                    <TextBlock Style="{StaticResource AfSettingsCardTitleStyle}" Text="组件间距" />
-                                    <TextBlock
-                                        Style="{StaticResource AfSettingsCardDescriptionStyle}"
-                                        Text="封面、文字与附加组件之间的水平间距。" />
-                                </StackPanel>
-                            </ui:CardControl.Header>
-                            <Grid Width="{StaticResource AfSettingsFieldWidth}">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <Slider
-                                    IsSnapToTickEnabled="True"
-                                    Maximum="32"
-                                    Minimum="4"
-                                    TickFrequency="1"
-                                    Value="{Binding ViewModel.ComponentSpacingDip, Mode=TwoWay}" />
-                                <TextBlock
-                                    Grid.Column="1"
-                                    Margin="12,0,0,0"
-                                    Style="{StaticResource AfSettingsFieldValueStyle}"
-                                    Text="{Binding ViewModel.ComponentSpacingDip, StringFormat={}{0:0} DIP}" />
-                            </Grid>
-                        </ui:CardControl>
-                    </StackPanel>
-                </components:SettingsGroup>
-
-                <components:SettingsGroup
-                    Header="静置层"
-                    Icon="{ui:SymbolIcon Layer24}"
-                    StatusText="始终开启"
-                    StatusTone="Accent">
-                    <StackPanel>
-                        <components:SettingsDiagram Margin="0,0,0,12" Kind="LayerRest" />
-
-                        <ui:CardControl Margin="{StaticResource AfSettingsCardGap}" Style="{StaticResource AfSettingsCardStackedStyle}">
-                            <ui:CardControl.Icon>
-                                <ui:SymbolIcon Symbol="TextAlignJustify24" />
-                            </ui:CardControl.Icon>
-                            <ui:CardControl.Header>
-                                <StackPanel>
-                                    <TextBlock Style="{StaticResource AfSettingsCardTitleStyle}" Text="信息布局" />
-                                    <TextBlock
-                                        Style="{StaticResource AfSettingsCardDescriptionStyle}"
-                                        Text="常驻显示多少信息、如何排列，以及标题与歌手如何对齐。" />
-                                </StackPanel>
-                            </ui:CardControl.Header>
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="16" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
-
-                                <StackPanel Grid.Column="0">
-                                    <TextBlock
-                                        Margin="{StaticResource AfSettingsFieldLabelGap}"
-                                        Style="{StaticResource AfSettingsFieldLabelStyle}"
-                                        Text="信息密度" />
-                                    <ComboBox
-                                        HorizontalAlignment="Stretch"
-                                        SelectedValue="{Binding ViewModel.Density, Mode=TwoWay}"
-                                        SelectedValuePath="Tag">
-                                        <ComboBoxItem Content="精简" Tag="{x:Static settings:TaskbarInformationDensity.Minimal}" />
-                                        <ComboBoxItem Content="均衡" Tag="{x:Static settings:TaskbarInformationDensity.Balanced}" />
-                                        <ComboBoxItem Content="信息优先" Tag="{x:Static settings:TaskbarInformationDensity.Information}" />
-                                    </ComboBox>
-
-                                    <TextBlock
-                                        Margin="0,10,0,6"
-                                        Style="{StaticResource AfSettingsFieldLabelStyle}"
-                                        Text="内容排列" />
-                                    <ComboBox
-                                        HorizontalAlignment="Stretch"
-                                        SelectedValue="{Binding ViewModel.ContentLayout, Mode=TwoWay}"
-                                        SelectedValuePath="Tag">
-                                        <ComboBoxItem Content="紧凑行内" Tag="{x:Static settings:TaskbarContentLayout.CompactInline}" />
-                                        <ComboBoxItem Content="自适应堆叠" Tag="{x:Static settings:TaskbarContentLayout.AdaptiveStack}" />
-                                    </ComboBox>
-                                </StackPanel>
-
-                                <StackPanel Grid.Column="2">
-                                    <TextBlock
-                                        Margin="{StaticResource AfSettingsFieldLabelGap}"
-                                        Style="{StaticResource AfSettingsFieldLabelStyle}"
-                                        Text="标题与歌手对齐" />
-                                    <ComboBox
-                                        HorizontalAlignment="Stretch"
-                                        SelectedValue="{Binding ViewModel.MediaTextAlignment, Mode=TwoWay}"
-                                        SelectedValuePath="Tag">
-                                        <ComboBoxItem Content="左对齐" Tag="{x:Static settings:TaskbarMediaTextAlignment.Left}" />
-                                        <ComboBoxItem Content="居中" Tag="{x:Static settings:TaskbarMediaTextAlignment.Center}" />
-                                        <ComboBoxItem Content="右对齐" Tag="{x:Static settings:TaskbarMediaTextAlignment.Right}" />
-                                    </ComboBox>
-
-                                    <TextBlock
-                                        Margin="0,12,0,0"
-                                        Style="{StaticResource AfSettingsHintTextStyle}"
-                                        Text="频谱与性能两个附加组件的开关和参数在「媒体与通知 → 静置层组件」。" />
-                                </StackPanel>
-                            </Grid>
-                        </ui:CardControl>
-                    </StackPanel>
-                </components:SettingsGroup>
-
-                <components:SettingsGroup Header="悬停层" Icon="{ui:SymbolIcon HandDraw24}">
-                    <StackPanel>
-                        <components:SettingsDiagram Margin="0,0,0,12" Kind="LayerHover" />
-
-                        <ui:CardControl Margin="{StaticResource AfSettingsCardGapLast}">
-                            <ui:CardControl.Icon>
-                                <ui:SymbolIcon Symbol="HandDraw24" />
-                            </ui:CardControl.Icon>
-                            <ui:CardControl.Header>
-                                <StackPanel>
-                                    <TextBlock Style="{StaticResource AfSettingsCardTitleStyle}" Text="启用悬停层" />
-                                    <TextBlock
-                                        Style="{StaticResource AfSettingsCardDescriptionStyle}"
-                                        Text="鼠标移入媒体栏时展开快捷控制；关闭后下面的按钮设置不生效。" />
-                                </StackPanel>
-                            </ui:CardControl.Header>
-                            <ui:ToggleSwitch IsChecked="{Binding ViewModel.HoverLayerEnabled, Mode=TwoWay}" />
-                        </ui:CardControl>
-
-                        <components:SettingsSubRegion
-                            CollapseWhenDisabled="True"
-                            Description="决定悬停时出现哪些按钮。关闭后整块折叠，避免留下一排不起作用的开关。"
-                            Header="悬停层控制"
-                            IsSubRegionEnabled="{Binding ViewModel.HoverLayerEnabled}"
-                            StatusText="需先启用">
-                            <WrapPanel>
-                                <ui:ToggleSwitch
-                                    Margin="0,0,20,10"
-                                    Content="播放 / 暂停"
-                                    IsChecked="{Binding ViewModel.HoverPlayPauseVisible, Mode=TwoWay}" />
-                                <ui:ToggleSwitch
-                                    Margin="0,0,20,10"
-                                    Content="上一首 / 下一首"
-                                    IsChecked="{Binding ViewModel.HoverPreviousNextVisible, Mode=TwoWay}" />
-                                <ui:ToggleSwitch
-                                    Margin="0,0,20,10"
-                                    Content="输出设备"
-                                    IsChecked="{Binding ViewModel.HoverOutputDeviceVisible, Mode=TwoWay}" />
-                                <ui:ToggleSwitch
-                                    Margin="0,0,20,10"
-                                    Content="音频控制"
-                                    IsChecked="{Binding ViewModel.HoverAudioControlVisible, Mode=TwoWay}" />
-                                <ui:ToggleSwitch
-                                    Margin="0,0,20,10"
-                                    Content="进度控制"
-                                    IsChecked="{Binding ViewModel.HoverProgressVisible, Mode=TwoWay}" />
-                            </WrapPanel>
-                        </components:SettingsSubRegion>
-                    </StackPanel>
-                </components:SettingsGroup>
-
-                <components:SettingsGroup Header="完整层" Icon="{ui:SymbolIcon ProjectionScreen24}">
-                    <StackPanel>
-                        <components:SettingsDiagram Margin="0,0,0,12" Kind="LayerFull" />
-
-                        <ui:CardControl Margin="{StaticResource AfSettingsCardGapLast}">
-                            <ui:CardControl.Icon>
-                                <ui:SymbolIcon Symbol="ProjectionScreen24" />
-                            </ui:CardControl.Icon>
-                            <ui:CardControl.Header>
-                                <StackPanel>
-                                    <TextBlock Style="{StaticResource AfSettingsCardTitleStyle}" Text="启用完整层" />
-                                    <TextBlock
-                                        Style="{StaticResource AfSettingsCardDescriptionStyle}"
-                                        Text="点击媒体栏展开完整面板；关闭后下面的分区设置不生效。" />
-                                </StackPanel>
-                            </ui:CardControl.Header>
-                            <ui:ToggleSwitch IsChecked="{Binding ViewModel.FullLayerEnabled, Mode=TwoWay}" />
-                        </ui:CardControl>
-
-                        <components:SettingsSubRegion
-                            CollapseWhenDisabled="True"
-                            Description="四个分区可以分别关闭，但至少保留一个；只剩一个时它的开关会被禁用。"
-                            Header="完整层内容"
-                            IsSubRegionEnabled="{Binding ViewModel.FullLayerEnabled}"
-                            StatusText="需先启用">
-                            <StackPanel>
-                                <WrapPanel Margin="0,0,0,12">
-                                    <ui:Button
-                                        Margin="0,0,8,0"
-                                        Command="{Binding ViewModel.ApplyCompactFullPanelPresetCommand}"
-                                        Content="套用紧凑预设"
-                                        Style="{StaticResource AfSettingsButtonStyle}" />
-                                    <ui:Button
-                                        Command="{Binding ViewModel.ApplyFullFullPanelPresetCommand}"
-                                        Content="套用完整预设"
-                                        Style="{StaticResource AfSettingsButtonStyle}" />
-                                </WrapPanel>
-
-                                <TextBlock
-                                    Margin="{StaticResource AfSettingsFieldLabelGap}"
-                                    Style="{StaticResource AfSettingsFieldLabelStyle}"
-                                    Text="{Binding ViewModel.FullPanelLayoutStatus, StringFormat=当前方案：{0}}" />
-
-                                <WrapPanel>
-                                    <ui:ToggleSwitch
-                                        Margin="0,0,20,10"
-                                        Content="媒体信息"
-                                        IsChecked="{Binding ViewModel.FullPanelMediaInfoVisible, Mode=TwoWay}"
-                                        IsEnabled="{Binding ViewModel.CanToggleFullPanelMediaInfo}" />
-                                    <ui:ToggleSwitch
-                                        Margin="0,0,20,10"
-                                        Content="播放控制"
-                                        IsChecked="{Binding ViewModel.FullPanelMediaControlsVisible, Mode=TwoWay}"
-                                        IsEnabled="{Binding ViewModel.CanToggleFullPanelMediaControls}" />
-                                    <ui:ToggleSwitch
-                                        Margin="0,0,20,10"
-                                        Content="音频控制"
-                                        IsChecked="{Binding ViewModel.FullPanelAudioControlsVisible, Mode=TwoWay}"
-                                        IsEnabled="{Binding ViewModel.CanToggleFullPanelAudioControls}" />
-                                    <ui:ToggleSwitch
-                                        Margin="0,0,20,10"
-                                        Content="性能信息"
-                                        IsChecked="{Binding ViewModel.FullPanelPerformanceVisible, Mode=TwoWay}"
-                                        IsEnabled="{Binding ViewModel.CanToggleFullPanelPerformance}" />
-                                </WrapPanel>
-                            </StackPanel>
-                        </components:SettingsSubRegion>
-                    </StackPanel>
-                </components:SettingsGroup>
-
-                <components:SettingsGroup
-                    Header="其他承载模式"
-                    Icon="{ui:SymbolIcon WindowConsole20}"
-                    StatusText="未实现"
-                    StatusTone="Neutral"
-                    Tint="Muted">
-                    <StackPanel>
-                        <TextBlock
-                            Margin="0,0,0,12"
-                            Style="{StaticResource AfSettingsHintTextStyle}"
-                            Text="下面三种承载方式尚未实现。选中其中一种只会高亮这张卡片，不会切换正在运行的任务栏窗口；但选中期间上面的任务栏设置会变为只读，点回「任务栏」即可继续编辑。" />
-
                         <UniformGrid Columns="2">
                             <RadioButton
                                 GroupName="DisplayMode"
@@ -522,12 +142,12 @@
                                 Style="{StaticResource ModeChoiceStyle}">
                                 <StackPanel>
                                     <DockPanel>
-                                        <!--  芯片先声明并按右停靠，标题最后声明以填充剩余宽度；顺序反过来会把芯片拉满整行。  -->
-                                        <!--  The chip docks right and is declared first; the title fills. The reverse order stretches the chip across the row.  -->
+                                        <!--  徽章先声明并按右停靠，标题最后声明以填充剩余宽度；顺序反过来会把徽章拉满整行。  -->
+                                        <!--  The badge docks right and is declared first; the title fills. The reverse order stretches the badge across the row.  -->
                                         <ContentControl
                                             DockPanel.Dock="Right"
                                             Content="当前模式"
-                                            Style="{StaticResource AfSettingsChipAccentStyle}"
+                                            Style="{StaticResource AfSettingsBadgeAccentStyle}"
                                             Visibility="{Binding ViewModel.IsTaskbarHostingActive, Converter={StaticResource BooleanToVisibilityConverter}}" />
                                         <TextBlock
                                             FontSize="16"
@@ -537,7 +157,7 @@
                                     <TextBlock
                                         Margin="0,8,0,0"
                                         Style="{StaticResource ModeCaptionStyle}"
-                                        Text="融入 Windows 任务栏，提供静置、悬停和完整三层体验。" />
+                                        Text="置于 Windows 任务栏，含静置层、悬停层与完整层" />
                                 </StackPanel>
                             </RadioButton>
 
@@ -551,7 +171,7 @@
                                         <ContentControl
                                             DockPanel.Dock="Right"
                                             Content="未实现"
-                                            Style="{StaticResource AfSettingsChipNeutralStyle}" />
+                                            Style="{StaticResource AfSettingsBadgeNeutralStyle}" />
                                         <TextBlock
                                             FontSize="16"
                                             FontWeight="{DynamicResource AppTextStrongFontWeight}"
@@ -560,7 +180,7 @@
                                     <TextBlock
                                         Margin="0,8,0,0"
                                         Style="{StaticResource ModeCaptionStyle}"
-                                        Text="以屏幕边缘浮层呈现媒体状态。" />
+                                        Text="以屏幕边缘浮层承载媒体状态" />
                                 </StackPanel>
                             </RadioButton>
 
@@ -574,7 +194,7 @@
                                         <ContentControl
                                             DockPanel.Dock="Right"
                                             Content="未实现"
-                                            Style="{StaticResource AfSettingsChipNeutralStyle}" />
+                                            Style="{StaticResource AfSettingsBadgeNeutralStyle}" />
                                         <TextBlock
                                             FontSize="16"
                                             FontWeight="{DynamicResource AppTextStrongFontWeight}"
@@ -583,7 +203,7 @@
                                     <TextBlock
                                         Margin="0,8,0,0"
                                         Style="{StaticResource ModeCaptionStyle}"
-                                        Text="在桌面放置可自由布局的媒体卡片。" />
+                                        Text="在桌面放置可自由布局的媒体卡片" />
                                 </StackPanel>
                             </RadioButton>
 
@@ -597,7 +217,7 @@
                                         <ContentControl
                                             DockPanel.Dock="Right"
                                             Content="未实现"
-                                            Style="{StaticResource AfSettingsChipNeutralStyle}" />
+                                            Style="{StaticResource AfSettingsBadgeNeutralStyle}" />
                                         <TextBlock
                                             FontSize="16"
                                             FontWeight="{DynamicResource AppTextStrongFontWeight}"
@@ -606,15 +226,440 @@
                                     <TextBlock
                                         Margin="0,8,0,0"
                                         Style="{StaticResource ModeCaptionStyle}"
-                                        Text="用紧凑悬浮入口快速展开控制。" />
+                                        Text="以紧凑悬浮入口展开控制" />
                                 </StackPanel>
                             </RadioButton>
                         </UniformGrid>
+
+                        <components:SettingsCallout
+                            Margin="0,4,0,0"
+                            IsAccent="False"
+                            Symbol="Info24"
+                            Text="当前运行模式固定为任务栏。选择其它模式只切换本页显示的内容，不会切换正在运行的窗口。" />
                     </StackPanel>
                 </components:SettingsGroup>
 
+                <!--  ============ 任务栏模式 ============  -->
+                <StackPanel
+                    x:Name="TaskbarModeSection"
+                    Visibility="{Binding ViewModel.IsTaskbarMode, Converter={StaticResource BooleanToVisibilityConverter}}">
+
+                    <components:SettingsGroup
+                        Description="媒体栏所在的显示器与任务栏位置"
+                        Header="屏幕与位置"
+                        Icon="{ui:SymbolIcon Desktop24}">
+                        <StackPanel>
+                            <components:SettingsDiagram Margin="0,0,0,12" Kind="TaskbarPlacement" />
+
+                            <components:SettingsRow
+                                Description="选择承载媒体栏的任务栏所在显示器"
+                                Icon="{ui:SymbolIcon Desktop24}"
+                                Title="目标显示器">
+                                <ComboBox
+                                    DisplayMemberPath="DisplayName"
+                                    ItemsSource="{Binding ViewModel.MonitorOptions}"
+                                    MinWidth="260"
+                                    SelectedValue="{Binding ViewModel.TaskbarTargetMonitorDeviceId, Mode=TwoWay}"
+                                    SelectedValuePath="DeviceId" />
+                            </components:SettingsRow>
+
+                            <components:SettingsRow
+                                Description="自动跟随任务栏方向，也可强制横向或纵向"
+                                Icon="{ui:SymbolIcon Orientation24}"
+                                Title="排列方向">
+                                <ComboBox
+                                    MinWidth="200"
+                                    SelectedValue="{Binding ViewModel.Orientation, Mode=TwoWay}"
+                                    SelectedValuePath="Tag">
+                                    <ComboBoxItem Content="自动（跟随任务栏）" Tag="{x:Static settings:LayoutOrientationMode.Auto}" />
+                                    <ComboBoxItem Content="强制横向" Tag="{x:Static settings:LayoutOrientationMode.Horizontal}" />
+                                    <ComboBoxItem Content="强制纵向" Tag="{x:Static settings:LayoutOrientationMode.Vertical}" />
+                                </ComboBox>
+                            </components:SettingsRow>
+
+                            <components:SettingsRow
+                                Description="自动避开任务栏图标区域，避免遮挡"
+                                Icon="{ui:SymbolIcon ArrowMinimize24}"
+                                Title="避开任务栏图标">
+                                <ui:ToggleSwitch IsChecked="{Binding ViewModel.IsTaskbarAvoidingIcons, Mode=TwoWay}" />
+                            </components:SettingsRow>
+
+                            <components:SettingsRow
+                                Description="锁定后阻止拖动"
+                                Icon="{ui:SymbolIcon LockClosed24}"
+                                Title="锁定位置">
+                                <ui:ToggleSwitch IsChecked="{Binding ViewModel.IsTaskbarPositionLocked, Mode=TwoWay}" />
+                            </components:SettingsRow>
+
+                            <components:SettingsRow
+                                Description="沿跨轴微调媒体栏与图标区之间的间距"
+                                Icon="{ui:SymbolIcon ArrowMove24}"
+                                Title="边缘偏移">
+                                <StackPanel Orientation="Horizontal">
+                                    <Slider
+                                        IsSnapToTickEnabled="True"
+                                        Maximum="20"
+                                        Minimum="-20"
+                                        Style="{StaticResource RowSliderStyle}"
+                                        TickFrequency="1"
+                                        Value="{Binding ViewModel.TaskbarCrossAxisOffsetDip, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                    <TextBlock Style="{StaticResource RowValueStyle}" Text="{Binding ViewModel.TaskbarCrossAxisOffsetDip, StringFormat={}{0:0} DIP}" />
+                                </StackPanel>
+                            </components:SettingsRow>
+
+                            <components:SettingsRow
+                                Description="恢复到自动避让计算出的位置"
+                                Icon="{ui:SymbolIcon ArrowReset24}"
+                                Title="重置位置">
+                                <ui:Button
+                                    Command="{Binding ViewModel.ResetTaskbarPositionCommand}"
+                                    Content="重置"
+                                    Icon="{ui:SymbolIcon ArrowReset24}"
+                                    Style="{StaticResource AfSettingsButtonStyle}" />
+                            </components:SettingsRow>
+                        </StackPanel>
+                    </components:SettingsGroup>
+
+                    <components:SettingsGroup
+                        Description="媒体栏的宽度与内部间距"
+                        Header="媒体栏宽度"
+                        Icon="{ui:SymbolIcon ResizeLarge24}">
+                        <StackPanel>
+                            <components:SettingsDiagram Margin="0,0,0,12" Kind="TaskbarLength" />
+
+                            <components:SettingsRow
+                                Description="媒体栏宽度随标题长度自动变化"
+                                Icon="{ui:SymbolIcon ArrowAutofitWidth24}"
+                                Title="跟随内容长度">
+                                <ui:ToggleSwitch IsChecked="{Binding ViewModel.FollowMediaTextLength, Mode=TwoWay}" />
+                            </components:SettingsRow>
+
+                            <components:SettingsRow
+                                Description="在所需最小宽度与任务栏可用宽度之间取值"
+                                Icon="{ui:SymbolIcon SlideSize24}"
+                                Style="{StaticResource FixedLengthRowStyle}"
+                                Title="固定宽度">
+                                <StackPanel Orientation="Horizontal">
+                                    <Slider
+                                        Maximum="{Binding ViewModel.FixedTaskbarLengthMaximum}"
+                                        Minimum="{Binding ViewModel.FixedTaskbarLengthMinimum}"
+                                        Style="{StaticResource RowSliderStyle}"
+                                        ToolTip="{Binding ViewModel.FixedTaskbarLengthRangeText}"
+                                        Value="{Binding ViewModel.FixedTaskbarLengthDip, Mode=TwoWay}" />
+                                    <TextBlock Style="{StaticResource RowValueStyle}" Text="{Binding ViewModel.FixedTaskbarLengthDip, StringFormat={}{0:0} DIP}" />
+                                </StackPanel>
+                            </components:SettingsRow>
+
+                            <components:SettingsRow
+                                Description="封面、文字与附加组件之间的水平间距"
+                                Icon="{ui:SymbolIcon PaddingLeft24}"
+                                Title="组件间距">
+                                <StackPanel Orientation="Horizontal">
+                                    <Slider
+                                        Maximum="32"
+                                        Minimum="4"
+                                        Style="{StaticResource RowSliderStyle}"
+                                        IsSnapToTickEnabled="True"
+                                        TickFrequency="1"
+                                        Value="{Binding ViewModel.ComponentSpacingDip, Mode=TwoWay}" />
+                                    <TextBlock Style="{StaticResource RowValueStyle}" Text="{Binding ViewModel.ComponentSpacingDip, StringFormat={}{0:0} DIP}" />
+                                </StackPanel>
+                            </components:SettingsRow>
+                        </StackPanel>
+                    </components:SettingsGroup>
+
+                    <components:SettingsGroup
+                        Description="始终显示的基础层，承载封面、标题与歌词"
+                        Header="静置层"
+                        Icon="{ui:SymbolIcon Layer24}"
+                        StatusText="始终开启"
+                        StatusTone="Accent">
+                        <StackPanel>
+                            <components:SettingsDiagram Margin="0,0,0,12" Kind="LayerRest" />
+
+                            <components:SettingsRow
+                                Description="统一调整按钮、进度与组件间的尺寸和间隔"
+                                Icon="{ui:SymbolIcon TextAlignJustify24}"
+                                Title="信息密度">
+                                <ComboBox
+                                    MinWidth="200"
+                                    SelectedValue="{Binding ViewModel.Density, Mode=TwoWay}"
+                                    SelectedValuePath="Tag">
+                                    <ComboBoxItem Content="精简" Tag="{x:Static settings:TaskbarInformationDensity.Minimal}" />
+                                    <ComboBoxItem Content="均衡" Tag="{x:Static settings:TaskbarInformationDensity.Balanced}" />
+                                    <ComboBoxItem Content="信息优先" Tag="{x:Static settings:TaskbarInformationDensity.Information}" />
+                                </ComboBox>
+                            </components:SettingsRow>
+
+                            <components:SettingsRow
+                                Description="标题与歌手并排一行，或上下堆叠"
+                                Icon="{ui:SymbolIcon LayoutColumnTwo24}"
+                                Title="内容排列">
+                                <ComboBox
+                                    MinWidth="200"
+                                    SelectedValue="{Binding ViewModel.ContentLayout, Mode=TwoWay}"
+                                    SelectedValuePath="Tag">
+                                    <ComboBoxItem Content="紧凑行内" Tag="{x:Static settings:TaskbarContentLayout.CompactInline}" />
+                                    <ComboBoxItem Content="自适应堆叠" Tag="{x:Static settings:TaskbarContentLayout.AdaptiveStack}" />
+                                </ComboBox>
+                            </components:SettingsRow>
+
+                            <components:SettingsRow
+                                Description="设置媒体文字在媒体栏内的对齐方式"
+                                Icon="{ui:SymbolIcon TextAlignLeft24}"
+                                Title="标题与歌手对齐">
+                                <ComboBox
+                                    MinWidth="200"
+                                    SelectedValue="{Binding ViewModel.MediaTextAlignment, Mode=TwoWay}"
+                                    SelectedValuePath="Tag">
+                                    <ComboBoxItem Content="左对齐" Tag="{x:Static settings:TaskbarMediaTextAlignment.Left}" />
+                                    <ComboBoxItem Content="居中" Tag="{x:Static settings:TaskbarMediaTextAlignment.Center}" />
+                                    <ComboBoxItem Content="右对齐" Tag="{x:Static settings:TaskbarMediaTextAlignment.Right}" />
+                                </ComboBox>
+                            </components:SettingsRow>
+
+                            <components:SettingsCallout
+                                Margin="0,4,0,0"
+                                IsAccent="True"
+                                Symbol="DataHistogram24"
+                                Text="频谱与性能组件的开关和参数在「媒体与通知 → 静置层组件」。" />
+                        </StackPanel>
+                    </components:SettingsGroup>
+
+                    <components:SettingsGroup
+                        Description="鼠标移入媒体栏时出现的快捷控制"
+                        Header="悬停层"
+                        Icon="{ui:SymbolIcon HandDraw24}">
+                        <StackPanel>
+                            <components:SettingsDiagram Margin="0,0,0,12" Kind="LayerHover" />
+
+                            <components:SettingsRow
+                                Description="鼠标移入媒体栏时显示快捷控制按钮"
+                                Icon="{ui:SymbolIcon HandDraw24}"
+                                Title="启用悬停层">
+                                <ui:ToggleSwitch IsChecked="{Binding ViewModel.HoverLayerEnabled, Mode=TwoWay}" />
+                            </components:SettingsRow>
+
+                            <ui:CardExpander
+                                Style="{StaticResource AfSettingsExpanderStyle}"
+                                Icon="{ui:SymbolIcon Layer24}"
+                                IsExpanded="{Binding ViewModel.HoverLayerEnabled, Mode=OneWay}">
+                                <ui:CardExpander.Header>
+                                    <StackPanel>
+                                        <TextBlock Style="{StaticResource AfSettingsRowTitleStyle}" Text="悬停层控制" />
+                                        <TextBlock Style="{StaticResource AfSettingsRowDescriptionStyle}" Text="选择悬停时出现的控制项" />
+                                    </StackPanel>
+                                </ui:CardExpander.Header>
+
+                                <StackPanel>
+                                    <components:SettingsRow
+                                        Icon="{ui:SymbolIcon Play24}"
+                                        IsNested="True"
+                                        Title="播放 / 暂停">
+                                        <ui:ToggleSwitch IsChecked="{Binding ViewModel.HoverPlayPauseVisible, Mode=TwoWay}" />
+                                    </components:SettingsRow>
+                                    <components:SettingsRow
+                                        Icon="{ui:SymbolIcon Previous24}"
+                                        IsNested="True"
+                                        Title="上一首 / 下一首">
+                                        <ui:ToggleSwitch IsChecked="{Binding ViewModel.HoverPreviousNextVisible, Mode=TwoWay}" />
+                                    </components:SettingsRow>
+                                    <components:SettingsRow
+                                        Icon="{ui:SymbolIcon Speaker224}"
+                                        IsNested="True"
+                                        Title="输出设备">
+                                        <ui:ToggleSwitch IsChecked="{Binding ViewModel.HoverOutputDeviceVisible, Mode=TwoWay}" />
+                                    </components:SettingsRow>
+                                    <components:SettingsRow
+                                        Icon="{ui:SymbolIcon Speaker124}"
+                                        IsNested="True"
+                                        Title="音频控制">
+                                        <ui:ToggleSwitch IsChecked="{Binding ViewModel.HoverAudioControlVisible, Mode=TwoWay}" />
+                                    </components:SettingsRow>
+                                    <components:SettingsRow
+                                        Icon="{ui:SymbolIcon DataBarVertical24}"
+                                        IsNested="True"
+                                        Title="进度控制">
+                                        <ui:ToggleSwitch IsChecked="{Binding ViewModel.HoverProgressVisible, Mode=TwoWay}" />
+                                    </components:SettingsRow>
+                                </StackPanel>
+                            </ui:CardExpander>
+                        </StackPanel>
+                    </components:SettingsGroup>
+
+                    <components:SettingsGroup
+                        Description="点击媒体栏展开的完整控制面板"
+                        Header="完整层"
+                        Icon="{ui:SymbolIcon ProjectionScreen24}">
+                        <StackPanel>
+                            <components:SettingsDiagram Margin="0,0,0,12" Kind="LayerFull" />
+
+                            <components:SettingsRow
+                                Description="点击媒体栏展开完整控制面板"
+                                Icon="{ui:SymbolIcon ProjectionScreen24}"
+                                Title="启用完整层">
+                                <ui:ToggleSwitch IsChecked="{Binding ViewModel.FullLayerEnabled, Mode=TwoWay}" />
+                            </components:SettingsRow>
+
+                            <ui:CardExpander
+                                Style="{StaticResource AfSettingsExpanderStyle}"
+                                Icon="{ui:SymbolIcon Info24}"
+                                IsExpanded="{Binding ViewModel.FullLayerEnabled, Mode=OneWay}">
+                                <ui:CardExpander.Header>
+                                    <StackPanel>
+                                        <TextBlock Style="{StaticResource AfSettingsRowTitleStyle}" Text="完整层内容" />
+                                        <TextBlock Style="{StaticResource AfSettingsRowDescriptionStyle}" Text="选择面板包含的分区，至少保留一个" />
+                                    </StackPanel>
+                                </ui:CardExpander.Header>
+
+                                <StackPanel>
+                                    <components:SettingsRow
+                                        Description="一次应用一组分区显隐方案"
+                                        Icon="{ui:SymbolIcon ArrowSync24}"
+                                        IsNested="True"
+                                        Title="套用预设">
+                                        <StackPanel Orientation="Horizontal">
+                                            <ui:Button
+                                                Margin="0,0,8,0"
+                                                Command="{Binding ViewModel.ApplyCompactFullPanelPresetCommand}"
+                                                Content="紧凑"
+                                                Style="{StaticResource AfSettingsButtonStyle}" />
+                                            <ui:Button
+                                                Command="{Binding ViewModel.ApplyFullFullPanelPresetCommand}"
+                                                Content="完整"
+                                                Style="{StaticResource AfSettingsButtonStyle}" />
+                                        </StackPanel>
+                                    </components:SettingsRow>
+                                    <components:SettingsRow
+                                        Icon="{ui:SymbolIcon Info24}"
+                                        IsNested="True"
+                                        Title="媒体信息">
+                                        <ui:ToggleSwitch
+                                            IsChecked="{Binding ViewModel.FullPanelMediaInfoVisible, Mode=TwoWay}"
+                                            IsEnabled="{Binding ViewModel.CanToggleFullPanelMediaInfo}" />
+                                    </components:SettingsRow>
+                                    <components:SettingsRow
+                                        Icon="{ui:SymbolIcon Play24}"
+                                        IsNested="True"
+                                        Title="播放控制">
+                                        <ui:ToggleSwitch
+                                            IsChecked="{Binding ViewModel.FullPanelMediaControlsVisible, Mode=TwoWay}"
+                                            IsEnabled="{Binding ViewModel.CanToggleFullPanelMediaControls}" />
+                                    </components:SettingsRow>
+                                    <components:SettingsRow
+                                        Icon="{ui:SymbolIcon Speaker124}"
+                                        IsNested="True"
+                                        Title="音频控制">
+                                        <ui:ToggleSwitch
+                                            IsChecked="{Binding ViewModel.FullPanelAudioControlsVisible, Mode=TwoWay}"
+                                            IsEnabled="{Binding ViewModel.CanToggleFullPanelAudioControls}" />
+                                    </components:SettingsRow>
+                                    <components:SettingsRow
+                                        Icon="{ui:SymbolIcon Gauge24}"
+                                        IsNested="True"
+                                        Title="性能信息">
+                                        <ui:ToggleSwitch
+                                            IsChecked="{Binding ViewModel.FullPanelPerformanceVisible, Mode=TwoWay}"
+                                            IsEnabled="{Binding ViewModel.CanToggleFullPanelPerformance}" />
+                                    </components:SettingsRow>
+                                </StackPanel>
+                            </ui:CardExpander>
+                        </StackPanel>
+                    </components:SettingsGroup>
+                </StackPanel>
+
+                <!--  ============ 灵动岛模式 ============  -->
+                <StackPanel
+                    x:Name="DynamicIslandModeSection"
+                    Visibility="{Binding ViewModel.IsDynamicIslandMode, Converter={StaticResource BooleanToVisibilityConverter}}">
+
+                    <components:SettingsGroup
+                        Description="灵动岛自己的外观，与任务栏互不影响"
+                        Header="灵动岛外观"
+                        Icon="{ui:SymbolIcon Window24}"
+                        StatusText="未实现"
+                        StatusTone="Neutral"
+                        Tint="Muted">
+                        <StackPanel>
+                            <components:SettingsCallout
+                                Margin="0,0,0,12"
+                                IsAccent="False"
+                                Symbol="Info24"
+                                Text="灵动岛模式尚未实现，因此下面的选项当前只读，改动不会影响正在运行的任务栏媒体栏。" />
+
+                            <components:SettingsDiagram Margin="0,0,0,12" Kind="DynamicIslandSurface" />
+
+                            <components:SettingsRow
+                                Description="灵动岛自身的背景样式"
+                                Icon="{ui:SymbolIcon Square24}"
+                                IsEnabled="False"
+                                Title="背景样式">
+                                <ComboBox
+                                    MinWidth="140"
+                                    SelectedValue="{Binding ViewModel.IslandSurfaceStyle, Mode=OneWay}"
+                                    SelectedValuePath="Tag">
+                                    <ComboBoxItem Content="自动" Tag="{x:Static settings:PlayerSurfaceStyle.Automatic}" />
+                                    <ComboBoxItem Content="纯色" Tag="{x:Static settings:PlayerSurfaceStyle.Solid}" />
+                                    <ComboBoxItem Content="主题色调" Tag="{x:Static settings:PlayerSurfaceStyle.ThemeTint}" />
+                                </ComboBox>
+                            </components:SettingsRow>
+
+                            <components:SettingsRow
+                                Description="数值越高越不透明"
+                                Icon="{ui:SymbolIcon Eye24}"
+                                IsEnabled="False"
+                                Title="背景不透明度">
+                                <StackPanel Orientation="Horizontal">
+                                    <Slider
+                                        Maximum="100"
+                                        Minimum="0"
+                                        Style="{StaticResource RowSliderStyle}"
+                                        Value="{Binding ViewModel.IslandSurfaceOpacityPercent, Mode=OneWay}" />
+                                    <TextBlock Style="{StaticResource RowValueStyle}" Text="{Binding ViewModel.IslandSurfaceOpacityPercent, StringFormat={}{0}%}" />
+                                </StackPanel>
+                            </components:SettingsRow>
+
+                            <components:SettingsRow
+                                Description="0–24 DIP"
+                                Icon="{ui:SymbolIcon BorderNone24}"
+                                IsEnabled="False"
+                                Title="圆角">
+                                <StackPanel Orientation="Horizontal">
+                                    <Slider
+                                        Maximum="24"
+                                        Minimum="0"
+                                        Style="{StaticResource RowSliderStyle}"
+                                        Value="{Binding ViewModel.IslandSurfaceCornerRadiusDip, Mode=OneWay}" />
+                                    <TextBlock Style="{StaticResource RowValueStyle}" Text="{Binding ViewModel.IslandSurfaceCornerRadiusDip, StringFormat={}{0:0.#} DIP}" />
+                                </StackPanel>
+                            </components:SettingsRow>
+                        </StackPanel>
+                    </components:SettingsGroup>
+                </StackPanel>
+
+                <!--  ============ 桌面卡片 / 悬浮球：未实现 ============  -->
+                <StackPanel
+                    x:Name="DesktopCardModeSection"
+                    Visibility="{Binding ViewModel.IsDesktopCardMode, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <components:SettingsCallout
+                        Margin="0,0,0,4"
+                        IsAccent="False"
+                        Symbol="WindowConsole20"
+                        Text="桌面卡片模式尚未实现，暂时没有可调整的设置。每个模式将拥有各自的设置页。" />
+                </StackPanel>
+
+                <StackPanel
+                    x:Name="FloatingBallModeSection"
+                    Visibility="{Binding ViewModel.IsFloatingBallMode, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <components:SettingsCallout
+                        Margin="0,0,0,4"
+                        IsAccent="False"
+                        Symbol="WindowConsole20"
+                        Text="悬浮球模式尚未实现，暂时没有可调整的设置。每个模式将拥有各自的设置页。" />
+                </StackPanel>
+
                 <ui:Button
-                    Margin="0,20,0,40"
+                    Margin="0,16,0,40"
                     HorizontalAlignment="Left"
                     Click="ResetButton_Click"
                     Content="恢复本页默认设置"
