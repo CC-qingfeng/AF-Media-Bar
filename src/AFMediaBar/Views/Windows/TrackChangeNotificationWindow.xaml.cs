@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Windows.Interop;
 using System.Windows.Input;
 using System.Windows.Controls;
@@ -16,6 +17,8 @@ namespace AFMediaBar.Views.Windows;
 /// <summary>可复用、非激活的曲目切换通知窗口。 / Reusable, non-activating track-change notification window.</summary>
 public partial class TrackChangeNotificationWindow : FluentWindow
 {
+    private const int ContentSizeAttemptCount = 3;
+    private const double ContentSizeTolerance = 0.5;
     private readonly DispatcherTimer _hideTimer;
     private DisplayMonitorInfo? _currentMonitor;
     private TrackChangeNotificationPosition _currentPosition;
@@ -81,7 +84,7 @@ public partial class TrackChangeNotificationWindow : FluentWindow
         if (presentationVersion != _presentationVersion || !IsVisible)
             return;
 
-        UpdateLayout();
+        EnsureContentSizedWindow();
         PositionOnMonitor(request.Monitor, request.Settings.Position);
         _hasCompletedInitialLayout = true;
         Opacity = 1;
@@ -89,6 +92,42 @@ public partial class TrackChangeNotificationWindow : FluentWindow
 
         _hideTimer.Interval = TimeSpan.FromMilliseconds(request.Settings.DurationMilliseconds);
         _hideTimer.Start();
+    }
+
+    /// <summary>
+    /// 按“客户端尺寸等于内容期望尺寸”校验并修正窗口尺寸。
+    /// 首次 Show 时 WPF 仍按窗口当时的标题栏和边框补偿 <c>SizeToContent</c>：窗口在 96 DPI 下比内容宽出
+    /// 16 物理像素、高出 39 物理像素（<c>SM_CXSIZEFRAME</c> 与 <c>SM_CYCAPTION</c> 的合计），内容停在左上角，
+    /// 右侧与下方留下空带；复用同一 HWND 的后续呈现不再补偿标题栏，尺寸因此正常。
+    /// 这里在窗口框架稳定后重新施加一次 <c>SizeToContent</c>，让首次呈现与后续复用得到同一尺寸。
+    /// Verifies and corrects the window size against the content's desired size. On the first Show, WPF still compensates
+    /// <c>SizeToContent</c> for the caption and frame the window had at that moment: the window is 16 physical pixels wider
+    /// and 39 physical pixels taller than its content at 96 DPI (the combined <c>SM_CXSIZEFRAME</c> and <c>SM_CYCAPTION</c>
+    /// metrics), and the content stays anchored to the top-left with empty strips at the right and bottom. Later
+    /// presentations reuse the HWND without that compensation and size correctly. Re-applying <c>SizeToContent</c> once the
+    /// window frame has settled makes the first presentation match every later one.
+    /// </summary>
+    private void EnsureContentSizedWindow()
+    {
+        for (var attempt = 0; attempt < ContentSizeAttemptCount; attempt++)
+        {
+            UpdateLayout();
+            var desired = AnimatedRoot.DesiredSize;
+            var widthMatches = Math.Abs(ActualWidth - desired.Width) <= ContentSizeTolerance;
+            var heightMatches = Math.Abs(ActualHeight - desired.Height) <= ContentSizeTolerance;
+            if (desired.Width > 0 && desired.Height > 0 && widthMatches && heightMatches)
+            {
+                return;
+            }
+
+            var sizeToContent = SizeToContent;
+            SizeToContent = System.Windows.SizeToContent.Manual;
+            SizeToContent = sizeToContent;
+        }
+
+        Debug.WriteLine(
+            $"[TrackChangeNotification] Content size did not settle: window {ActualWidth}x{ActualHeight}, " +
+            $"content {AnimatedRoot.DesiredSize.Width}x{AnimatedRoot.DesiredSize.Height}");
     }
 
     /// <summary>补全当前可见通知的封面或文字，不重新显示窗口或重置计时。 / Enriches artwork or text for the visible notification without re-showing it or resetting its timer.</summary>
