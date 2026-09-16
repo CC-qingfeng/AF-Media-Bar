@@ -153,6 +153,7 @@
                                     </TextBlock>
                     <Slider Grid.Column="2" Minimum="0" Maximum="100"
                             MinWidth="0"
+                            Style="{StaticResource AfAccentSliderStyle}"
                             FocusVisualStyle="{DynamicResource AfFocusVisualStyle}"
                             Margin="0,0,6,0"
                                             Value="{Binding VolumePercent, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"

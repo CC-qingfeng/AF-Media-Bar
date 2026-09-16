@@ -77,7 +77,171 @@
         does not jitter with the number's width while dragging, and the slider is fixed at 150 DIP so every
         slider's endpoints land on the same two vertical lines.
     -->
-    <Style x:Key="AfSettingsRowSliderStyle" TargetType="{x:Type Slider}">
+    <!--
+        强调色调节条：轨道在滑块之前的一半用系统强调色，之后的一半保持中性轨道色，滑块是带强调色芯的圆点。
+        同一套样式同时服务设置页滑杆、完整层进度/音量、紧凑菜单的竖向音量与托盘音频面板，
+        因此"左强调色/右中性色"在整个应用里只有一处定义。
+        Accent adjustment bar: the part of the track before the thumb uses the system accent color, the remainder keeps the
+        neutral track color, and the thumb is a circle with an accent core. One definition serves settings sliders, the full
+        panel progress/volume, the compact menu's vertical volume, and the tray audio panel.
+    -->
+    <!--
+        强调色画刷取"原始系统强调色"（WPF-UI 的 SystemAccentColor），而不是主题里那档被压暗的填充令牌
+        （AccentFillColorDefaultBrush 是强调色的暗档，在深色主题下看起来发灰、发淡）。
+        The accent brush uses the raw system accent (WPF-UI's SystemAccentColor) instead of the theme's darkened fill
+        token (AccentFillColorDefaultBrush is a darker shade of the accent and reads washed out on dark themes).
+    -->
+    <SolidColorBrush x:Key="AfAccentFillBrush" Color="{DynamicResource SystemAccentColor}" />
+
+    <Style x:Key="AfAccentSliderThumbStyle" TargetType="{x:Type Thumb}">
+        <Setter Property="OverridesDefaultStyle" Value="True" />
+        <Setter Property="Height" Value="18" />
+        <Setter Property="Width" Value="18" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type Thumb}">
+                    <Grid Background="Transparent">
+                        <Border CornerRadius="9"
+                                BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                BorderThickness="3" />
+                        <Ellipse Width="8" Height="8"
+                                 Fill="{DynamicResource AfAccentFillBrush}" />
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!--
+        填充段由 PART_SelectionRange 承担：它由 Slider 自己按 Value 定尺寸与位置（横向贴滑块左侧、竖向贴滑块下方），
+        Track 的减/增重复按钮只保留翻页点击行为、不再负责画颜色 —— 依赖它们画填充时它们拿到的是 0 宽度，
+        填充因此永远不会出现。
+        The filled segment comes from PART_SelectionRange: the Slider itself sizes and positions it from Value (left of the
+        thumb when horizontal, below it when vertical). The Track's decrease/increase repeat buttons keep only the paging
+        click behavior and no longer paint: when they are expected to paint, the Track gives them zero width and the fill
+        never appears.
+    -->
+    <Style x:Key="AfAccentSliderStyle" TargetType="{x:Type Slider}">
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="IsSelectionRangeEnabled" Value="True" />
+        <Setter Property="SelectionStart" Value="{Binding Minimum, RelativeSource={RelativeSource Self}}" />
+        <Setter Property="SelectionEnd" Value="{Binding Value, RelativeSource={RelativeSource Self}}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type Slider}">
+                    <Grid Background="Transparent">
+                        <Border Height="4" CornerRadius="2" VerticalAlignment="Center"
+                                Background="{DynamicResource ControlStrokeColorDefaultBrush}" />
+                        <Border x:Name="PART_SelectionRange" Height="4" CornerRadius="2"
+                                VerticalAlignment="Center" HorizontalAlignment="Left"
+                                Background="{DynamicResource AfAccentFillBrush}" />
+                        <Track x:Name="PART_Track" Orientation="{TemplateBinding Orientation}">
+                            <Track.DecreaseRepeatButton>
+                                <RepeatButton Command="{x:Static Slider.DecreaseLarge}" Focusable="False" IsTabStop="False">
+                                    <RepeatButton.Template>
+                                        <ControlTemplate TargetType="{x:Type RepeatButton}">
+                                            <Border Background="Transparent" />
+                                        </ControlTemplate>
+                                    </RepeatButton.Template>
+                                </RepeatButton>
+                            </Track.DecreaseRepeatButton>
+                            <Track.Thumb>
+                                <Thumb Style="{StaticResource AfAccentSliderThumbStyle}" />
+                            </Track.Thumb>
+                            <Track.IncreaseRepeatButton>
+                                <RepeatButton Command="{x:Static Slider.IncreaseLarge}" Focusable="False" IsTabStop="False">
+                                    <RepeatButton.Template>
+                                        <ControlTemplate TargetType="{x:Type RepeatButton}">
+                                            <Border Background="Transparent" />
+                                        </ControlTemplate>
+                                    </RepeatButton.Template>
+                                </RepeatButton>
+                            </Track.IncreaseRepeatButton>
+                        </Track>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <!-- 竖向滑杆需要转置的轨道与填充段，用第二个模板而不是在触发器里改尺寸（嵌套模板里的元素无法被外层 TargetName 命中）。 -->
+            <!-- A vertical slider needs the transposed track and fill; use a second template instead of resizing from a
+                 trigger, because elements inside a nested template cannot be addressed by the outer TargetName. -->
+            <Trigger Property="Orientation" Value="Vertical">
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="{x:Type Slider}">
+                            <Grid Background="Transparent">
+                                <Border Width="4" CornerRadius="2" HorizontalAlignment="Center"
+                                        Background="{DynamicResource ControlStrokeColorDefaultBrush}" />
+                                <Border x:Name="PART_SelectionRange" Width="4" CornerRadius="2"
+                                        HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                                        Background="{DynamicResource AfAccentFillBrush}" />
+                                <Track x:Name="PART_Track" Orientation="{TemplateBinding Orientation}">
+                                    <Track.DecreaseRepeatButton>
+                                        <RepeatButton Command="{x:Static Slider.DecreaseLarge}" Focusable="False" IsTabStop="False">
+                                            <RepeatButton.Template>
+                                                <ControlTemplate TargetType="{x:Type RepeatButton}">
+                                                    <Border Background="Transparent" />
+                                                </ControlTemplate>
+                                            </RepeatButton.Template>
+                                        </RepeatButton>
+                                    </Track.DecreaseRepeatButton>
+                                    <Track.Thumb>
+                                        <Thumb Style="{StaticResource AfAccentSliderThumbStyle}" />
+                                    </Track.Thumb>
+                                    <Track.IncreaseRepeatButton>
+                                        <RepeatButton Command="{x:Static Slider.IncreaseLarge}" Focusable="False" IsTabStop="False">
+                                            <RepeatButton.Template>
+                                                <ControlTemplate TargetType="{x:Type RepeatButton}">
+                                                    <Border Background="Transparent" />
+                                                </ControlTemplate>
+                                            </RepeatButton.Template>
+                                        </RepeatButton>
+                                    </Track.IncreaseRepeatButton>
+                                </Track>
+                            </Grid>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Opacity" Value="0.4" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!--
+        隐式样式让应用里"剩下的每一个滑杆"（例如屏幕与位置页的长度/粗细/偏移滑杆）都得到同一套双色轨道，
+        不依赖每个页面记得声明；局部显式样式（如行内滑杆的固定宽度）仍然优先。
+        The implicit style gives every remaining slider in the application (for example the length/thickness/offset sliders on
+        the screen-and-position page) the same two-tone track without each page having to remember; local explicit styles such
+        as the fixed-width row slider still win.
+    -->
+    <Style TargetType="{x:Type Slider}" BasedOn="{StaticResource AfAccentSliderStyle}" />
+
+    <!--
+        强调色进度条：只展示进度，没有滑块也不接受输入；高度默认 4 DIP，调用方可以再压薄。
+        Accent progress bar: display only, no thumb and no input; 4 DIP tall by default, callers may go thinner.
+    -->
+    <Style x:Key="AfAccentProgressBarStyle" TargetType="{x:Type ProgressBar}">
+        <Setter Property="Height" Value="4" />
+        <Setter Property="IsHitTestVisible" Value="False" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type ProgressBar}">
+                    <Grid Background="Transparent">
+                        <Border x:Name="PART_Track" CornerRadius="2"
+                                Background="{DynamicResource ControlStrokeColorDefaultBrush}" />
+                        <Border x:Name="PART_Indicator" CornerRadius="2" HorizontalAlignment="Left"
+                                Background="{DynamicResource AfAccentFillBrush}" />
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="AfSettingsRowSliderStyle" TargetType="{x:Type Slider}"
+           BasedOn="{StaticResource AfAccentSliderStyle}">
         <Setter Property="Width" Value="{StaticResource AfSettingsRowSliderWidth}" />
         <Setter Property="IsMoveToPointEnabled" Value="True" />
         <Setter Property="VerticalAlignment" Value="Center" />

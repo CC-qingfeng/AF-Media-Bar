@@ -450,8 +450,6 @@ public partial class TaskBarMediaControl
 
     private void TaskbarHoverLayer_MouseLeave(object sender, MouseEventArgs e)
     {
-        if (_isSeeking)
-            return;
         _hoverCloseTimer.Stop();
         _hoverCloseTimer.Start();
     }
@@ -510,8 +508,6 @@ public partial class TaskBarMediaControl
     {
         _hoverOpenTimer.Stop();
         _hoverCloseTimer.Stop();
-        if (!immediate && _isSeeking)
-            return;
         if (immediate || HoverRevealHost.Visibility != Visibility.Visible)
         {
             HoverRevealClip.BeginAnimation(RectangleGeometry.RectProperty, null);

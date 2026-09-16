@@ -121,7 +121,6 @@ namespace AFMediaBar.Components
         private readonly DispatcherTimer _hoverCloseTimer;
         private MediaSnapshot _snapshot = MediaSnapshot.Disconnected;
         private bool _isTaskbarHoverVisible;
-        private bool _isSeeking;
         private PlayerForegroundDecision? _adaptiveForegroundDecision;
         private IReadOnlyList<QuickLaunchEntry> _quickLaunchEntries = Array.Empty<QuickLaunchEntry>();
         private DateTime _suppressSurfaceClickUntilUtc;
@@ -143,7 +142,6 @@ namespace AFMediaBar.Components
         public event EventHandler? QuickLaunchMenuRequested;
         public event EventHandler<PlayerSurfaceWheelEventArgs>? QuickLaunchWheelRequested;
         public event EventHandler? OpenTaskManagerRequested;
-        public event Action<double>? SeekRequested;
         public event EventHandler<PlayerSurfaceWheelEventArgs>? WheelRequested;
         public event EventHandler<MediaBarSizeRequestEventArgs>? DesiredSizeChanged;
 
@@ -427,7 +425,6 @@ namespace AFMediaBar.Components
             TaskbarHoverProgress.Visibility = controls.ProgressVisible && progressVisible
                 ? Visibility.Visible
                 : Visibility.Collapsed;
-            TaskbarHoverProgress.IsEnabled = _snapshot.CanSeek;
             TaskbarFullPanelHandle.Visibility = experience.FullLayerEnabled
                 ? Visibility.Visible
                 : Visibility.Collapsed;
@@ -772,7 +769,6 @@ namespace AFMediaBar.Components
                     TaskbarPreviousButton.IsEnabled = false;
                     TaskbarPlayPauseButton.IsEnabled = false;
                     TaskbarNextButton.IsEnabled = false;
-                    TaskbarHoverProgress.IsEnabled = false;
                     HideTaskbarHoverLayer(immediate: true);
                     UpdateTaskbarProgress();
                     ApplyTaskbarExperienceSettings();
@@ -1131,26 +1127,6 @@ namespace AFMediaBar.Components
         private void TaskbarFullPanelHandle_Click(object sender, RoutedEventArgs e) =>
             OpenFullPanelRequested?.Invoke(this, EventArgs.Empty);
 
-        private void TaskbarHoverProgress_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-        {
-            if (!_snapshot.CanSeek || _snapshot.Duration <= 0)
-                return;
-            _isSeeking = true;
-        }
-
-        private void TaskbarHoverProgress_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
-        {
-            if (!_isSeeking)
-                return;
-            _isSeeking = false;
-            SeekRequested?.Invoke(TaskbarHoverProgress.Value);
-            if (!HoverRevealHost.IsMouseOver && !SongInfoStackPanel.IsMouseOver)
-                HideTaskbarHoverLayer();
-        }
-
-        private void TaskbarHoverProgress_LostMouseCapture(object sender, MouseEventArgs e) =>
-            _isSeeking = false;
-
         private void UpdateTaskbarProgress()
         {
             var position = TaskbarExperiencePolicy.GetPosition(_snapshot, DateTimeOffset.UtcNow);
@@ -1158,8 +1134,7 @@ namespace AFMediaBar.Components
             TaskbarRestProgress.Maximum = Math.Max(1, _snapshot.Duration);
             TaskbarRestProgress.Value = position;
             TaskbarHoverProgress.Maximum = Math.Max(1, _snapshot.Duration);
-            if (!_isSeeking)
-                TaskbarHoverProgress.Value = position;
+            TaskbarHoverProgress.Value = position;
             if (_currentMode == WindowMode.Taskbar && !_isVertical)
             {
                 TaskbarRestProgress.Visibility = hasDuration ? Visibility.Visible : Visibility.Collapsed;

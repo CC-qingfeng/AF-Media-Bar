@@ -135,7 +135,6 @@ public partial class TaskbarWindow : Window
         MediaControl.QuickLaunchMenuRequested += MediaControl_QuickLaunchMenuRequested;
         MediaControl.QuickLaunchWheelRequested += MediaControl_QuickLaunchWheelRequested;
         MediaControl.OpenTaskManagerRequested += MediaControl_OpenTaskManagerRequested;
-        MediaControl.SeekRequested += MediaControl_SeekRequested;
         MediaControl.WheelRequested += MediaControl_WheelRequested;
         MediaControl.DesiredSizeChanged += MediaControl_DesiredSizeChanged;
         MediaControl.OutputDeviceInfoRequested += MediaControl_OutputDeviceInfoRequested;
@@ -1089,9 +1088,6 @@ public partial class TaskbarWindow : Window
         _foregroundSamplingSession.RequestRefresh();
     }
 
-    private void MediaControl_SeekRequested(double position) =>
-        ExecuteWithParameter(_viewModel.SeekCommand, position);
-
     private static void ExecuteWithParameter(System.Windows.Input.ICommand command, object parameter)
     {
         if (command.CanExecute(parameter))
@@ -1373,7 +1369,6 @@ public partial class TaskbarWindow : Window
         MediaControl.QuickLaunchMenuRequested -= MediaControl_QuickLaunchMenuRequested;
         MediaControl.QuickLaunchWheelRequested -= MediaControl_QuickLaunchWheelRequested;
         MediaControl.OpenTaskManagerRequested -= MediaControl_OpenTaskManagerRequested;
-        MediaControl.SeekRequested -= MediaControl_SeekRequested;
         MediaControl.WheelRequested -= MediaControl_WheelRequested;
         MediaControl.DesiredSizeChanged -= MediaControl_DesiredSizeChanged;
         MediaControl.OutputDeviceInfoRequested -= MediaControl_OutputDeviceInfoRequested;

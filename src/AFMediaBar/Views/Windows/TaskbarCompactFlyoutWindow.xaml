@@ -69,6 +69,7 @@
                 <Slider x:Name="VolumeSlider" Orientation="Vertical" Height="150" Margin="0,8,0,0"
                         HorizontalAlignment="Center" Minimum="0" Maximum="100" SmallChange="2" LargeChange="10"
                         IsMoveToPointEnabled="True"
+                        Style="{StaticResource AfAccentSliderStyle}"
                         ValueChanged="VolumeSlider_ValueChanged" PreviewMouseWheel="VolumeSlider_PreviewMouseWheel"/>
             </StackPanel>
         </Grid>

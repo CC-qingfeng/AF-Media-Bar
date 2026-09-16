@@ -230,11 +230,8 @@
                          VerticalAlignment="Bottom"
                          Minimum="0"
                          Maximum="1"
-                         Visibility="Collapsed"
-                         IsHitTestVisible="False"
-                         BorderThickness="0"
-                         Background="Transparent"
-                         Foreground="#FF75B9" />
+                         Style="{StaticResource AfAccentProgressBarStyle}"
+                         Visibility="Collapsed" />
             <Border x:Name="TaskbarSpectrumHoverSurface"
                     Panel.ZIndex="4"
                     Width="38"
@@ -348,19 +345,17 @@
                                         PreviewMouseWheel="TaskbarVolumeButton_PreviewMouseWheel">
                                     <TextBlock Text="&#xE767;" FontFamily="{DynamicResource AppIconFontFamily}" FontSize="14" />
                                 </Button>
-                                <Slider x:Name="TaskbarHoverProgress"
-                                        Width="96"
-                                        Height="20"
-                                        Margin="8,0,0,0"
-                                        VerticalAlignment="Center"
-                                        Minimum="0"
-                                        Maximum="1"
-                                        Tag="MediaAction"
-                                        FocusVisualStyle="{DynamicResource AfFocusVisualStyle}"
-                                        IsMoveToPointEnabled="True"
-                                        PreviewMouseLeftButtonDown="TaskbarHoverProgress_PreviewMouseLeftButtonDown"
-                                        PreviewMouseLeftButtonUp="TaskbarHoverProgress_PreviewMouseLeftButtonUp"
-                                        LostMouseCapture="TaskbarHoverProgress_LostMouseCapture" />
+                                <!-- 悬停层进度只展示播放位置：没有滑块、不可拖动，只用强调色段表示进度。 -->
+                                <!-- The hover-layer progress only displays playback position: no thumb, no dragging, accent color only. -->
+                                <ProgressBar x:Name="TaskbarHoverProgress"
+                                             Width="96"
+                                             Height="3"
+                                             Margin="10,0,0,0"
+                                             VerticalAlignment="Center"
+                                             Minimum="0"
+                                             Maximum="1"
+                                             Style="{StaticResource AfAccentProgressBarStyle}"
+                                             Visibility="Collapsed" />
                             </StackPanel>
                             <Button x:Name="TaskbarFullPanelHandle"
                                     Width="44"
