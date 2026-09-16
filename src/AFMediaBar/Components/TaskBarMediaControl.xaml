@@ -65,19 +65,19 @@
                 </Trigger>
             </Style.Triggers>
         </Style>
+        <!--
+            频谱颜色只有一处定义：柱状图、像素柱状图与波形都取这一支画刷，因此改颜色不会出现某一种样式没跟上。
+            The spectrum colour has one definition: the bar, pixel, and waveform styles all take this brush, so changing it
+            cannot leave one style behind.
+        -->
+        <SolidColorBrush x:Key="TaskbarSpectrumBrush" Color="#DFFFFFFF" />
         <Style x:Key="TaskbarSpectrumBar" TargetType="Border">
-            <Setter Property="Width" Value="2" />
-            <Setter Property="Height" Value="21" />
-            <Setter Property="Margin" Value="1,0" />
+            <Setter Property="Background" Value="{StaticResource TaskbarSpectrumBrush}" />
             <Setter Property="CornerRadius" Value="1" />
-            <Setter Property="VerticalAlignment" Value="Bottom" />
-            <Setter Property="Background" Value="#DFFFFFFF" />
-            <Setter Property="RenderTransformOrigin" Value="0.5,1" />
-            <Setter Property="RenderTransform">
-                <Setter.Value>
-                    <ScaleTransform ScaleY="0.15" />
-                </Setter.Value>
-            </Setter>
+        </Style>
+        <Style x:Key="TaskbarSpectrumPixel" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource TaskbarSpectrumBrush}" />
+            <Setter Property="CornerRadius" Value="0.5" />
         </Style>
     </UserControl.Resources>
 
@@ -234,7 +234,7 @@
                          Visibility="Collapsed" />
             <Border x:Name="TaskbarSpectrumHoverSurface"
                     Panel.ZIndex="4"
-                    Width="38"
+                    Width="36"
                     Height="32"
                     Margin="0,0,4,0"
                     Padding="1"
@@ -247,30 +247,20 @@
                     Visibility="Collapsed"
                     MouseEnter="TaskbarSpectrumHoverSurface_MouseEnter"
                     MouseLeave="TaskbarSpectrumHoverSurface_MouseLeave">
-                <StackPanel x:Name="TaskbarSpectrum"
-                            Width="36"
-                            Height="22"
-                            HorizontalAlignment="Center"
-                            VerticalAlignment="Center"
-                            Orientation="Horizontal"
-                            IsHitTestVisible="False">
-                    <Border Style="{StaticResource TaskbarSpectrumBar}" />
-                    <Border Style="{StaticResource TaskbarSpectrumBar}" />
-                    <Border Style="{StaticResource TaskbarSpectrumBar}" />
-                    <Border Style="{StaticResource TaskbarSpectrumBar}" />
-                    <Border Style="{StaticResource TaskbarSpectrumBar}" />
-                    <Border Style="{StaticResource TaskbarSpectrumBar}" />
-                    <Border Style="{StaticResource TaskbarSpectrumBar}" />
-                    <Border Style="{StaticResource TaskbarSpectrumBar}" />
-                    <Border Style="{StaticResource TaskbarSpectrumBar}" />
-                </StackPanel>
+                <!-- 频谱的画布尺寸、柱数和样式都由 SpectrumPresentationPolicy 决定，视觉子元素在代码中重建。 -->
+                <!-- The spectrum canvas size, bar count, and style all come from SpectrumPresentationPolicy; its visual children are rebuilt in code. -->
+                <Canvas x:Name="TaskbarSpectrum"
+                        Width="34"
+                        Height="21"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        IsHitTestVisible="False" />
             </Border>
             <Border x:Name="TaskbarPerformanceSurface"
                     Panel.ZIndex="4" Width="74" Height="24" Margin="0,0,4,0"
                     HorizontalAlignment="Right" VerticalAlignment="Center"
                     CornerRadius="12" Background="#16000000"
-                    Cursor="Arrow" Visibility="Collapsed"
-                    MouseLeftButtonUp="TaskbarPerformanceSurface_MouseLeftButtonUp">
+                    Cursor="Arrow" Visibility="Collapsed">
                 <TextBlock x:Name="TaskbarPerformanceText" Text="MEM —" FontSize="11"
                            FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"
                            TextTrimming="CharacterEllipsis" IsHitTestVisible="False"/>

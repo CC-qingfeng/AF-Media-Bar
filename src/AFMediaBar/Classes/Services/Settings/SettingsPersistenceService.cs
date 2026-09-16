@@ -11,7 +11,7 @@ namespace AFMediaBar.Classes.Services;
 /// <summary>负责用户设置 JSON 的加载、恢复、原子保存和防抖。 / Owns loading, recovery, atomic saving and debouncing of user settings JSON.</summary>
 public sealed class SettingsPersistenceService : IDisposable
 {
-    public const int CurrentSchemaVersion = 9;
+    public const int CurrentSchemaVersion = 10;
     private readonly string _directoryPath;
     private readonly string _settingsPath;
     private readonly string _backupPath;
@@ -251,6 +251,22 @@ public sealed class SettingsPersistenceService : IDisposable
             // migration intent belongs in code rather than in the coincidence that a missing field equals a
             // default. Automatic checking and automatic download/install are on, matching a fresh installation.
             result.Update = UpdateSettings.Default;
+        }
+        if (envelope.SchemaVersion <= 9)
+        {
+            // Schema 10 让频谱柱数与尺寸相关（9–24 根）并新增频谱样式。旧文件的柱数可能落在新区间之外，
+            // 由 Normalize 夹到 9；样式在该文件里没有对应字段，取值即柱状图，与迁移前的观感一致。
+            // 性能组件的采样间隔同时收敛到 0.5–5 秒，旧取值由 Normalize 吸附到 0.5 秒网格并夹取。
+            // 「点击性能组件时打开任务管理器」改为默认开启：该开关此前虽然存在，但点击被任务栏拖动逻辑吞掉，
+            // 因此没有任何用户能在它关闭的状态下做出有效选择，旧文件里的 false 不代表用户意图。
+            // Schema 10 ties the spectrum bar count to its size (9–24) and adds spectrum styles. Bars from an older file may
+            // fall outside the new range and are clamped to nine by Normalize, while the style has no field in those files and
+            // therefore reads as bars, matching the pre-migration appearance. The performance sampling interval narrows to
+            // 0.5–5 seconds at the same time; Normalize snaps older values onto the 0.5-second grid and clamps them. Opening
+            // Task Manager on click becomes the default: the switch existed before but the click was swallowed by the taskbar
+            // drag logic, so no user could have made a meaningful choice while it was off and a stored false is not intent.
+            result.SpectrumComponent = result.SpectrumComponent with { Style = SpectrumStyle.Bars };
+            result.PerformanceComponent = result.PerformanceComponent with { OpenTaskManagerOnClick = true };
         }
         return result.Normalize();
     }

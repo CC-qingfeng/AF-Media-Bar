@@ -58,11 +58,50 @@ public partial class ExtraFeaturesViewModel : ObservableObject
         set { SettingsManager.SetSpectrumComponentSettings(SettingsManager.Current.SpectrumComponent with { SensitivityPercent = value }); OnPropertyChanged(); }
     }
 
-    public int PerformanceRefreshIntervalMilliseconds
+    /// <summary>
+    /// 频谱呈现样式。柱数决定频谱占用宽度，样式只决定这些宽度怎么画，因此两者互不影响。
+    /// Spectrum presentation style. The bar count decides the width the spectrum occupies and the style only decides how that
+    /// width is painted, so neither interferes with the other.
+    /// </summary>
+    public SpectrumStyle SpectrumStyle
     {
-        get => SettingsManager.Current.PerformanceComponent.RefreshIntervalMilliseconds;
-        set { SettingsManager.SetPerformanceComponentSettings(SettingsManager.Current.PerformanceComponent with { RefreshIntervalMilliseconds = value }); OnPropertyChanged(); }
+        get => SettingsManager.Current.SpectrumComponent.Style;
+        set { SettingsManager.SetSpectrumComponentSettings(SettingsManager.Current.SpectrumComponent with { Style = value }); OnPropertyChanged(); }
     }
+
+    /// <summary>柱数滑杆的下限，来自持久化常量而不是界面字面量。 / Lower bound of the bar-count slider, taken from the persistence constant rather than a UI literal.</summary>
+    public int MinimumSpectrumBandCount => SpectrumComponentSettings.MinimumBandCount;
+
+    /// <inheritdoc cref="MinimumSpectrumBandCount" />
+    public int MaximumSpectrumBandCount => SpectrumComponentSettings.MaximumBandCount;
+
+    /// <summary>
+    /// 性能组件的采样间隔，界面以秒为单位。设置里存的仍是毫秒，写入前吸附到滑杆步长上，
+    /// 因此读数与滑杆位置永远一致。
+    /// Sampling interval of the performance component, expressed in seconds for the interface. The stored value stays in
+    /// milliseconds and is snapped onto the slider step before it is written, so the reading and the slider position always
+    /// agree.
+    /// </summary>
+    public double PerformanceRefreshIntervalSeconds
+    {
+        get => SettingsManager.Current.PerformanceComponent.RefreshIntervalMilliseconds / 1000d;
+        set
+        {
+            var milliseconds = PerformanceComponentSettings.SnapRefreshIntervalMilliseconds((int)Math.Round(value * 1000));
+            SettingsManager.SetPerformanceComponentSettings(
+                SettingsManager.Current.PerformanceComponent with { RefreshIntervalMilliseconds = milliseconds });
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>采样间隔滑杆的下限（秒）。 / Lower bound of the sampling-interval slider, in seconds.</summary>
+    public double MinimumPerformanceRefreshIntervalSeconds => PerformanceComponentSettings.MinimumRefreshIntervalMilliseconds / 1000d;
+
+    /// <inheritdoc cref="MinimumPerformanceRefreshIntervalSeconds" />
+    public double MaximumPerformanceRefreshIntervalSeconds => PerformanceComponentSettings.MaximumRefreshIntervalMilliseconds / 1000d;
+
+    /// <inheritdoc cref="MinimumPerformanceRefreshIntervalSeconds" />
+    public double PerformanceRefreshIntervalStepSeconds => PerformanceComponentSettings.RefreshIntervalStepMilliseconds / 1000d;
 
     public bool OpenTaskManagerOnMetricsClick
     {
@@ -247,7 +286,8 @@ public partial class ExtraFeaturesViewModel : ObservableObject
             OnPropertyChanged(nameof(SpectrumBandCount));
             OnPropertyChanged(nameof(SpectrumRefreshRateHz));
             OnPropertyChanged(nameof(SpectrumSensitivityPercent));
-            OnPropertyChanged(nameof(PerformanceRefreshIntervalMilliseconds));
+            OnPropertyChanged(nameof(SpectrumStyle));
+            OnPropertyChanged(nameof(PerformanceRefreshIntervalSeconds));
             OnPropertyChanged(nameof(OpenTaskManagerOnMetricsClick));
             OnPropertyChanged(nameof(SpectrumVisible));
             OnPropertyChanged(nameof(PerformanceVisible));

@@ -225,7 +225,23 @@
                             </ui:CardExpander.Header>
                             <StackPanel>
                                 <components:SettingsRow
-                                    Description="频谱柱的数量（1–9）"
+                                    Description="频谱的绘制方式，不改变柱数与占用宽度"
+                                    Icon="{ui:SymbolIcon PaintBrush24}"
+                                    IsNested="True"
+                                    Style="{StaticResource SpectrumParameterRowStyle}"
+                                    Title="样式">
+                                    <ComboBox
+                                        MinWidth="160"
+                                        SelectedValue="{Binding ViewModel.SpectrumStyle, Mode=TwoWay}"
+                                        SelectedValuePath="Tag">
+                                        <ComboBoxItem Content="柱状图" Tag="{x:Static settings:SpectrumStyle.Bars}" />
+                                        <ComboBoxItem Content="波形图" Tag="{x:Static settings:SpectrumStyle.Waveform}" />
+                                        <ComboBoxItem Content="像素柱状图" Tag="{x:Static settings:SpectrumStyle.PixelBars}" />
+                                        <ComboBoxItem Content="上下对称柱状图" Tag="{x:Static settings:SpectrumStyle.MirroredBars}" />
+                                    </ComboBox>
+                                </components:SettingsRow>
+                                <components:SettingsRow
+                                    Description="频谱柱的数量（9–24）；柱宽固定，柱数越多频谱越宽"
                                     Icon="{ui:SymbolIcon DataBarVertical24}"
                                     IsNested="True"
                                     Style="{StaticResource SpectrumParameterRowStyle}"
@@ -233,8 +249,8 @@
                                     <StackPanel Orientation="Horizontal">
                                         <Slider
                                             IsSnapToTickEnabled="True"
-                                            Maximum="9"
-                                            Minimum="1"
+                                            Maximum="{Binding ViewModel.MaximumSpectrumBandCount}"
+                                            Minimum="{Binding ViewModel.MinimumSpectrumBandCount}"
                                             Style="{StaticResource AfSettingsRowSliderStyle}"
                                             TickFrequency="1"
                                             Value="{Binding ViewModel.SpectrumBandCount, Mode=TwoWay}" />
@@ -334,7 +350,7 @@
                                         IsEnabled="{Binding ViewModel.CanUncheckProcessMemory}" />
                                 </components:SettingsRow>
                                 <components:SettingsRow
-                                    Description="采样间隔，越小越灵敏（250–60000 毫秒）"
+                                    Description="采样间隔，越小越灵敏（0.5–5 秒）"
                                     Icon="{ui:SymbolIcon Timer24}"
                                     IsNested="True"
                                     Style="{StaticResource PerformanceParameterRowStyle}"
@@ -342,15 +358,16 @@
                                     <StackPanel Orientation="Horizontal">
                                         <Slider
                                             IsSnapToTickEnabled="True"
-                                            Maximum="60000"
-                                            Minimum="250"
+                                            Maximum="{Binding ViewModel.MaximumPerformanceRefreshIntervalSeconds}"
+                                            Minimum="{Binding ViewModel.MinimumPerformanceRefreshIntervalSeconds}"
                                             Style="{StaticResource AfSettingsRowSliderStyle}"
-                                            TickFrequency="250"
-                                            Value="{Binding ViewModel.PerformanceRefreshIntervalMilliseconds, Mode=TwoWay}" />
-                                        <TextBlock Style="{StaticResource AfSettingsRowValueStyle}" Text="{Binding ViewModel.PerformanceRefreshIntervalMilliseconds, StringFormat={}{0} ms}" />
+                                            TickFrequency="{Binding ViewModel.PerformanceRefreshIntervalStepSeconds}"
+                                            Value="{Binding ViewModel.PerformanceRefreshIntervalSeconds, Mode=TwoWay}" />
+                                        <TextBlock Style="{StaticResource AfSettingsRowValueStyle}" Text="{Binding ViewModel.PerformanceRefreshIntervalSeconds, StringFormat={}{0:0.#} 秒}" />
                                     </StackPanel>
                                 </components:SettingsRow>
                                 <components:SettingsRow
+                                    Description="关闭后点击性能组件不执行任何操作"
                                     Icon="{ui:SymbolIcon CursorClick24}"
                                     IsNested="True"
                                     Style="{StaticResource PerformanceParameterRowStyle}"

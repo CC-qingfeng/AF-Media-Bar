@@ -130,11 +130,14 @@ public sealed class SettingsPersistenceServiceTests
             new[] { "PLAYER.ONE", "player.two" },
             SettingsManager.Current.SmtcSourceFilter.AllowedSourceIds!.ToArray());
         Assert.AreEqual("Player", SettingsManager.Current.QuickLaunch.Entries!.Single().DisplayName);
-        Assert.AreEqual(new SpectrumComponentSettings(7, 25, 180), SettingsManager.Current.SpectrumComponent);
+        // 柱数 7 低于新的下限 9，写入时被夹取；采样间隔 1800 ms 不在 0.5 秒网格上，被吸附到 2000 ms。
+        // A bar count of seven is below the new minimum of nine and is clamped on write, and a 1800 ms interval does not sit
+        // on the 0.5-second grid, so it snaps to 2000 ms.
+        Assert.AreEqual(new SpectrumComponentSettings(9, 25, 180), SettingsManager.Current.SpectrumComponent);
         CollectionAssert.AreEqual(
             new[] { MetricKind.SystemCpu, MetricKind.ProcessMemory },
             SettingsManager.Current.PerformanceComponent.Metrics!.ToArray());
-        Assert.AreEqual(1800, SettingsManager.Current.PerformanceComponent.RefreshIntervalMilliseconds);
+        Assert.AreEqual(2000, SettingsManager.Current.PerformanceComponent.RefreshIntervalMilliseconds);
         Assert.IsTrue(SettingsManager.Current.PerformanceComponent.OpenTaskManagerOnClick);
         Assert.IsFalse(SettingsManager.Current.Update.AutoCheckEnabled);
         Assert.AreEqual("1.2.0", SettingsManager.Current.Update.SkippedVersion);
@@ -143,7 +146,7 @@ public sealed class SettingsPersistenceServiceTests
             SettingsManager.Current.Update.LastCheckUtc);
         Assert.IsFalse(SettingsManager.Current.Update.LastCheckSucceeded);
         var persisted = File.ReadAllText(reader.SettingsPath);
-        StringAssert.Contains(persisted, "\"schemaVersion\": 9");
+        StringAssert.Contains(persisted, "\"schemaVersion\": 10");
         StringAssert.Contains(persisted, "\"Disabled\"");
     }
 
@@ -192,7 +195,7 @@ public sealed class SettingsPersistenceServiceTests
 
         Assert.IsTrue(SettingsManager.Current.LyricsEnabled);
         Assert.IsTrue(Directory.GetFiles(_directory, "settings.json.unsupported-*").Length == 1);
-        StringAssert.Contains(File.ReadAllText(main), "\"schemaVersion\": 9");
+        StringAssert.Contains(File.ReadAllText(main), "\"schemaVersion\": 10");
     }
 
     [TestMethod]
@@ -260,7 +263,7 @@ public sealed class SettingsPersistenceServiceTests
         Assert.AreEqual("DISPLAY2", SettingsManager.Current.TrackChangeNotification.FixedMonitorDeviceId);
         Assert.AreEqual(TaskbarLengthMode.FollowContent, SettingsManager.Current.TaskbarExperience.LengthMode);
         Assert.AreEqual(TaskbarExperienceSettings.Default.FixedLengthDip, SettingsManager.Current.TaskbarExperience.FixedLengthDip);
-        StringAssert.Contains(File.ReadAllText(service.SettingsPath), "\"schemaVersion\": 9");
+        StringAssert.Contains(File.ReadAllText(service.SettingsPath), "\"schemaVersion\": 10");
     }
 
     [TestMethod]
@@ -340,7 +343,7 @@ public sealed class SettingsPersistenceServiceTests
         Assert.AreEqual(TaskbarInformationDensity.Information, SettingsManager.Current.TaskbarExperience.Density);
         Assert.AreEqual(TaskbarLengthMode.Fixed, SettingsManager.Current.TaskbarExperience.LengthMode);
         Assert.AreEqual(420, SettingsManager.Current.TaskbarExperience.FixedLengthDip);
-        StringAssert.Contains(File.ReadAllText(service.SettingsPath), "\"schemaVersion\": 9");
+        StringAssert.Contains(File.ReadAllText(service.SettingsPath), "\"schemaVersion\": 10");
     }
 
     [TestMethod]
@@ -365,7 +368,41 @@ public sealed class SettingsPersistenceServiceTests
             SettingsManager.Current.Update,
             "schema 8 的文件没有更新设置，必须取默认值，而不是被推断成关闭。");
         Assert.IsTrue(SettingsManager.Current.Update.AutoCheckEnabled);
-        StringAssert.Contains(File.ReadAllText(service.SettingsPath), "\"schemaVersion\": 9");
+        StringAssert.Contains(File.ReadAllText(service.SettingsPath), "\"schemaVersion\": 10");
+    }
+
+    /// <summary>
+    /// schema 9 的文件里，频谱柱数可能低于新的下限、采样间隔可能落在旧的 250–60000 毫秒区间上，
+    /// 而「点击性能组件时打开任务管理器」在旧版本中因为点击被拖动逻辑吞掉而从未真正生效过。
+    /// 迁移必须把柱数抬到 9、把间隔吸附并夹取到 0.5–5 秒，并把该开关当作新默认值处理。
+    /// A schema 9 file may hold a bar count below the new minimum and a sampling interval anywhere in the old
+    /// 250–60000 ms range, and its "open Task Manager on click" switch never actually worked because the click was
+    /// swallowed by the drag logic. The migration must lift the bar count to nine, snap and clamp the interval into
+    /// 0.5–5 seconds, and treat that switch as the new default.
+    /// </summary>
+    [TestMethod]
+    public void Schema9MigrationWidensSpectrumBarsAndResetsTheTaskManagerClickDefault()
+    {
+        Directory.CreateDirectory(_directory);
+        File.WriteAllText(
+            Path.Combine(_directory, "settings.json"),
+            """
+            {"schemaVersion":9,"settings":{"spectrumComponent":{"bandCount":3,"refreshRateHz":25,"sensitivityPercent":180},"performanceComponent":{"metrics":["SystemCpu"],"refreshIntervalMilliseconds":250,"openTaskManagerOnClick":false}}}
+            """);
+
+        using var service = new SettingsPersistenceService(_directory);
+        service.Initialize();
+
+        var spectrum = SettingsManager.Current.SpectrumComponent;
+        Assert.AreEqual(SpectrumComponentSettings.MinimumBandCount, spectrum.BandCount);
+        Assert.AreEqual(SpectrumStyle.Bars, spectrum.Style, "旧文件没有样式字段，必须保持柱状图观感。");
+        Assert.AreEqual(25, spectrum.RefreshRateHz);
+        Assert.AreEqual(180, spectrum.SensitivityPercent);
+        Assert.AreEqual(500, SettingsManager.Current.PerformanceComponent.RefreshIntervalMilliseconds);
+        Assert.IsTrue(
+            SettingsManager.Current.PerformanceComponent.OpenTaskManagerOnClick,
+            "该开关在旧版本里从未生效，旧的 false 不代表用户意图，必须取新的默认值。");
+        StringAssert.Contains(File.ReadAllText(service.SettingsPath), "\"schemaVersion\": 10");
     }
 
     [TestMethod]
@@ -512,7 +549,7 @@ public sealed class SettingsPersistenceServiceTests
             PerformanceComponentSettings.Default.Metrics!.ToArray(),
             SettingsManager.Current.PerformanceComponent.Metrics!.ToArray());
         Assert.AreEqual(2500, SettingsManager.Current.PerformanceComponent.RefreshIntervalMilliseconds);
-        Assert.IsFalse(SettingsManager.Current.PerformanceComponent.OpenTaskManagerOnClick);
+        Assert.IsTrue(SettingsManager.Current.PerformanceComponent.OpenTaskManagerOnClick);
     }
 
     [TestMethod]

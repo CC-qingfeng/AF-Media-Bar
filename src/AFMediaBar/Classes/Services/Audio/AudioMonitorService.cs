@@ -1,16 +1,15 @@
 using System.Buffers.Binary;
 using System.Runtime.InteropServices;
+using AFMediaBar.Classes.Settings;
 
 namespace AFMediaBar.Classes.Services;
 
 /// <summary>
-/// 通过 WASAPI 回环采集默认输出，并以复用缓冲区计算九段 FFT 频谱。
-/// Captures the default render loopback and computes nine FFT bands with reused buffers.
+/// 通过 WASAPI 回环采集默认输出，并以复用缓冲区计算可变段数的 FFT 频谱。
+/// Captures the default render loopback and computes a variable-count FFT spectrum with reused buffers.
 /// </summary>
 public sealed class AudioMonitorService : IDisposable
 {
-    public const int BandCount = 9;
-
     private const int FftSize = 512;
     private const int SampleRingSize = 4096;
     private const int InitialPacketBufferSize = 64 * 1024;
@@ -34,13 +33,16 @@ public sealed class AudioMonitorService : IDisposable
         new("00000001-0000-0010-8000-00AA00389B71");
     private static readonly Guid FloatSubFormat =
         new("00000003-0000-0010-8000-00AA00389B71");
-    private static readonly float[] BandEdges =
-        [45, 90, 180, 360, 720, 1400, 2800, 5600, 11000, 20000];
 
     private readonly float[] _sampleRing = new float[SampleRingSize];
     private readonly double[] _fftReal = new double[FftSize];
     private readonly double[] _fftImaginary = new double[FftSize];
     private readonly double[] _fftWindow = CreateFftWindow();
+    // 频段边界只随柱数变化，因此按柱数缓存；采样线程每帧都要读它，不能每帧重新计算等比数列。
+    // Band edges change only with the bar count, so they are cached per count: the sampling thread reads them every frame
+    // and must not rebuild the geometric progression each time.
+    private float[] _bandEdges = SpectrumBandPolicy.CreateBandEdges(SpectrumComponentSettings.DefaultBandCount);
+    private int _bandEdgeCount = SpectrumComponentSettings.DefaultBandCount;
     private byte[] _packetBuffer = new byte[InitialPacketBufferSize];
     // 这些 COM 对象跨采样复用；切换设备或 Dispose 时必须按依赖逆序释放。
     // These COM objects span samples and must be released in reverse dependency order.
@@ -60,16 +62,25 @@ public sealed class AudioMonitorService : IDisposable
     private int _captureFailureCount;
     private bool _disposed;
 
-    public bool GetSpectrum(float[] bands)
+    /// <summary>
+    /// 按请求的柱数填充频谱。缓冲区必须容得下全部请求的频段，因为调用方持有它并在两次采样之间复用。
+    /// Fills the spectrum for the requested bar count. The buffer must hold every requested band, because the caller owns it
+    /// and reuses it between samples.
+    /// </summary>
+    /// <param name="bands">接收归一化频段值的缓冲区（0–1）。/ Buffer receiving normalized band values, 0–1.</param>
+    /// <param name="bandCount">本次要计算的频段数量；越界时被夹取到持久化区间。/ Number of bands to compute; clamped to the persisted range.</param>
+    /// <returns>采集可用并已写入频段时为真；无采集或发生异常时为假。/ True when capture was available and the bands were written; false without capture or after a failure.</returns>
+    public bool GetSpectrum(float[] bands, int bandCount)
     {
-        if (bands.Length < BandCount)
+        var count = SpectrumBandPolicy.ClampBandCount(bandCount);
+        if (bands.Length < count)
         {
-            throw new ArgumentException($"At least {BandCount} bands are required.", nameof(bands));
+            throw new ArgumentException($"At least {count} bands are required.", nameof(bands));
         }
 
         if (_disposed || !EnsureCapture())
         {
-            Array.Clear(bands, 0, BandCount);
+            Array.Clear(bands, 0, count);
             return false;
         }
 
@@ -79,17 +90,17 @@ public sealed class AudioMonitorService : IDisposable
             if (_sampleCount < FftSize ||
                 Environment.TickCount64 - _lastPacketTick > 180)
             {
-                Array.Clear(bands, 0, BandCount);
+                Array.Clear(bands, 0, count);
                 return true;
             }
 
-            CalculateSpectrum(bands);
+            CalculateSpectrum(bands, count);
             return true;
         }
         catch
         {
             ReleaseCaptureAndScheduleRetry();
-            Array.Clear(bands, 0, BandCount);
+            Array.Clear(bands, 0, count);
             return false;
         }
     }
@@ -355,7 +366,7 @@ public sealed class AudioMonitorService : IDisposable
         _sampleCount = Math.Min(_sampleCount + 1, SampleRingSize);
     }
 
-    private void CalculateSpectrum(float[] bands)
+    private void CalculateSpectrum(float[] bands, int bandCount)
     {
         var start = (_sampleWriteIndex - FftSize + SampleRingSize) % SampleRingSize;
         for (var index = 0; index < FftSize; index++)
@@ -365,12 +376,13 @@ public sealed class AudioMonitorService : IDisposable
         }
 
         TransformFft();
+        var edges = ResolveBandEdges(bandCount);
         var binWidth = _sampleRate / (double)FftSize;
         var nyquistBin = FftSize / 2 - 1;
-        for (var band = 0; band < BandCount; band++)
+        for (var band = 0; band < bandCount; band++)
         {
-            var firstBin = Math.Clamp((int)Math.Ceiling(BandEdges[band] / binWidth), 1, nyquistBin);
-            var lastBin = Math.Clamp((int)Math.Floor(BandEdges[band + 1] / binWidth), firstBin, nyquistBin);
+            var firstBin = Math.Clamp((int)Math.Ceiling(edges[band] / binWidth), 1, nyquistBin);
+            var lastBin = Math.Clamp((int)Math.Floor(edges[band + 1] / binWidth), firstBin, nyquistBin);
             var maximum = 0d;
             for (var bin = firstBin; bin <= lastBin; bin++)
             {
@@ -385,6 +397,17 @@ public sealed class AudioMonitorService : IDisposable
                 0,
                 1);
         }
+    }
+
+    /// <summary>返回请求柱数对应的频段边界，柱数变化时重建缓存。 / Returns the band edges for the requested count, rebuilding the cache when the count changes.</summary>
+    private float[] ResolveBandEdges(int bandCount)
+    {
+        if (bandCount == _bandEdgeCount)
+            return _bandEdges;
+
+        _bandEdges = SpectrumBandPolicy.CreateBandEdges(bandCount);
+        _bandEdgeCount = bandCount;
+        return _bandEdges;
     }
 
     private void TransformFft()

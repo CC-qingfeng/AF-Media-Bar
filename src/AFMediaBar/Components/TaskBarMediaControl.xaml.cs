@@ -124,7 +124,6 @@ namespace AFMediaBar.Components
         private PlayerForegroundDecision? _adaptiveForegroundDecision;
         private IReadOnlyList<QuickLaunchEntry> _quickLaunchEntries = Array.Empty<QuickLaunchEntry>();
         private DateTime _suppressSurfaceClickUntilUtc;
-        private const double TaskbarSpectrumWidth = 38;
         private const double TaskbarPerformanceWidth = 74;
         private const double TaskbarTrailingMargin = 4;
         private const double TaskbarCoveredBlurRadius = 4;
@@ -267,6 +266,34 @@ namespace AFMediaBar.Components
         }
 
         /// <summary>
+        /// 判断一次命中的元素是否位于性能组件内部。宿主的拖动逻辑按「左键按下是否落在媒体动作上」决定要不要开始拖动，
+        /// 而性能组件本身不是媒体动作，因此它必须能单独被识别出来。
+        /// Reports whether a hit element lies inside the performance component. The host's drag logic decides whether to start
+        /// a drag from whether the press landed on a media action, and the performance component is deliberately not one, so it
+        /// has to be recognisable on its own.
+        /// </summary>
+        /// <param name="source">鼠标事件给出的原始命中元素。/ Original hit element reported by the mouse event.</param>
+        public bool IsPerformanceComponentClick(DependencyObject? source)
+        {
+            while (source is not null)
+            {
+                if (ReferenceEquals(source, TaskbarPerformanceSurface))
+                    return true;
+                source = VisualTreeHelper.GetParent(source);
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// 请求宿主打开任务管理器。抬起事件会被宿主的拖动预览处理器标记为已处理，因此组件自身声明的 MouseLeftButtonUp
+        /// 永远不会执行——这也是该功能此前点不开的原因。
+        /// Requests the host to open Task Manager. The mouse-up event is marked handled by the host's drag preview handler, so a
+        /// MouseLeftButtonUp declared on the component itself never runs, which is why the feature never worked before.
+        /// </summary>
+        public void RequestOpenTaskManager() => OpenTaskManagerRequested?.Invoke(this, EventArgs.Empty);
+
+        /// <summary>
         /// 应用宿主从实际屏幕背景解析出的自动前景决定；null 恢复主题回退。
         /// Applies the automatic foreground decision resolved from the real screen background; null restores theme fallback.
         /// </summary>
@@ -399,6 +426,10 @@ namespace AFMediaBar.Components
             var isHorizontalTaskbar = _currentMode == WindowMode.Taskbar && !_isVertical;
             var experience = SettingsManager.Current.TaskbarExperience.Normalize();
             var metrics = TaskbarDensityMetrics.From(experience.Density);
+            // 频谱的柱数与样式决定它占用的宽度，因此必须在任何宽度计算之前先重建视觉树。
+            // The spectrum's bar count and style decide how much width it occupies, so the visual tree is rebuilt before any
+            // width is computed.
+            ConfigureSpectrum();
             var progressVisible = _snapshot.Duration > 0;
             var controls = experience.HoverControls;
             var spectrumVisible = isHorizontalTaskbar && experience.SpectrumVisible && TaskbarExperiencePolicy.ShouldShowSpectrum(_snapshot);
@@ -522,7 +553,8 @@ namespace AFMediaBar.Components
                 TaskbarExperienceSettings.MinimumComponentSpacingDip,
                 TaskbarExperienceSettings.MaximumComponentSpacingDip);
             var textLeft = artworkRight + (_isConnected ? sectionGap : 0);
-            var reservedRight = (spectrumVisible ? sectionGap + TaskbarSpectrumWidth : 0) +
+            var spectrumWidth = SpectrumSurfaceWidth;
+            var reservedRight = (spectrumVisible ? sectionGap + spectrumWidth : 0) +
                                 (experience.PerformanceVisible ? sectionGap + TaskbarPerformanceWidth : 0) +
                                 TaskbarTrailingMargin;
             var textWidth = _isConnected
@@ -558,7 +590,7 @@ namespace AFMediaBar.Components
             SongInfoHoverOverlay.Height = SongInfoStackPanel.Height;
 
             TaskbarRestProgress.Margin = new Thickness(textLeft, 0, reservedRight, 1);
-            TaskbarSpectrumHoverSurface.Width = TaskbarSpectrumWidth;
+            TaskbarSpectrumHoverSurface.Width = spectrumWidth;
             TaskbarPerformanceSurface.Margin = new Thickness(0, 0, TaskbarTrailingMargin, 0);
             TaskbarSpectrumHoverSurface.Margin = new Thickness(0, 0,
                 TaskbarTrailingMargin + (experience.PerformanceVisible ? TaskbarPerformanceWidth + sectionGap : 0), 0);
@@ -935,7 +967,10 @@ namespace AFMediaBar.Components
             // Spectrum tuning and metric selection never change their reserved widths. Keeping
             // those values (or play/pause) in the fingerprint causes redundant host size
             // animations and visibly nudges title/artist/lyrics while sliders are adjusted.
-            var fingerprint = $"{orientation}|{visibleText}|{secondaryText}|{artist}|{SongTitle.FontSize:0.##}|{SongArtist.FontSize:0.##}|{SettingsManager.Current.LayoutLengthScalePercent:0.##}|{SettingsManager.Current.LayoutThicknessScalePercent:0.##}|{SettingsManager.Current.LyricsEnabled}|{SettingsManager.Current.TwoLineLyricsEnabled}|{SettingsManager.Current.LyricsSecondaryLineMode}|{SettingsManager.Current.TaskbarExperience}|{_snapshot.IsConnected}|{_snapshot.Duration > 0}";
+            // 频谱柱数是唯一的例外：它决定频谱组件宽度，因此必须参与指纹，否则改柱数后宿主不会重新发布尺寸。
+            // The spectrum bar count is the one exception: it decides the spectrum width, so it belongs in the
+            // fingerprint; leaving it out would stop the host from republishing the size after a bar-count change.
+            var fingerprint = $"{orientation}|{visibleText}|{secondaryText}|{artist}|{SongTitle.FontSize:0.##}|{SongArtist.FontSize:0.##}|{SettingsManager.Current.LayoutLengthScalePercent:0.##}|{SettingsManager.Current.LayoutThicknessScalePercent:0.##}|{SettingsManager.Current.LyricsEnabled}|{SettingsManager.Current.TwoLineLyricsEnabled}|{SettingsManager.Current.LyricsSecondaryLineMode}|{SettingsManager.Current.TaskbarExperience}|{SpectrumSurfaceWidth:0.##}|{_snapshot.IsConnected}|{_snapshot.Duration > 0}";
 
             // 没有订阅者的请求不会被任何宿主消费，因此不能记入指纹；否则订阅后的首次请求会被去重丢弃，
             // 媒体栏在上一次媒体连接之前一直停留在预设长度。
@@ -966,11 +1001,12 @@ namespace AFMediaBar.Components
             {
                 var experience = SettingsManager.Current.TaskbarExperience.Normalize();
                 var spectrumVisible = experience.SpectrumVisible && TaskbarExperiencePolicy.ShouldShowSpectrum(_snapshot);
+                var spectrumWidth = SpectrumSurfaceWidth;
                 var progressVisible = _snapshot.Duration > 0;
                 var contentWidth = TaskbarExperiencePolicy.CalculateWidth(
                     textWidth,
                     GetTaskbarArtworkRight(),
-                    TaskbarSpectrumWidth,
+                    spectrumWidth,
                     TaskbarTrailingMargin,
                     _snapshot.IsConnected,
                     spectrumVisible,
@@ -986,7 +1022,7 @@ namespace AFMediaBar.Components
                 _minimumPrimaryLength = TaskbarExperiencePolicy.CalculateWidth(
                     0,
                     GetTaskbarArtworkRight(),
-                    TaskbarSpectrumWidth,
+                    spectrumWidth,
                     TaskbarTrailingMargin,
                     _snapshot.IsConnected,
                     spectrumVisible,
@@ -1117,15 +1153,6 @@ namespace AFMediaBar.Components
         {
             VolumeWheelRequested?.Invoke(this, new PlayerSurfaceWheelEventArgs(e.Delta, false, false, false));
             e.Handled = true;
-        }
-
-        private void TaskbarPerformanceSurface_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
-        {
-            if (SettingsManager.Current.PerformanceComponent.OpenTaskManagerOnClick && e.ChangedButton == MouseButton.Left)
-            {
-                OpenTaskManagerRequested?.Invoke(this, EventArgs.Empty);
-                e.Handled = true;
-            }
         }
 
         private void TaskbarFullPanelHandle_Click(object sender, RoutedEventArgs e) =>

@@ -64,6 +64,7 @@ public partial class TaskbarWindow : Window
     private bool _environmentLayoutQueued;
     private bool _isDragging;
     private bool _isDragPending;
+    private bool _isTaskManagerClickPending;
     private DateTime _suppressContextMenuUntilUtc;
     private DateTime _skipOccupiedAreaProbeUntilUtc;
     private WindowMode? _appliedWindowMode;
@@ -81,7 +82,7 @@ public partial class TaskbarWindow : Window
     private MediaBarSizeRequest? _lastDesiredSizeRequest;
     private readonly AudioMonitorService _audioMonitorService;
     private readonly AdaptiveForegroundSamplingSession _foregroundSamplingSession;
-    private readonly float[] _spectrumBands = new float[AudioMonitorService.BandCount];
+    private readonly float[] _spectrumBands = new float[SpectrumComponentSettings.MaximumBandCount];
     private MediaSnapshot _lastSnapshot = MediaSnapshot.Disconnected;
     private IReadOnlyList<AudioDeviceOption> _outputDevices = Array.Empty<AudioDeviceOption>();
     private AudioDeviceOption? _pendingOutputDevice;
@@ -166,19 +167,20 @@ public partial class TaskbarWindow : Window
         _spectrumTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
         _spectrumTimer.Tick += (_, _) =>
         {
+            var bandCount = SettingsManager.Current.SpectrumComponent.Normalize().BandCount;
             if (!_isClosing && _appliedOrientation == LayoutOrientation.Horizontal &&
                 SettingsManager.Current.TaskbarExperience.SpectrumVisible &&
-                MediaControl.IsPlaying && _audioMonitorService.GetSpectrum(_spectrumBands))
+                MediaControl.IsPlaying && _audioMonitorService.GetSpectrum(_spectrumBands, bandCount))
             {
                 _spectrumActive = true;
-                MediaControl.ApplySpectrum(_spectrumBands);
+                MediaControl.ApplySpectrum(_spectrumBands.AsSpan(0, bandCount));
                 return;
             }
 
             if (_spectrumActive)
             {
                 Array.Clear(_spectrumBands, 0, _spectrumBands.Length);
-                MediaControl.ApplySpectrum(_spectrumBands);
+                MediaControl.ApplySpectrum(_spectrumBands.AsSpan(0, bandCount));
                 _spectrumActive = false;
             }
         };
@@ -1103,6 +1105,19 @@ public partial class TaskbarWindow : Window
             return;
         }
 
+        // 性能组件是可点击控件而不是可拖动的空白：命中它时不开拖动，否则这次点击的抬起事件会被拖动路径标记为已处理，
+        // 组件上声明的 MouseLeftButtonUp 永远不会执行，点击打开任务管理器就永远不生效。
+        // The performance component is a clickable control rather than draggable background: a hit on it must not start a
+        // drag, because the drag path marks the matching mouse-up as handled and the component's own MouseLeftButtonUp then
+        // never runs, which is what kept "open Task Manager on click" from ever working.
+        if (e.OriginalSource is DependencyObject performanceSource &&
+            SettingsManager.Current.PerformanceComponent.OpenTaskManagerOnClick &&
+            MediaControl.IsPerformanceComponentClick(performanceSource))
+        {
+            _isTaskManagerClickPending = true;
+            return;
+        }
+
         var taskbarHandle = _lastTaskbarHandle;
         if (taskbarHandle == IntPtr.Zero ||
             !_taskBarService.TryGetTaskbarRect(taskbarHandle, out var taskbarRect) ||
@@ -1134,6 +1149,9 @@ public partial class TaskbarWindow : Window
 
     private void MediaControl_PreviewMouseMove(object sender, MouseEventArgs e)
     {
+        if (_isTaskManagerClickPending && e.LeftButton != MouseButtonState.Pressed)
+            _isTaskManagerClickPending = false;
+
         if (!_isDragging && !_isDragPending)
             return;
 
@@ -1170,7 +1188,25 @@ public partial class TaskbarWindow : Window
 
     private void MediaControl_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
-        if ((!_isDragging && !_isDragPending) || e.ChangedButton != MouseButton.Left)
+        if (e.ChangedButton != MouseButton.Left)
+            return;
+
+        if (_isTaskManagerClickPending)
+        {
+            _isTaskManagerClickPending = false;
+            // 指针可能已经移到别的元素上，因此抬起时重新判定命中，而不是相信按下时的结论。
+            // The pointer may have moved onto another element, so the hit is re-evaluated on release instead of trusting the
+            // verdict from the press.
+            if (e.OriginalSource is DependencyObject source && MediaControl.IsPerformanceComponentClick(source))
+            {
+                MediaControl.RequestOpenTaskManager();
+                e.Handled = true;
+            }
+
+            return;
+        }
+
+        if (!_isDragging && !_isDragPending)
             return;
 
         EndTaskbarDrag();
@@ -1311,6 +1347,7 @@ public partial class TaskbarWindow : Window
     {
         _isDragging = false;
         _isDragPending = false;
+        _isTaskManagerClickPending = false;
         if (releaseCapture && MediaControl.IsMouseCaptured)
             MediaControl.ReleaseMouseCapture();
 

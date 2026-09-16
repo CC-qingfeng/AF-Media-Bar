@@ -105,8 +105,8 @@ The app runs in its own process and hosts its WPF player as a taskbar child wind
 | Tray audio controls | Bind tray left-click to audio controls, Settings, or the context menu; bind plain and chorded wheel gestures to output devices or current-media volume using the same Shift/left/right key as the media bar |
 | Audio devices | Switch devices in a stable ordered list; both the audio flyout and Full wheel-preview and apply after scrolling stops |
 | App volume | Aggregate application icons and audio sessions across active output endpoints; the audio flyout, Full, and tray wheel adjust the selected media app in 2% steps |
-| Visualizer | WASAPI loopback spectrum with 1–9 bars, 5–30 Hz refresh, and adjustable jump amount; show it under Media &amp; Notifications → Rest components |
-| Metrics | Rest can rotate selected system/process metrics and Full can show all four; disabling the Rest component releases its sampling lease when Full has no consumer |
+| Visualizer | WASAPI loopback spectrum with four styles (bars, waveform, pixel bars, mirrored bars), 9–24 bars with a fixed bar width so more bars means a wider spectrum, 5–30 Hz refresh, and adjustable jump amount; show it under Media &amp; Notifications → Rest components |
+| Metrics | Rest can rotate selected system/process metrics and Full can show all four; the sampling interval is set in seconds (0.5–5 s) and clicking the Rest component opens Task Manager; disabling the Rest component releases its sampling lease when Full has no consumer |
 | Low-performance fallback | When WPF reports software rendering or a low-performance path, decorative continuous motion, marquees, spectrum easing, blur, and backdrop effects are disabled automatically |
 
 </div>

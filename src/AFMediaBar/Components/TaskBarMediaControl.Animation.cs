@@ -25,41 +25,6 @@ public partial class TaskBarMediaControl
 
     private static PowerEase CreateEaseInOut() => new() { Power = 3, EasingMode = EasingMode.EaseInOut };
 
-    /// <summary>把九段频谱值应用到任务栏静置层。 / Applies nine spectrum-band values to the taskbar rest layer.</summary>
-    public void ApplySpectrum(ReadOnlySpan<float> bands)
-    {
-        var motion = CurrentMotion;
-        var settings = SettingsManager.Current.SpectrumComponent.Normalize();
-        for (var index = 0; index < TaskbarSpectrum.Children.Count; index++)
-        {
-            if (TaskbarSpectrum.Children[index] is Border bar)
-            {
-                bar.Visibility = index < settings.BandCount ? Visibility.Visible : Visibility.Collapsed;
-                var value = index < bands.Length ? bands[index] * settings.SensitivityPercent / 100f : 0;
-                var targetScale = (3 + Math.Clamp(value, 0, 1) * 18) / 21d;
-                if (bar.RenderTransform is not ScaleTransform scale || scale.IsFrozen)
-                {
-                    scale = new ScaleTransform(1, 0.15);
-                    bar.RenderTransform = scale;
-                }
-
-                scale.BeginAnimation(
-                    ScaleTransform.ScaleYProperty,
-                    motion.UseContinuousMotion
-                        ? new DoubleAnimation
-                        {
-                            To = targetScale,
-                            Duration = motion.FastDuration,
-                            EasingFunction = CreateEaseOut()
-                        }
-                        : null,
-                    HandoffBehavior.SnapshotAndReplace);
-                if (!motion.UseContinuousMotion)
-                    scale.ScaleY = targetScale;
-            }
-        }
-    }
-
     private void QueueMarqueeUpdate(double textWidth)
     {
         var version = ++_marqueeUpdateVersion;

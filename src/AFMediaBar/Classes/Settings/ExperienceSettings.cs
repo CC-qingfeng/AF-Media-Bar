@@ -146,14 +146,70 @@ public readonly record struct QuickLaunchSettings(IReadOnlyList<QuickLaunchEntry
     }
 }
 
+/// <summary>任务栏静置层频谱的呈现样式。 / Presentation style of the taskbar rest-layer spectrum.</summary>
+public enum SpectrumStyle
+{
+    /// <summary>贴底的柱状图，柱高随音量增长。 / Bottom-anchored bars whose height follows the level.</summary>
+    Bars = 0,
+
+    /// <summary>围绕垂直中线上下延伸的连续波形。 / Continuous waveform extending above and below the vertical centre.</summary>
+    Waveform = 1,
+
+    /// <summary>由离散方块组成的像素柱状图。 / Pixel column chart built from discrete blocks.</summary>
+    PixelBars = 2,
+
+    /// <summary>从垂直中线向上下同时延伸的对称柱状图。 / Symmetric bars growing both up and down from the vertical centre.</summary>
+    MirroredBars = 3
+}
+
 /// <summary>任务栏频谱组件设置。 / Taskbar spectrum component settings.</summary>
 public readonly record struct SpectrumComponentSettings(int BandCount, int RefreshRateHz, int SensitivityPercent)
 {
-    public static SpectrumComponentSettings Default { get; } = new(9, 20, 100);
+    /// <summary>
+    /// 频谱呈现样式。该成员以 init 属性而不是位置参数存在，因此旧设置文件缺少该字段时反序列化到样式枚举的 0 值（柱状图），
+    /// 与迁移前的观感一致，也不需要改动既有的构造签名。
+    /// The presentation style. It is an init property rather than a positional parameter, so an older settings file that
+    /// lacks the field deserializes to enum value 0 (bars), which matches the pre-migration appearance, and the existing
+    /// constructor signature stays intact.
+    /// </summary>
+    public SpectrumStyle Style { get; init; } = SpectrumStyle.Bars;
+
+    /// <summary>
+    /// 柱数下限。频谱组件宽度随柱数增长，柱宽保持固定，因此柱数不能再降到 9 以下：
+    /// 更少的柱子会把频谱压缩成一小撮，与「柱数决定宽度」的尺寸关系自相矛盾。
+    /// Lower bound of the bar count. The component width grows with the bar count while each bar keeps a fixed width, so
+    /// the count cannot drop below nine: fewer bars would collapse the spectrum into a stub and contradict the very size
+    /// relationship the count is supposed to express.
+    /// </summary>
+    public const int MinimumBandCount = 9;
+
+    /// <summary>柱数上限；受默认 FFT 分辨率与任务栏可用长度限制。 / Upper bound, limited by FFT resolution and available taskbar length.</summary>
+    public const int MaximumBandCount = 24;
+
+    /// <summary>柱数默认值。 / Default bar count.</summary>
+    public const int DefaultBandCount = 9;
+
+    /// <summary>刷新率下限（Hz）。 / Lower refresh-rate bound in hertz.</summary>
+    public const int MinimumRefreshRateHz = 5;
+
+    /// <summary>刷新率上限（Hz）。 / Upper refresh-rate bound in hertz.</summary>
+    public const int MaximumRefreshRateHz = 30;
+
+    /// <summary>灵敏度下限（百分比）。 / Lower sensitivity bound in percent.</summary>
+    public const int MinimumSensitivityPercent = 1;
+
+    /// <summary>灵敏度上限（百分比）。 / Upper sensitivity bound in percent.</summary>
+    public const int MaximumSensitivityPercent = 400;
+
+    public static SpectrumComponentSettings Default { get; } = new(DefaultBandCount, 20, 100);
+
     public SpectrumComponentSettings Normalize() => new(
-        Math.Clamp(BandCount, 1, 9),
-        Math.Clamp(RefreshRateHz, 5, 30),
-        Math.Clamp(SensitivityPercent, 1, 400));
+        Math.Clamp(BandCount, MinimumBandCount, MaximumBandCount),
+        Math.Clamp(RefreshRateHz, MinimumRefreshRateHz, MaximumRefreshRateHz),
+        Math.Clamp(SensitivityPercent, MinimumSensitivityPercent, MaximumSensitivityPercent))
+    {
+        Style = Enum.IsDefined(Style) ? Style : SpectrumStyle.Bars
+    };
 }
 
 /// <summary>任务栏性能组件设置。 / Taskbar performance component settings.</summary>
@@ -162,7 +218,35 @@ public readonly record struct PerformanceComponentSettings(
     int RefreshIntervalMilliseconds,
     bool OpenTaskManagerOnClick)
 {
-    public static PerformanceComponentSettings Default { get; } = new([MetricKind.SystemMemory], 2500, false);
+    /// <summary>
+    /// 采样间隔下限（毫秒）。旧范围（250–60000 毫秒）里真正可用的部分只占一小段，滑杆其余行程全是没人会选的取值，
+    /// 因此收敛到 0.5–5 秒。
+    /// Lower sampling-interval bound in milliseconds. In the previous 250–60000 ms range only a small slice was usable and
+    /// the rest of the slider travel held values nobody would pick, so the range is narrowed to 0.5–5 seconds.
+    /// </summary>
+    public const int MinimumRefreshIntervalMilliseconds = 500;
+
+    /// <summary>采样间隔上限（5 秒）；再慢就只剩一个偶尔跳动的数字。 / Upper sampling-interval bound (5 seconds); anything slower is a number that rarely moves.</summary>
+    public const int MaximumRefreshIntervalMilliseconds = 5000;
+
+    /// <summary>采样间隔的默认值（2.5 秒）。 / Default sampling interval (2.5 seconds).</summary>
+    public const int DefaultRefreshIntervalMilliseconds = 2500;
+
+    /// <summary>
+    /// 采样间隔的步长（0.5 秒）。界面的滑杆按该步长吸附，因此写入设置的值也必须落到步长网格上，
+    /// 否则界面会显示一个滑杆位置无法表达的读数。
+    /// Step of the sampling interval (0.5 seconds). The slider snaps to this step, so the stored value must land on the same
+    /// grid; otherwise the interface shows a reading its own slider position cannot express.
+    /// </summary>
+    public const int RefreshIntervalStepMilliseconds = 500;
+
+    /// <summary>
+    /// 性能组件的默认设置。点击打开任务管理器默认为开启：该开关此前一直存在，但点击被任务栏拖动逻辑吞掉，
+    /// 因此没有任何用户能在它关闭的状态下做出有效选择。 / Defaults for the performance component. Opening Task Manager
+    /// on click is on by default: the switch existed before but the click was swallowed by the taskbar drag logic, so no
+    /// user could have made a meaningful choice while it was off.
+    /// </summary>
+    public static PerformanceComponentSettings Default { get; } = new([MetricKind.SystemMemory], DefaultRefreshIntervalMilliseconds, true);
 
     public PerformanceComponentSettings Normalize()
     {
@@ -175,8 +259,17 @@ public readonly record struct PerformanceComponentSettings(
             metrics = [MetricKind.SystemMemory];
         return new PerformanceComponentSettings(
             metrics,
-            Math.Clamp(RefreshIntervalMilliseconds, 250, 60000),
+            SnapRefreshIntervalMilliseconds(RefreshIntervalMilliseconds),
             OpenTaskManagerOnClick);
+    }
+
+    /// <summary>把采样间隔吸附到界面步长网格并夹取到安全区间。 / Snaps the sampling interval onto the interface step grid and clamps it to the safe range.</summary>
+    /// <param name="milliseconds">待换算的采样间隔（毫秒）。/ Sampling interval to normalize, in milliseconds.</param>
+    public static int SnapRefreshIntervalMilliseconds(int milliseconds)
+    {
+        var snapped = (int)Math.Round(milliseconds / (double)RefreshIntervalStepMilliseconds, MidpointRounding.AwayFromZero)
+                      * RefreshIntervalStepMilliseconds;
+        return Math.Clamp(snapped, MinimumRefreshIntervalMilliseconds, MaximumRefreshIntervalMilliseconds);
     }
 }
 
