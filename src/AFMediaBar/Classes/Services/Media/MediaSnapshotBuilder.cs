@@ -43,6 +43,15 @@ public sealed class MediaSnapshotBuilder
         }
 
         var controlSession = session.ControlSession;
+
+        // 第三方库可能在选中之后关闭会话并清除 ControlSession；本次构建跳过，关闭事件会安排下一次刷新。
+        // The third-party library can close the session and clear ControlSession after selection; skip this build and let
+        // the close event schedule the next refresh.
+        if (controlSession is null)
+        {
+            return null;
+        }
+
         var songInfo = TryGetMediaProperties(controlSession);
         if (songInfo is null)
         {

@@ -47,6 +47,7 @@ public sealed class MediaSessionSelectionService : IDisposable
     public bool Select(string key, IReadOnlyList<MediaSession> sessions)
     {
         var selected = sessions.FirstOrDefault(session =>
+            MediaSessionGuard.IsUsable(session) &&
             string.Equals(session.Id, key, StringComparison.Ordinal));
         if (selected is null)
         {
@@ -56,17 +57,19 @@ public sealed class MediaSessionSelectionService : IDisposable
         ClearPendingAutoSwitch();
         ClearMissingSession();
         SelectedKey = selected.Id;
-        SelectedSourceId = selected.ControlSession.SourceAppUserModelId ?? string.Empty;
+        SelectedSourceId = MediaSessionGuard.GetSourceId(selected);
         return true;
     }
 
     /// <summary>
-    /// 按手动选择、宽限期和系统焦点优先级解析当前会话。
-    /// Resolves the current session using manual selection, grace-period, and system-focus precedence.
+    /// 按手动选择、宽限期和系统焦点优先级解析当前会话，并且只返回仍可读取的会话；全部会话已关闭时返回空值。
+    /// Resolves the current session using manual selection, grace-period, and system-focus precedence, returning only a
+    /// still-readable session and null when every session has been closed.
     /// </summary>
     public MediaSession? Resolve(IReadOnlyList<MediaSession> sessions)
     {
         var selected = sessions.FirstOrDefault(session =>
+            MediaSessionGuard.IsUsable(session) &&
             string.Equals(session.Id, SelectedKey, StringComparison.Ordinal));
         if (selected is not null)
         {
@@ -75,7 +78,7 @@ public sealed class MediaSessionSelectionService : IDisposable
                 Debug.WriteLine($"[MediaSessionSelection] Browser source recovered: {SelectedSourceId}");
             }
 
-            SelectedSourceId = selected.ControlSession.SourceAppUserModelId ?? SelectedSourceId;
+            SelectedSourceId = MediaSessionGuard.GetSourceId(selected);
             ClearMissingSession();
             return selected;
         }
@@ -84,7 +87,7 @@ public sealed class MediaSessionSelectionService : IDisposable
         if (restored is not null)
         {
             SelectedKey = restored.Id;
-            SelectedSourceId = restored.ControlSession.SourceAppUserModelId ?? string.Empty;
+            SelectedSourceId = MediaSessionGuard.GetSourceId(restored);
             Debug.WriteLine($"[MediaSessionSelection] Browser source recreated: {SelectedSourceId}");
             ClearMissingSession();
             return restored;
@@ -100,9 +103,12 @@ public sealed class MediaSessionSelectionService : IDisposable
         var focused = _catalog.GetFocusedSession();
         selected = focused is not null
             ? sessions.FirstOrDefault(session =>
+                MediaSessionGuard.IsUsable(session) &&
                 string.Equals(session.Id, focused.Id, StringComparison.Ordinal))
             : null;
-        selected ??= sessions.FirstOrDefault(IsPlaying) ?? sessions.FirstOrDefault();
+        selected ??= sessions.FirstOrDefault(session =>
+            MediaSessionGuard.IsUsable(session) && IsPlaying(session));
+        selected ??= sessions.FirstOrDefault(MediaSessionGuard.IsUsable);
         if (selected is null)
         {
             SelectedKey = null;
@@ -111,7 +117,7 @@ public sealed class MediaSessionSelectionService : IDisposable
         }
 
         SelectedKey = selected.Id;
-        SelectedSourceId = selected.ControlSession.SourceAppUserModelId ?? string.Empty;
+        SelectedSourceId = MediaSessionGuard.GetSourceId(selected);
         return selected;
     }
 
@@ -122,6 +128,7 @@ public sealed class MediaSessionSelectionService : IDisposable
     public bool TryAutoSwitchToPlaying(IReadOnlyList<MediaSession> sessions)
     {
         var current = sessions.FirstOrDefault(session =>
+            MediaSessionGuard.IsUsable(session) &&
             string.Equals(session.Id, SelectedKey, StringComparison.Ordinal));
         if (current is null)
         {
@@ -143,7 +150,7 @@ public sealed class MediaSessionSelectionService : IDisposable
             return false;
         }
 
-        var currentSourceId = current.ControlSession.SourceAppUserModelId ?? string.Empty;
+        var currentSourceId = MediaSessionGuard.GetSourceId(current);
         if (IsBrowserSource(currentSourceId))
         {
             ClearPendingAutoSwitch();
@@ -151,6 +158,7 @@ public sealed class MediaSessionSelectionService : IDisposable
         }
 
         var replacement = sessions.FirstOrDefault(candidate =>
+            MediaSessionGuard.IsUsable(candidate) &&
             !ReferenceEquals(candidate, current) && IsPlaying(candidate));
         if (replacement is null)
         {
@@ -174,7 +182,7 @@ public sealed class MediaSessionSelectionService : IDisposable
 
         ClearPendingAutoSwitch();
         SelectedKey = replacement.Id;
-        SelectedSourceId = replacement.ControlSession.SourceAppUserModelId ?? string.Empty;
+        SelectedSourceId = MediaSessionGuard.GetSourceId(replacement);
         return true;
     }
 
@@ -241,7 +249,7 @@ public sealed class MediaSessionSelectionService : IDisposable
     private MediaSession? FindRestoredSession(IReadOnlyList<MediaSession> sessions) =>
         IsMissingSessionGraceActive
             ? sessions.FirstOrDefault(session => IsSameBrowserSource(
-                session.ControlSession.SourceAppUserModelId ?? string.Empty,
+                MediaSessionGuard.GetSourceId(session),
                 SelectedSourceId ?? string.Empty))
             : null;
 
@@ -277,6 +285,13 @@ public sealed class MediaSessionSelectionService : IDisposable
 
     private static bool IsPlaying(MediaSession session)
     {
+        // 会话可能在本方法执行期间被第三方库关闭，读取失败一律按“未播放”处理。
+        // The third-party library may close the session while this method runs, so every read failure means "not playing".
+        if (!MediaSessionGuard.IsUsable(session))
+        {
+            return false;
+        }
+
         try
         {
             return session.ControlSession.GetPlaybackInfo().PlaybackStatus ==

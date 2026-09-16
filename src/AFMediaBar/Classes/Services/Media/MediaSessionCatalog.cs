@@ -41,8 +41,13 @@ public sealed class MediaSessionCatalog : IDisposable
     }
 
     /// <summary>
-    /// 返回当前动态会话集合的稳定数组快照；目录尚未就绪时返回 <see langword="false"/>。
-    /// Returns a stable array snapshot of the dynamic session collection, or <see langword="false"/> while the catalog is unavailable.
+    /// 返回当前动态会话集合的稳定数组快照，并剔除已被第三方库关闭的会话；目录尚未就绪时返回 <see langword="false"/>。
+    /// 字典由 WinRT 事件线程改写而本方法在 UI 线程读取，因此剔除只能缩小竞态窗口，消费者仍须通过
+    /// <see cref="MediaSessionGuard"/> 判定可用性。
+    /// Returns a stable array snapshot of the dynamic session collection with sessions already closed by the third-party
+    /// library removed, or <see langword="false"/> while the catalog is unavailable. The dictionary is mutated on WinRT event
+    /// threads while this method reads it on the UI thread, so filtering only narrows the race window and consumers must
+    /// still check usability through <see cref="MediaSessionGuard"/>.
     /// </summary>
     public bool TryGetSnapshot(out MediaSession[] sessions)
     {
@@ -50,7 +55,9 @@ public sealed class MediaSessionCatalog : IDisposable
         {
             try
             {
-                sessions = _mediaManager.CurrentMediaSessions.Values.ToArray();
+                sessions = _mediaManager.CurrentMediaSessions.Values
+                    .Where(MediaSessionGuard.IsUsable)
+                    .ToArray();
                 return true;
             }
             catch (InvalidOperationException)
