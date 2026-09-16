@@ -62,7 +62,10 @@ public partial class TaskbarCompactFlyoutWindow : FluentWindow, IDisposable
         ShowMode(TaskbarCompactFlyoutMode.OutputDevice, anchor);
     }
 
-    /// <summary>显示与托盘面板一致的横向媒体音量控件。 / Shows the tray-style horizontal media-volume control.</summary>
+    /// <summary>
+    /// 显示竖向媒体音量面板：来源名称、百分比与竖向滑块自上而下排列。
+    /// Shows the vertical media-volume panel: source name, percentage, and vertical slider from top to bottom.
+    /// </summary>
     public void ShowVolume(string sourceName, int? volume, TrayIconBounds anchor)
     {
         _isUpdating = true;
@@ -71,7 +74,7 @@ public partial class TaskbarCompactFlyoutWindow : FluentWindow, IDisposable
         VolumeSlider.Value = volume ?? 0;
         VolumePercentText.Text = volume is int value ? $"{value}%" : "不可用";
         _isUpdating = false;
-        Width = 320;
+        Width = 100;
         ShowMode(TaskbarCompactFlyoutMode.Volume, anchor);
     }
 
@@ -169,6 +172,29 @@ public partial class TaskbarCompactFlyoutWindow : FluentWindow, IDisposable
     private void OutputDeviceComboBox_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
     {
         OutputDeviceWheelRequested?.Invoke(e.Delta);
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// 菜单任意位置的滚轮都按设备候选推进；菜单内滚轮因此不会冒泡为播放器手势。
+    /// Wheel anywhere in the menu advances the device candidate, so an in-menu wheel never bubbles up to a player gesture.
+    /// </summary>
+    private void OutputDevicePanel_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (e.Handled)
+            return;
+
+        OutputDeviceWheelRequested?.Invoke(e.Delta);
+        e.Handled = true;
+    }
+
+    /// <summary>菜单任意位置的滚轮都按 2% 调节当前媒体音量。/ Wheel anywhere in the menu adjusts the current media volume by 2%.</summary>
+    private void VolumePanel_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (e.Handled)
+            return;
+
+        VolumeWheelRequested?.Invoke(e.Delta);
         e.Handled = true;
     }
 

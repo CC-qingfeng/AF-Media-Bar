@@ -138,6 +138,8 @@ public partial class TaskbarWindow : Window
         MediaControl.SeekRequested += MediaControl_SeekRequested;
         MediaControl.WheelRequested += MediaControl_WheelRequested;
         MediaControl.DesiredSizeChanged += MediaControl_DesiredSizeChanged;
+        MediaControl.OutputDeviceInfoRequested += MediaControl_OutputDeviceInfoRequested;
+        MediaControl.VolumeInfoRequested += MediaControl_VolumeInfoRequested;
 
         _taskBarService = taskBarService;
         _occupiedAreaService = occupiedAreaService;
@@ -880,7 +882,32 @@ public partial class TaskbarWindow : Window
     }
 
     private async void MediaControl_OutputDeviceWheelRequested(object? sender, PlayerSurfaceWheelEventArgs e)
-        => await PreviewOutputDeviceAsync(e.Delta, updateFlyout: false);
+        => await PreviewOutputDeviceAsync(e.Delta, updateFlyout: _compactFlyout.IsShowing(TaskbarCompactFlyoutMode.OutputDevice));
+
+    /// <summary>
+    /// 指针进入输出设备按钮时刷新提示；滚轮预览尚未落地时显示待应用候选，避免提示回退到旧设备。
+    /// Refreshes the tooltip when the pointer enters the output-device button; while a wheel preview is still pending it
+    /// shows that candidate so the tooltip cannot fall back to the previously applied device.
+    /// </summary>
+    private async void MediaControl_OutputDeviceInfoRequested(object? sender, EventArgs e)
+    {
+        if (_pendingOutputDevice is { } pending)
+        {
+            MediaControl.SetOutputDevicePreview(pending);
+            return;
+        }
+
+        if (_isClosing) return;
+        // 每次悬停都重新枚举，避免显示已被系统切换过的旧默认设备。
+        // Re-enumerate on every hover so a default device changed elsewhere is not reported stale.
+        _outputDevices = await _audioInteractionService.GetOutputDevicesAsync();
+        if (_isClosing) return;
+        var current = _outputDevices.FirstOrDefault(device => device.IsDefault) ?? _outputDevices.FirstOrDefault();
+        if (current is null)
+            MediaControl.SetOutputDeviceUnavailable();
+        else
+            MediaControl.SetOutputDevicePreview(current);
+    }
 
     private async void CompactFlyout_OutputDeviceWheelRequested(int delta)
         => await PreviewOutputDeviceAsync(delta, updateFlyout: true);
@@ -905,6 +932,7 @@ public partial class TaskbarWindow : Window
     {
         _outputDeviceApplyTimer.Stop();
         _pendingOutputDevice = null;
+        MediaControl.SetOutputDevicePreview(device);
         await _audioInteractionService.SetOutputDeviceAsync(device);
     }
 
@@ -924,7 +952,30 @@ public partial class TaskbarWindow : Window
     }
 
     private async void MediaControl_VolumeWheelRequested(object? sender, PlayerSurfaceWheelEventArgs e)
-        => await PreviewVolumeAsync(e.Delta, updateFlyout: false);
+        => await PreviewVolumeAsync(e.Delta, updateFlyout: _compactFlyout.IsShowing(TaskbarCompactFlyoutMode.Volume));
+
+    /// <summary>
+    /// 指针进入音量按钮时刷新提示；已有延迟应用候选时显示该候选，避免提示回退到已应用值。
+    /// Refreshes the tooltip when the pointer enters the volume button; a pending deferred candidate is shown instead so the
+    /// tooltip cannot fall back to the applied value.
+    /// </summary>
+    private async void MediaControl_VolumeInfoRequested(object? sender, EventArgs e)
+    {
+        if (_pendingVolume is { } pending)
+        {
+            MediaControl.SetVolumePreview(pending);
+            return;
+        }
+
+        if (_isClosing) return;
+        var volume = await Task.Run(_audioInteractionService.GetCurrentMediaVolume);
+        if (_isClosing) return;
+        _currentVolume = volume;
+        if (volume is null)
+            MediaControl.SetVolumeUnavailable();
+        else
+            MediaControl.SetVolumePreview(volume.VolumePercent);
+    }
 
     private async void CompactFlyout_VolumeWheelRequested(int delta)
         => await PreviewVolumeAsync(delta, updateFlyout: true);
@@ -940,7 +991,13 @@ public partial class TaskbarWindow : Window
         if (updateFlyout) _compactFlyout.SetVolumePreview(value);
     }
 
-    private void MediaControl_VolumeValueRequested(int value) => QueueVolume(value);
+    private void MediaControl_VolumeValueRequested(int value)
+    {
+        // 菜单内拖动滑杆同样要刷新按钮提示，与滚轮预览保持一致。
+        // Dragging the slider inside the menu refreshes the button tooltip too, matching the wheel preview.
+        MediaControl.SetVolumePreview(value);
+        QueueVolume(value);
+    }
 
     private void QueueVolume(int value)
     {
@@ -1319,6 +1376,8 @@ public partial class TaskbarWindow : Window
         MediaControl.SeekRequested -= MediaControl_SeekRequested;
         MediaControl.WheelRequested -= MediaControl_WheelRequested;
         MediaControl.DesiredSizeChanged -= MediaControl_DesiredSizeChanged;
+        MediaControl.OutputDeviceInfoRequested -= MediaControl_OutputDeviceInfoRequested;
+        MediaControl.VolumeInfoRequested -= MediaControl_VolumeInfoRequested;
         _compactFlyout.Dispose();
         base.OnClosed(e);
     }

@@ -147,6 +147,12 @@ namespace AFMediaBar.Components
         public event EventHandler<PlayerSurfaceWheelEventArgs>? WheelRequested;
         public event EventHandler<MediaBarSizeRequestEventArgs>? DesiredSizeChanged;
 
+        /// <summary>指针进入输出设备按钮，宿主应刷新该按钮提示。 / Pointer entered the output-device button; the host should refresh its tooltip.</summary>
+        public event EventHandler? OutputDeviceInfoRequested;
+
+        /// <summary>指针进入音量按钮，宿主应刷新该按钮提示。 / Pointer entered the volume button; the host should refresh its tooltip.</summary>
+        public event EventHandler? VolumeInfoRequested;
+
         /// <summary>当前横向任务栏悬停层和固定组件所需的最小长度。 / Current minimum length required by the horizontal taskbar hover layer and fixed components.</summary>
         public double MinimumPrimaryLength => _minimumPrimaryLength;
 
@@ -206,17 +212,35 @@ namespace AFMediaBar.Components
         /// <summary>更新音符的快速启动预览提示。 / Updates the note tooltip with the quick-launch preview.</summary>
         public void SetQuickLaunchPreview(QuickLaunchEntry entry) => SongImageBorder.ToolTip = $"快速启动：{entry.DisplayName}";
 
-        /// <summary>更新输出设备按钮的即时预览提示。 / Updates the output-device button tooltip with the immediate preview.</summary>
-        public void SetOutputDevicePreview(AudioDeviceOption device) => TaskbarDeviceButton.ToolTip = $"输出设备：{device.DisplayName}";
+        /// <summary>
+        /// 刷新输出设备按钮提示；文本与托盘图标提示来自同一策略，指针悬停与滚轮预览都经过这里。
+        /// Refreshes the output-device button tooltip; the text comes from the same policy as the tray icon tooltip, and
+        /// both hover and wheel previews go through it.
+        /// </summary>
+        public void SetOutputDevicePreview(AudioDeviceOption device) =>
+            TaskbarDeviceButton.ToolTip = AudioTooltipPolicy.BuildOutputDevice(device);
 
         /// <summary>提示当前没有可用输出设备。 / Indicates that no output device is available.</summary>
-        public void SetOutputDeviceUnavailable() => TaskbarDeviceButton.ToolTip = "输出设备：不可用";
+        public void SetOutputDeviceUnavailable() =>
+            TaskbarDeviceButton.ToolTip = AudioTooltipPolicy.BuildOutputDevice(null);
 
-        /// <summary>更新当前媒体音量按钮的即时提示。 / Updates the current-media volume button tooltip.</summary>
-        public void SetVolumePreview(int volume) => TaskbarVolumeButton.ToolTip = $"当前媒体音量：{volume}%";
+        /// <summary>
+        /// 刷新音量按钮提示；滚轮预览的候选值也走这里，因此提示总是先于延迟应用更新。
+        /// Refreshes the volume button tooltip; wheel-preview candidates go through it too, so the tooltip always updates
+        /// before the deferred apply.
+        /// </summary>
+        public void SetVolumePreview(int volume)
+        {
+            // 音量可读但媒体快照暂时没有来源名时给出通用标签，而不是谎报“不可用”。
+            // When the volume is readable but the media snapshot has no source name yet, use a generic label instead of
+            // reporting the value as unavailable.
+            var sourceName = string.IsNullOrWhiteSpace(_snapshot.SourceName) ? "当前媒体" : _snapshot.SourceName;
+            TaskbarVolumeButton.ToolTip = AudioTooltipPolicy.BuildMediaVolume(sourceName, volume);
+        }
 
         /// <summary>提示当前媒体没有可匹配音频会话。 / Indicates that the current media has no matching audio session.</summary>
-        public void SetVolumeUnavailable() => TaskbarVolumeButton.ToolTip = "当前媒体音量：不可用";
+        public void SetVolumeUnavailable() =>
+            TaskbarVolumeButton.ToolTip = AudioTooltipPolicy.BuildMediaVolume(null, null);
 
         /// <summary>返回快速启动菜单的物理屏幕锚点。 / Returns the physical screen anchor for the quick-launch menu.</summary>
         public TrayIconBounds GetQuickLaunchAnchor() => GetScreenBounds(SongImageBorder);
@@ -1082,6 +1106,12 @@ namespace AFMediaBar.Components
             OutputDeviceWheelRequested?.Invoke(this, new PlayerSurfaceWheelEventArgs(e.Delta, false, false, false));
             e.Handled = true;
         }
+
+        private void TaskbarDeviceButton_MouseEnter(object sender, MouseEventArgs e) =>
+            OutputDeviceInfoRequested?.Invoke(this, EventArgs.Empty);
+
+        private void TaskbarVolumeButton_MouseEnter(object sender, MouseEventArgs e) =>
+            VolumeInfoRequested?.Invoke(this, EventArgs.Empty);
 
         private void TaskbarVolumeButton_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
         {

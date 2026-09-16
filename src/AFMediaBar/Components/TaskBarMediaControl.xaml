@@ -333,14 +333,18 @@
                                         Style="{StaticResource TaskbarHoverButton}"
                                         Margin="4,0,1,0"
                                         ToolTip="切换输出设备"
+                                        ToolTipService.InitialShowDelay="200"
                                         Click="TaskbarDeviceButton_Click"
+                                        MouseEnter="TaskbarDeviceButton_MouseEnter"
                                         PreviewMouseWheel="TaskbarDeviceButton_PreviewMouseWheel">
                                     <TextBlock Text="&#xE7F5;" FontFamily="{DynamicResource AppIconFontFamily}" FontSize="14" />
                                 </Button>
                                 <Button x:Name="TaskbarVolumeButton"
                                         Style="{StaticResource TaskbarHoverButton}"
                                         ToolTip="当前应用音量 / 音量合成器"
+                                        ToolTipService.InitialShowDelay="200"
                                         Click="TaskbarVolumeButton_Click"
+                                        MouseEnter="TaskbarVolumeButton_MouseEnter"
                                         PreviewMouseWheel="TaskbarVolumeButton_PreviewMouseWheel">
                                     <TextBlock Text="&#xE767;" FontFamily="{DynamicResource AppIconFontFamily}" FontSize="14" />
                                 </Button>

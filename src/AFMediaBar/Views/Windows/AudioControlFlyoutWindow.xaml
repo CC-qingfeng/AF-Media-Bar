@@ -8,6 +8,7 @@
         Title="音频控制"
         Width="320"
         MinWidth="0"
+        MinHeight="0"
         SizeToContent="Height"
         MaxHeight="440"
         ShowInTaskbar="False"
