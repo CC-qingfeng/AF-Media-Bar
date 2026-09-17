@@ -275,7 +275,7 @@
                                     </StackPanel>
                                 </components:SettingsRow>
                                 <components:SettingsRow
-                                    Description="频谱柱达到最大高度时对应的音频音量"
+                                    Description="频谱柱达到最大高度时对应的音频音量（10%–400%）"
                                     Icon="{ui:SymbolIcon TopSpeed24}"
                                     IsNested="True"
                                     Style="{StaticResource SpectrumParameterRowStyle}"
@@ -283,10 +283,10 @@
                                     <StackPanel Orientation="Horizontal">
                                         <Slider
                                             IsSnapToTickEnabled="True"
-                                            Maximum="400"
-                                            Minimum="1"
+                                            Maximum="{Binding ViewModel.MaximumSpectrumSensitivityPercent}"
+                                            Minimum="{Binding ViewModel.MinimumSpectrumSensitivityPercent}"
                                             Style="{StaticResource AfSettingsRowSliderStyle}"
-                                            TickFrequency="1"
+                                            TickFrequency="{Binding ViewModel.SpectrumSensitivityStepPercent}"
                                             Value="{Binding ViewModel.SpectrumSensitivityPercent, Mode=TwoWay}" />
                                         <TextBlock Style="{StaticResource AfSettingsRowValueStyle}" Text="{Binding ViewModel.SpectrumSensitivityPercent, StringFormat={}{0}%}" />
                                     </StackPanel>

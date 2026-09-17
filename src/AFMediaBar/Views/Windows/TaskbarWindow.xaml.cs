@@ -952,6 +952,45 @@ public partial class TaskbarWindow : Window
             MediaControl.GetVolumeAnchor());
     }
 
+    /// <summary>
+    /// 在指定屏幕锚点处打开紧凑菜单（输出设备或当前应用音量）。托盘图标点击走这条入口：菜单内容与按钮点开时完全一致，
+    /// 只有锚点不同，因此不会出现两份会各自漂移的实现。
+    /// Opens a compact menu (output device or current application volume) at the given screen anchor. The tray icon's click uses
+    /// this entry: the menu content is identical to the button-opened one and only the anchor differs, so there is no second
+    /// implementation to drift.
+    /// </summary>
+    /// <param name="mode">要打开的面板：输出设备或当前应用音量。/ Panel to open: output device or current application volume.</param>
+    /// <param name="anchor">菜单锚点；为空时退回媒体栏上的对应按钮。/ Menu anchor, falling back to the matching media-bar button when null.</param>
+    public async Task ShowCompactMenuAsync(TaskbarCompactFlyoutMode mode, TrayIconBounds? anchor)
+    {
+        if (_isClosing || mode is not (TaskbarCompactFlyoutMode.OutputDevice or TaskbarCompactFlyoutMode.Volume))
+            return;
+
+        if (_compactFlyout.IsShowing(mode))
+        {
+            _compactFlyout.Dismiss();
+            return;
+        }
+
+        if (mode == TaskbarCompactFlyoutMode.OutputDevice)
+        {
+            _outputDevices = await _audioInteractionService.GetOutputDevicesAsync();
+            if (_isClosing) return;
+            _compactFlyout.ShowOutputDevices(
+                _outputDevices,
+                _outputDevices.FirstOrDefault(device => device.IsDefault),
+                anchor ?? MediaControl.GetOutputDeviceAnchor());
+            return;
+        }
+
+        _currentVolume = await Task.Run(_audioInteractionService.GetCurrentMediaVolume);
+        if (_isClosing) return;
+        _compactFlyout.ShowVolume(
+            _lastSnapshot.SourceName,
+            _currentVolume?.VolumePercent,
+            anchor ?? MediaControl.GetVolumeAnchor());
+    }
+
     private async void MediaControl_VolumeWheelRequested(object? sender, PlayerSurfaceWheelEventArgs e)
         => await PreviewVolumeAsync(e.Delta, updateFlyout: _compactFlyout.IsShowing(TaskbarCompactFlyoutMode.Volume));
 

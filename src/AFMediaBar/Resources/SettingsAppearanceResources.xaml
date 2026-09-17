@@ -1,6 +1,7 @@
 <ResourceDictionary
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:components="clr-namespace:AFMediaBar.Components"
     xmlns:sys="clr-namespace:System;assembly=System.Runtime"
     xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml">
 
@@ -232,11 +233,17 @@
     <!--
         隐式样式让应用里"剩下的每一个滑杆"（例如屏幕与位置页的长度/粗细/偏移滑杆）都得到同一套双色轨道，
         不依赖每个页面记得声明；局部显式样式（如行内滑杆的固定宽度）仍然优先。
+        键盘与滚轮的选中调节默认开启：设置页滑杆都要能用，而任务栏表面的滑杆（紧凑菜单竖向音量）
+        在使用处显式关闭，因为那里的滚轮属于播放器与音频手势。
         The implicit style gives every remaining slider in the application (for example the length/thickness/offset sliders on
         the screen-and-position page) the same two-tone track without each page having to remember; local explicit styles such
-        as the fixed-width row slider still win.
+        as the fixed-width row slider still win. Selection-driven keyboard and wheel adjustment is on by default because every
+        settings slider needs it; the taskbar-surface sliders (the compact menu's vertical volume) opt out where they are used,
+        because the wheel there belongs to the player and audio gestures.
     -->
-    <Style TargetType="{x:Type Slider}" BasedOn="{StaticResource AfAccentSliderStyle}" />
+    <Style TargetType="{x:Type Slider}" BasedOn="{StaticResource AfAccentSliderStyle}">
+        <Setter Property="components:SliderInputBehavior.IsEnabled" Value="True" />
+    </Style>
 
     <!--
         强调色进度条：只展示进度，没有滑块也不接受输入；高度默认 4 DIP，调用方可以再压薄。
@@ -264,6 +271,15 @@
         <Setter Property="Width" Value="{StaticResource AfSettingsRowSliderWidth}" />
         <Setter Property="IsMoveToPointEnabled" Value="True" />
         <Setter Property="VerticalAlignment" Value="Center" />
+        <!--
+            行内滑杆要显示自己的选中框：基础样式把 FocusVisualStyle 置空，那个决定是为任务栏的进度/音量条做的
+            （它们不是键盘控件），而设置页滑杆正是要靠它告诉用户"现在选中了我"。
+            A row slider shows its own selection frame: the base style clears FocusVisualStyle, a decision made for the taskbar's
+            progress and volume bars, which are not keyboard controls, while a settings slider is exactly the control that needs
+            to tell the user it is the selected one.
+        -->
+        <Setter Property="FocusVisualStyle" Value="{DynamicResource AfFocusVisualStyle}" />
+        <Setter Property="components:SliderInputBehavior.IsEnabled" Value="True" />
     </Style>
 
     <Style x:Key="AfSettingsRowValueStyle" TargetType="{x:Type TextBlock}">

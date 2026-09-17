@@ -157,21 +157,31 @@ public partial class DisplayModesViewModel : ObservableObject
         set => UpdateExperience(SettingsManager.Current.TaskbarExperience with { ContentLayout = value });
     }
 
-    /// <summary>
-    /// 静置层媒体文字（标题、歌手、歌词）的字号缩放百分比。
-    /// Font-size scale percentage for rest-layer media text: title, artist, and lyrics.
-    /// </summary>
-    public int MediaFontSizePercent
-    {
-        get => SettingsManager.Current.TaskbarExperience.Normalize().MediaFontSizePercent;
-        set => UpdateExperience(SettingsManager.Current.TaskbarExperience with { MediaFontSizePercent = value });
-    }
-
     /// <summary>任务栏标题和歌手文字的对齐方式。 / Alignment of taskbar title and artist text.</summary>
     public TaskbarMediaTextAlignment MediaTextAlignment
     {
         get => SettingsManager.Current.TaskbarExperience.MediaTextAlignment;
         set => UpdateExperience(SettingsManager.Current.TaskbarExperience with { MediaTextAlignment = value });
+    }
+
+    /// <summary>
+    /// 静置层与悬停层是否提供进入完整层的入口（文字区顶部细杠与悬停层按钮）。界面开关在本页静置层分区，
+    /// 关闭后两个入口一起消失；完整层本身与托盘、菜单入口不受影响。
+    /// Whether the rest and hover layers offer an entry into the full layer (the thin bar above the text and the hover layer's
+    /// button). The switch sits in this page's rest section; turning it off removes both entries, while the full layer itself and
+    /// the tray and menu entries stay as they are.
+    /// </summary>
+    public bool FullPanelEntryVisible
+    {
+        get => SettingsManager.Current.TaskbarExperience.FullPanelEntryVisible;
+        set => UpdateExperience(SettingsManager.Current.TaskbarExperience with { FullPanelEntryVisible = value });
+    }
+
+    /// <summary>静置层是否显示底部的播放进度条。 / Whether the rest layer shows its bottom playback-progress bar.</summary>
+    public bool RestProgressVisible
+    {
+        get => SettingsManager.Current.TaskbarExperience.RestProgressVisible;
+        set => UpdateExperience(SettingsManager.Current.TaskbarExperience with { RestProgressVisible = value });
     }
 
     /// <summary>静置层是否显示频谱组件。 / Whether the rest layer shows the spectrum component.</summary>
@@ -550,7 +560,9 @@ public partial class DisplayModesViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(HoverLayerEnabled)); OnPropertyChanged(nameof(FullLayerEnabled));
         OnPropertyChanged(nameof(Density)); OnPropertyChanged(nameof(ContentLayout));
-        OnPropertyChanged(nameof(MediaTextAlignment)); OnPropertyChanged(nameof(MediaFontSizePercent));
+        OnPropertyChanged(nameof(MediaTextAlignment));
+        OnPropertyChanged(nameof(FullPanelEntryVisible));
+        OnPropertyChanged(nameof(RestProgressVisible));
         OnPropertyChanged(nameof(SpectrumVisible)); OnPropertyChanged(nameof(PerformanceVisible));
         OnPropertyChanged(nameof(HoverPlayPauseVisible)); OnPropertyChanged(nameof(HoverPreviousNextVisible));
         OnPropertyChanged(nameof(HoverOutputDeviceVisible)); OnPropertyChanged(nameof(HoverAudioControlVisible));

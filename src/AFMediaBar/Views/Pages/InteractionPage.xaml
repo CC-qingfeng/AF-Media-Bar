@@ -94,6 +94,7 @@
                                 SelectedValuePath="Tag">
                                 <ComboBoxItem Content="播放 / 暂停" Tag="{x:Static settings:PlayerClickAction.TogglePlayPause}" />
                                 <ComboBoxItem Content="打开播放中的程序" Tag="{x:Static settings:PlayerClickAction.ActivateSource}" />
+                                <ComboBoxItem Content="打开完整层" Tag="{x:Static settings:PlayerClickAction.OpenFullPanel}" />
                             </ComboBox>
                         </components:SettingsRow>
 
@@ -106,6 +107,7 @@
                                 SelectedValuePath="Tag">
                                 <ComboBoxItem Content="打开播放中的程序" Tag="{x:Static settings:PlayerClickAction.ActivateSource}" />
                                 <ComboBoxItem Content="播放 / 暂停" Tag="{x:Static settings:PlayerClickAction.TogglePlayPause}" />
+                                <ComboBoxItem Content="打开完整层" Tag="{x:Static settings:PlayerClickAction.OpenFullPanel}" />
                             </ComboBox>
                         </components:SettingsRow>
 
@@ -154,6 +156,8 @@
                                 SelectedValue="{Binding ViewModel.TrayClickAction, Mode=TwoWay}"
                                 SelectedValuePath="Tag">
                                 <ComboBoxItem Content="打开音频控制菜单" Tag="{x:Static settings:TrayClickAction.OpenAudioControl}" />
+                                <ComboBoxItem Content="打开输出设备菜单" Tag="{x:Static settings:TrayClickAction.OpenOutputDeviceMenu}" />
+                                <ComboBoxItem Content="打开当前应用音量菜单" Tag="{x:Static settings:TrayClickAction.OpenCurrentAppVolumeMenu}" />
                                 <ComboBoxItem Content="打开设置页" Tag="{x:Static settings:TrayClickAction.OpenSettings}" />
                                 <ComboBoxItem Content="打开右键菜单" Tag="{x:Static settings:TrayClickAction.OpenContextMenu}" />
                             </ComboBox>

@@ -93,7 +93,7 @@ The app runs in its own process and hosts its WPF player as a taskbar child wind
 | Category | Capabilities |
 | --- | --- |
 | Media | Previous, play/pause, next, repeat, and click-to-position or draggable progress; unavailable controls keep a transparent background and dim their icons; Full always retains explicit buttons |
-| Source interaction | Bind artwork and title/lyric clicks independently to play/pause or activate the media app; right-click the bar to switch sources |
+| Source interaction | Bind artwork and title/lyric clicks independently to play/pause, activate the media app, or open the full layer; right-click the bar to switch sources |
 | Track-change notification | Optionally show the current track after it changes and starts playing, with six placements, 1–10 second duration, fullscreen suppression, and fixed- or foreground-display targeting |
 | Live lyrics | Lyrics exist only in taskbar rest and replace title plus artist/source when available; configure secondary content and alignment on the Lyrics page |
 | Taskbar behavior | Horizontal taskbars retain the original Rest appearance; Hover directly blurs/dims the original text while controls stay crisp, Full stays outside the taskbar, and a fixed target display can be selected independently |
@@ -152,6 +152,8 @@ Both options are published on GitHub Releases only. When GitHub is slow or unrea
 
 After launching, right-click the player or tray icon and use Display Modes, Media &amp; Notifications, Interaction, Lyrics, Appearance, and App &amp; About for light customization.
 
+Clicking a slider in the settings selects it (its row lights up), after which the arrow keys or the wheel adjust it: one press moves one step, and holding an arrow grows the distance over time. An unselected slider never swallows the wheel, so the page still scrolls.
+
 AF Media Bar is not commercially code-signed, so Windows SmartScreen may show an unknown publisher warning when you run the installer or launch the app for the first time.
 
 ## Basic Usage
@@ -160,15 +162,15 @@ AF Media Bar is not commercially code-signed, so Windows SmartScreen may show an
 | Action | Result |
 | --- | --- |
 | Hover over the bar | With media connected, artwork, text, and the playing spectrum use independent legacy hover feedback; opening controls directly blurs/dims the original text while buttons remain crisp; when Hover is disabled, a text-region pull handle still opens Full |
-| Click artwork | Play/pause by default, or bind it to activate the current media app |
-| Click title or lyric | Activate the current media app by default, or bind it to play/pause |
+| Click artwork | Play/pause by default, or bind it to activate the current media app or open the full layer |
+| Click title or lyric | Activate the current media app by default, or bind it to play/pause or open the full layer |
 | Open the Lyrics page | Toggle live lyrics, secondary content, and alignment |
 | Scroll up/down over the media area | Bind plain and modified wheel gestures to previous/next, media-source cycling, output-device cycling, or current-media volume; defaults are previous/next and Shift + source cycling |
 | Right-click the bar and choose “Switch media source” | Switch between available media sessions |
 | Enable Track-change notification under Media &amp; Notifications | Show the current track only after an observable track change begins playing; configure placement, duration, fullscreen policy, and fixed/foreground display targeting |
 | Choose the taskbar target display under Display Modes | Close an open Full panel and rebuild the taskbar host through its safe reload path; a disconnected target temporarily falls back to the primary display without discarding the preference |
 | Disable content-length following under Display Modes | Choose a fixed value between the live Hover minimum and available taskbar length; overflowing title, artist, and lyric text scrolls within its clipped region |
-| Click the AF Media Bar tray icon | Open output-device, spatial-audio status, and application-volume controls |
+| Click the AF Media Bar tray icon | Open the audio control panel by default; Interaction → Tray icon can switch it to the output-device menu, the current application's volume menu, the settings page, or the context menu |
 | Scroll over the audio flyout or Full output-device row | Preview immediately and switch about 1.2 seconds after scrolling stops; Full gives long device names more room and exposes the complete name as a tooltip |
 | Hover over the AF Media Bar tray icon | Show the default wheel action and its current value in the native Windows tooltip |
 | Scroll over the tray icon | Plain wheel switches output devices by default; Shift + wheel adjusts current-media volume in 2% steps; device previews update the native tooltip immediately and apply after about 1.2 seconds of inactivity |

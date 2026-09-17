@@ -140,7 +140,7 @@
                                     Maximum="{Binding Source={x:Static settings:AppearanceSettings.MaximumFontWeight}}"
                                     Minimum="{Binding Source={x:Static settings:AppearanceSettings.MinimumFontWeight}}"
                                     Style="{StaticResource AfSettingsRowSliderStyle}"
-                                    TickFrequency="50"
+                                    TickFrequency="{Binding Source={x:Static settings:AppearanceSettings.FontWeightStep}}"
                                     Value="{Binding ViewModel.FontWeight, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                                 <TextBlock Style="{StaticResource AfSettingsRowValueStyle}" Text="{Binding ViewModel.FontWeight}" />
                             </StackPanel>
@@ -236,6 +236,29 @@
                                 <ComboBoxItem Content="始终浅色文字" Tag="{x:Static settings:PlayerForegroundMode.LightText}" />
                                 <ComboBoxItem Content="始终深色文字" Tag="{x:Static settings:PlayerForegroundMode.DarkText}" />
                             </ComboBox>
+                        </components:SettingsRow>
+
+                        <!--
+                            媒体文字大小原本在「显示模式 → 静置层」，但它是"媒体栏上的文字长什么样"，
+                            与同组的颜色、字号、粗细属于同一件事，因此并入本页；取值范围不变。
+                            The media text size used to live under Display Modes → Rest, but it describes how the media bar's text
+                            looks, which is the same subject as this group's colour, typeface, and weight, so it moved here. Its range
+                            is unchanged.
+                        -->
+                        <components:SettingsRow
+                            Description="按百分比缩放静置层的标题、歌手与歌词字号（80%–125%）"
+                            Icon="{ui:SymbolIcon TextFont24}"
+                            Title="媒体文字大小">
+                            <StackPanel Orientation="Horizontal">
+                                <Slider
+                                    IsSnapToTickEnabled="True"
+                                    Maximum="125"
+                                    Minimum="80"
+                                    Style="{StaticResource AfSettingsRowSliderStyle}"
+                                    TickFrequency="5"
+                                    Value="{Binding ViewModel.MediaFontSizePercent, Mode=TwoWay}" />
+                                <TextBlock Style="{StaticResource AfSettingsRowValueStyle}" Text="{Binding ViewModel.MediaFontSizePercent, StringFormat={}{0:0}%}" />
+                            </StackPanel>
                         </components:SettingsRow>
 
                         <Grid Margin="0,4,0,0">

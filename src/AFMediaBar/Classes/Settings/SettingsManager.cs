@@ -246,6 +246,15 @@ public static class SettingsManager
         next.Appearance = AppearanceSettings.Default;
         next.TaskbarSurface = ModeSurfaceSettings.Default;
         next.DynamicIslandSurface = ModeSurfaceSettings.Default;
+        // 媒体文字大小的界面位于外观页的「媒体栏文字」分组，因此它也属于这一页的重置作用域。
+        // 显示模式页的重置仍然重置同一份任务栏体验设置，两个入口重置同一组值不会互相矛盾——与灵动岛外观的处理相同。
+        // The media text size is presented in the appearance page's media-bar-text group, so it belongs to this page's reset scope
+        // too. The display-mode page's reset still resets the same taskbar experience settings, and both entries agreeing is what
+        // keeps "restore this page" honest — the same arrangement the island appearance already uses.
+        next.TaskbarExperience = next.TaskbarExperience with
+        {
+            MediaFontSizePercent = TaskbarExperienceSettings.Default.MediaFontSizePercent
+        };
         Replace(next, SettingsResetScope.Appearance);
     }
     public static void ResetDisplayModes()

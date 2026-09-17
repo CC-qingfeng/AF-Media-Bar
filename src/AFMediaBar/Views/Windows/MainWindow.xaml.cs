@@ -161,6 +161,8 @@ namespace AFMediaBar.Views.Windows
             _trackChangeNotificationCoordinator.DismissRequested += TrackChangeNotificationCoordinator_OnDismissRequested;
             _audioControlViewModel.FlyoutToggleRequested += AudioControl_OnFlyoutToggleRequested;
             _audioControlViewModel.TrayContextMenuRequested += AudioControl_OnTrayContextMenuRequested;
+            _audioControlViewModel.OutputDeviceMenuRequested += AudioControl_OnOutputDeviceMenuRequested;
+            _audioControlViewModel.CurrentAppVolumeMenuRequested += AudioControl_OnCurrentAppVolumeMenuRequested;
             _audioControlViewModel.SettingsOpenRequested += ViewModel_OpenSettingsRequested;
             _mouseInputMonitor.LeftButtonPressed += MouseInputMonitor_OnLeftButtonPressed;
             ViewModel.OpenSettingsRequested += ViewModel_OpenSettingsRequested;
@@ -273,6 +275,8 @@ namespace AFMediaBar.Views.Windows
             _trackChangeNotificationCoordinator.DismissRequested -= TrackChangeNotificationCoordinator_OnDismissRequested;
             _audioControlViewModel.FlyoutToggleRequested -= AudioControl_OnFlyoutToggleRequested;
             _audioControlViewModel.TrayContextMenuRequested -= AudioControl_OnTrayContextMenuRequested;
+            _audioControlViewModel.OutputDeviceMenuRequested -= AudioControl_OnOutputDeviceMenuRequested;
+            _audioControlViewModel.CurrentAppVolumeMenuRequested -= AudioControl_OnCurrentAppVolumeMenuRequested;
             _audioControlViewModel.SettingsOpenRequested -= ViewModel_OpenSettingsRequested;
             _mouseInputMonitor.LeftButtonPressed -= MouseInputMonitor_OnLeftButtonPressed;
             ViewModel.OpenSettingsRequested -= ViewModel_OpenSettingsRequested;
@@ -687,6 +691,27 @@ namespace AFMediaBar.Views.Windows
                 return;
 
             await _audioControlFlyout.ToggleAsync(bounds);
+        }
+
+        /// <summary>
+        /// 托盘点击要求打开输出设备菜单：交给任务栏宿主的紧凑菜单实现，锚点用托盘图标的位置，
+        /// 因此菜单出现在用户刚刚点击的地方。
+        /// The tray click asks for the output-device menu: the taskbar host owns that compact menu, and the anchor is the tray
+        /// icon's position, so the menu appears where the user just clicked.
+        /// </summary>
+        private async void AudioControl_OnOutputDeviceMenuRequested(TrayIconBounds? bounds) =>
+            await ShowTrayCompactMenuAsync(TaskbarCompactFlyoutMode.OutputDevice, bounds);
+
+        /// <inheritdoc cref="AudioControl_OnOutputDeviceMenuRequested" />
+        private async void AudioControl_OnCurrentAppVolumeMenuRequested(TrayIconBounds? bounds) =>
+            await ShowTrayCompactMenuAsync(TaskbarCompactFlyoutMode.Volume, bounds);
+
+        private async Task ShowTrayCompactMenuAsync(TaskbarCompactFlyoutMode mode, TrayIconBounds? bounds)
+        {
+            if (_isClosing || _taskbarWindow is null)
+                return;
+
+            await _taskbarWindow.ShowCompactMenuAsync(mode, bounds);
         }
 
         private void SettingsManager_OnTaskbarExperienceSettingsChanged(object? sender, EventArgs e)

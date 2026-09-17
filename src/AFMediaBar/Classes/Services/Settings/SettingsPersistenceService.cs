@@ -11,7 +11,7 @@ namespace AFMediaBar.Classes.Services;
 /// <summary>负责用户设置 JSON 的加载、恢复、原子保存和防抖。 / Owns loading, recovery, atomic saving and debouncing of user settings JSON.</summary>
 public sealed class SettingsPersistenceService : IDisposable
 {
-    public const int CurrentSchemaVersion = 10;
+    public const int CurrentSchemaVersion = 11;
     private readonly string _directoryPath;
     private readonly string _settingsPath;
     private readonly string _backupPath;
@@ -267,6 +267,22 @@ public sealed class SettingsPersistenceService : IDisposable
             // drag logic, so no user could have made a meaningful choice while it was off and a stored false is not intent.
             result.SpectrumComponent = result.SpectrumComponent with { Style = SpectrumStyle.Bars };
             result.PerformanceComponent = result.PerformanceComponent with { OpenTaskManagerOnClick = true };
+        }
+        if (envelope.SchemaVersion <= 10)
+        {
+            // Schema 11 新增「完整层入口」与「静置层进度显示」两个开关，并让字体粗细改用 100–900 的真实字重、频谱灵敏度按 10 步进。
+            // 旧文件没有这两个开关字段，迁移时显式写入开启，保持"细杠与悬停按钮都在、静置层底部有进度条"的既有行为；
+            // 粗细与灵敏度由各自的 Normalize 吸附与夹取，这里不再重复。
+            // Schema 11 adds the full-layer entry and rest-layer progress switches and moves the font weight onto the nine real
+            // weights from 100 to 900 while the spectrum sensitivity steps by ten. Older files have neither switch, so the
+            // migration writes both as enabled and keeps the previous behaviour where the thin bar, the hover button, and the
+            // rest-layer progress bar were all present; the weight and the sensitivity are snapped and clamped by their own
+            // Normalize, so they are not repeated here.
+            result.TaskbarExperience = result.TaskbarExperience with
+            {
+                FullPanelEntryVisible = true,
+                RestProgressVisible = true
+            };
         }
         return result.Normalize();
     }

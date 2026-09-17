@@ -19,6 +19,15 @@ public sealed class ApplicationThemeCoordinator : IDisposable
     private DispatcherTimer? _systemThemeRefreshTimer;
     private AccentPalette? _publishedAccent;
     private ApplicationTheme? _publishedTheme;
+    /// <summary>
+    /// 上一次已发布资源所依据的外观设置。字体（字体族与粗细）也通过这些资源发布，而它既不属于主题也不属于强调色，
+    /// 因此去重条件必须把它算进去，否则只改字体时会被判定为"什么都没变"而整段跳过，字体设置看起来完全无效。
+    /// Appearance settings the last published resources were derived from. The typeface (family and weight) is published through
+    /// the same resources while belonging to neither the theme nor the accent, so the dedupe has to include it: without it a
+    /// font-only change looks like "nothing changed" and the whole publish is skipped, which reads as a font setting that does
+    /// nothing.
+    /// </summary>
+    private AppearanceSettings? _publishedAppearance;
     private bool _isPublishing;
     private bool _started;
     private bool _disposed;
@@ -132,9 +141,12 @@ public sealed class ApplicationThemeCoordinator : IDisposable
                    (theme == ApplicationTheme.HighContrast && SystemParameters.HighContrast);
         var palette = AccentColorPolicy.Build(systemAccent, dark, SystemParameters.HighContrast);
 
-        // 强调色与主题都没变时不做任何重应用：DWM 与系统偏好消息会出现成串重复事件。
-        // Skip everything when neither the accent nor the theme changed: DWM and system-preference messages arrive in bursts.
-        if (_publishedAccent == palette && _publishedTheme == theme)
+        // 强调色、主题与外观设置都没变时不做任何重应用：DWM 与系统偏好消息会出现成串重复事件。
+        // 外观设置参与判断是必须的：字体只通过这一条资源回调生效。
+        // Skip everything when neither the accent, the theme, nor the appearance settings changed: DWM and system-preference
+        // messages arrive in bursts. The appearance settings must take part in that comparison, because the typeface only ever
+        // reaches the interface through this one resource callback.
+        if (_publishedAccent == palette && _publishedTheme == theme && _publishedAppearance == appearance)
             return;
 
         // 先记录本次结果，再调用可能同步回调的库方法，避免 ApplySystemAccent 触发的主题事件把流程递归回来。
@@ -142,6 +154,7 @@ public sealed class ApplicationThemeCoordinator : IDisposable
         // re-entrant call must already see the new state.
         _publishedAccent = palette;
         _publishedTheme = theme;
+        _publishedAppearance = appearance;
 
         // 主题应用与强调色应用必须一起发生：WPF-UI 只在主题应用时重建主题字典，
         // 库内控件（开关的基础态、窗口边框、导航选中态）才会重新解析强调色。只调用 ApplySystemAccent 时，

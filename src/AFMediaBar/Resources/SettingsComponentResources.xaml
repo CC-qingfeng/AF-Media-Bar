@@ -265,10 +265,19 @@
                             </MultiTrigger.Conditions>
                             <Setter TargetName="RowSurface" Property="BorderBrush" Value="{DynamicResource ControlStrokeColorSecondaryBrush}" />
                         </MultiTrigger>
+                        <!--
+                            选中态用 IsKeyboardFocusWithin 而不是 IsKeyboardFocused：点击或拖动行内滑杆时焦点落在滑杆上，
+                            行本身并没有获得焦点，用 IsKeyboardFocused 时行的强调色边框不会亮，"点一下滑块"因此看起来没有选中；
+                            改成 FocusWithin 后，Tab 与鼠标两条入口亮起的是同一圈边框。
+                            The active state keys off IsKeyboardFocusWithin rather than IsKeyboardFocused: clicking or dragging the row's
+                            slider puts focus on the slider, not on the row, so with IsKeyboardFocused the row's accent border stayed dark
+                            and clicking a slider looked like nothing had been selected; with FocusWithin both the Tab and mouse entries
+                            light the same frame.
+                        -->
                         <MultiTrigger>
                             <MultiTrigger.Conditions>
                                 <Condition Property="IsNested" Value="False" />
-                                <Condition Property="IsKeyboardFocused" Value="True" />
+                                <Condition Property="IsKeyboardFocusWithin" Value="True" />
                             </MultiTrigger.Conditions>
                             <Setter TargetName="RowSurface" Property="BorderBrush" Value="{DynamicResource AfAccentBrush}" />
                         </MultiTrigger>

@@ -75,6 +75,15 @@ public partial class ExtraFeaturesViewModel : ObservableObject
     /// <inheritdoc cref="MinimumSpectrumBandCount" />
     public int MaximumSpectrumBandCount => SpectrumComponentSettings.MaximumBandCount;
 
+    /// <summary>灵敏度滑杆的下限，来自持久化常量而不是界面字面量。 / Lower bound of the sensitivity slider, taken from the persistence constant rather than a UI literal.</summary>
+    public int MinimumSpectrumSensitivityPercent => SpectrumComponentSettings.MinimumSensitivityPercent;
+
+    /// <inheritdoc cref="MinimumSpectrumBandCount" />
+    public int MaximumSpectrumSensitivityPercent => SpectrumComponentSettings.MaximumSensitivityPercent;
+
+    /// <inheritdoc cref="MinimumSpectrumBandCount" />
+    public int SpectrumSensitivityStepPercent => SpectrumComponentSettings.SensitivityStepPercent;
+
     /// <summary>
     /// 性能组件的采样间隔，界面以秒为单位。设置里存的仍是毫秒，写入前吸附到滑杆步长上，
     /// 因此读数与滑杆位置永远一致。

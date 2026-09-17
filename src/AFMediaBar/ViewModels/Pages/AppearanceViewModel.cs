@@ -111,6 +111,26 @@ public partial class AppearanceViewModel : ObservableObject
         }
     }
 
+    /// <summary>
+    /// 静置层媒体文字（标题、歌手、歌词）的字号缩放百分比。该值存在任务栏体验设置里，但按界面归属由本页承载：
+    /// 「恢复本页默认设置」因此会连同它一起复位。
+    /// Font-size scale percentage for the rest-layer media text (title, artist, lyrics). The value lives in the taskbar
+    /// experience settings but this page owns it in the interface, so "restore this page's defaults" resets it as well.
+    /// </summary>
+    public int MediaFontSizePercent
+    {
+        get => SettingsManager.Current.TaskbarExperience.Normalize().MediaFontSizePercent;
+        set
+        {
+            if (_isRefreshing || value == MediaFontSizePercent)
+                return;
+
+            SettingsManager.SetTaskbarExperienceSettings(
+                SettingsManager.Current.TaskbarExperience with { MediaFontSizePercent = value });
+            OnPropertyChanged();
+        }
+    }
+
     /// <summary>当前桌面环境的动效级别。/ Current motion level for the desktop environment.</summary>
     public string MotionModeText => MotionPolicy.ResolveCurrent().Mode switch
     {
@@ -149,7 +169,13 @@ public partial class AppearanceViewModel : ObservableObject
 
     private void OnSettingsChanged(object? sender, SettingsChangedEventArgs e)
     {
-        if (e.ResetScope is not (SettingsResetScope.Appearance or SettingsResetScope.All)) return;
+        // 媒体文字大小存在任务栏体验设置里，因此它的外部变化（例如显示模式页的重置）也要回写本页读数。
+        // The media text size lives in the taskbar experience settings, so an external change to it (the display-mode page's
+        // reset, for example) must be reflected in this page's reading too.
+        if (e.ResetScope is not (SettingsResetScope.Appearance or SettingsResetScope.All) &&
+            e.PropertyName != nameof(AppSettings.TaskbarExperience))
+            return;
+
         var appearance = SettingsManager.Current.Appearance;
         _isRefreshing = true;
         try
@@ -160,6 +186,7 @@ public partial class AppearanceViewModel : ObservableObject
             PlayerForegroundMode = appearance.PlayerForegroundMode;
             ApplicationThemeMode = appearance.ApplicationThemeMode;
             BackdropMode = appearance.BackdropMode;
+            MediaFontSizePercent = SettingsManager.Current.TaskbarExperience.Normalize().MediaFontSizePercent;
         }
         finally { _isRefreshing = false; }
     }

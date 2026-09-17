@@ -33,14 +33,23 @@ public enum TrayClickAction
     None = 0,
     OpenSettings = 1,
     OpenAudioControl = 2,
-    OpenContextMenu = 3
+    OpenContextMenu = 3,
+
+    /// <summary>打开输出设备菜单。它与音频控制浮窗是两条不同路径：前者只换设备，后者带音量与设备列表。 / Opens the output-device menu. It is a different path from the audio flyout: this one only switches devices, the flyout also carries volume.</summary>
+    OpenOutputDeviceMenu = 4,
+
+    /// <summary>打开当前应用音量菜单。 / Opens the current application's volume menu.</summary>
+    OpenCurrentAppVolumeMenu = 5
 }
 
 /// <summary>任务栏静置内容的点击结果。 / Result of clicking taskbar rest-layer content.</summary>
 public enum PlayerClickAction
 {
     TogglePlayPause = 0,
-    ActivateSource = 1
+    ActivateSource = 1,
+
+    /// <summary>打开完整层。 / Opens the full layer.</summary>
+    OpenFullPanel = 2
 }
 
 /// <summary>普通滚轮映射切换到组合映射时使用的共享修饰键。 / Shared modifier that switches plain wheel input to its chord mapping.</summary>
@@ -195,21 +204,42 @@ public readonly record struct SpectrumComponentSettings(int BandCount, int Refre
     /// <summary>刷新率上限（Hz）。 / Upper refresh-rate bound in hertz.</summary>
     public const int MaximumRefreshRateHz = 30;
 
-    /// <summary>灵敏度下限（百分比）。 / Lower sensitivity bound in percent.</summary>
-    public const int MinimumSensitivityPercent = 1;
+    /// <summary>灵敏度下限（百分比）。静态增益低于 10% 时频谱几乎不动，因此下限取 10。 / Lower sensitivity bound in percent. A static gain below 10% leaves the spectrum almost still, so the floor is ten.</summary>
+    public const int MinimumSensitivityPercent = 10;
 
     /// <summary>灵敏度上限（百分比）。 / Upper sensitivity bound in percent.</summary>
     public const int MaximumSensitivityPercent = 400;
+
+    /// <summary>
+    /// 灵敏度滑杆的步进（百分比）。1–400 之间用 1 步进会给出四百个位置，而听感上的差别远达不到这个分辨率。
+    /// Step of the sensitivity slider in percent. Stepping by one across 1–400 would give four hundred positions while the
+    /// audible difference is nowhere near that resolution.
+    /// </summary>
+    public const int SensitivityStepPercent = 10;
 
     public static SpectrumComponentSettings Default { get; } = new(DefaultBandCount, 20, 100);
 
     public SpectrumComponentSettings Normalize() => new(
         Math.Clamp(BandCount, MinimumBandCount, MaximumBandCount),
         Math.Clamp(RefreshRateHz, MinimumRefreshRateHz, MaximumRefreshRateHz),
-        Math.Clamp(SensitivityPercent, MinimumSensitivityPercent, MaximumSensitivityPercent))
+        SnapSensitivityPercent(SensitivityPercent))
     {
         Style = Enum.IsDefined(Style) ? Style : SpectrumStyle.Bars
     };
+
+    /// <summary>
+    /// 把灵敏度吸附到步长网格并夹取。旧设置文件里的 1–9 会被抬到下限，非整十的取值落到最近的整十值上，
+    /// 否则界面会显示一个滑杆位置无法表达的读数。
+    /// Snaps sensitivity onto the step grid and clamps it. Values of 1–9 in an older file are lifted to the floor and off-grid
+    /// values land on the nearest ten, so the interface never shows a reading its own slider position cannot express.
+    /// </summary>
+    /// <param name="sensitivityPercent">待换算的灵敏度（百分比）。/ Sensitivity to normalize, in percent.</param>
+    public static int SnapSensitivityPercent(int sensitivityPercent)
+    {
+        var snapped = (int)Math.Round(sensitivityPercent / (double)SensitivityStepPercent, MidpointRounding.AwayFromZero)
+                      * SensitivityStepPercent;
+        return Math.Clamp(snapped, MinimumSensitivityPercent, MaximumSensitivityPercent);
+    }
 }
 
 /// <summary>任务栏性能组件设置。 / Taskbar performance component settings.</summary>
@@ -382,6 +412,23 @@ public readonly record struct TaskbarExperienceSettings(
     /// <summary>静置层是否显示性能组件。 / Whether the rest layer shows the performance component.</summary>
     public bool PerformanceVisible { get; init; } = true;
 
+    /// <summary>
+    /// 静置层是否显示底部的播放进度条。关闭后只在媒体报告了时长时消失的那条进度不再绘制，
+    /// 悬停层与完整层的进度不受影响。
+    /// Whether the rest layer shows its bottom playback-progress bar. Turning it off only removes that bar, which otherwise
+    /// appears whenever the session reports a duration; the hover and full layers keep their own progress.
+    /// </summary>
+    public bool RestProgressVisible { get; init; } = true;
+
+    /// <summary>
+    /// 静置层与悬停层是否提供进入完整层的入口。关闭后静置层文字区顶部那条细杠不再绘制、也不再可点，
+    /// 悬停层的完整层按钮同时隐藏；完整层本身与其它入口（托盘、菜单）不受影响。
+    /// Whether the rest and hover layers offer an entry into the full layer. Turning it off stops drawing and hit-testing the thin
+    /// bar above the rest-layer text and hides the hover layer's full-layer button; the full layer itself and other entries
+    /// (tray, menus) stay as they are.
+    /// </summary>
+    public bool FullPanelEntryVisible { get; init; } = true;
+
     /// <summary>悬停层中各项控制的显隐设置。 / Visibility settings for individual hover-layer controls.</summary>
     public TaskbarHoverControlsSettings HoverControls { get; init; } = TaskbarHoverControlsSettings.Default;
 
@@ -480,7 +527,11 @@ public readonly record struct GlobalInteractionSettings(
             PrimaryWheelAction = Enum.IsDefined(PrimaryWheelAction) ? PrimaryWheelAction : defaults.PrimaryWheelAction,
             Modifier = Enum.IsDefined(Modifier) ? Modifier : defaults.Modifier,
             ChordWheelAction = Enum.IsDefined(ChordWheelAction) ? ChordWheelAction : defaults.ChordWheelAction,
-            TrayClickAction = TrayClickAction is TrayClickAction.OpenAudioControl or TrayClickAction.OpenSettings or TrayClickAction.OpenContextMenu
+            TrayClickAction = TrayClickAction is TrayClickAction.OpenAudioControl
+                or TrayClickAction.OpenSettings
+                or TrayClickAction.OpenContextMenu
+                or TrayClickAction.OpenOutputDeviceMenu
+                or TrayClickAction.OpenCurrentAppVolumeMenu
                 ? TrayClickAction
                 : defaults.TrayClickAction,
             TrayPrimaryWheelAction = NormalizeTrayWheelAction(TrayPrimaryWheelAction, defaults.TrayPrimaryWheelAction),

@@ -21,14 +21,21 @@
     <CornerRadius x:Key="AfSurfaceCornerRadius">8</CornerRadius>
     <CornerRadius x:Key="AfNotificationCornerRadius">10</CornerRadius>
 
+    <!--
+        焦点框：强调色 + 与设置行相同的 8 DIP 圆角。原先用系统高亮色的 4 DIP 方框，与它包着的卡片（8 DIP 圆角）不是同一套语言，
+        看起来像贴上去的。高对比度下不需要额外分支：AfAccentBrush 本身就是系统高亮色（见 AccentColorPolicy）。
+        Focus frame: accent colour with the same 8 DIP radius as the settings rows. The previous system-highlight rectangle used a
+        4 DIP radius, which is not the language of the card it wraps (8 DIP) and read as something stuck on. Under high contrast
+        no extra branch is needed: AfAccentBrush is the system highlight colour there (see AccentColorPolicy).
+    -->
     <Style x:Key="AfFocusVisualStyle" TargetType="Control">
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate>
                     <Border Margin="-2"
-                            BorderBrush="{x:Static SystemColors.HighlightBrush}"
+                            BorderBrush="{DynamicResource AfAccentBrush}"
                             BorderThickness="2"
-                            CornerRadius="4" />
+                            CornerRadius="{StaticResource AfSurfaceCornerRadius}" />
                 </ControlTemplate>
             </Setter.Value>
         </Setter>

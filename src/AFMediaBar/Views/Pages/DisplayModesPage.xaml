@@ -419,26 +419,24 @@
                             </components:SettingsRow>
 
                             <components:SettingsRow
-                                Description="按百分比缩放静置层的标题、歌手与歌词字号（80%–125%）"
-                                Icon="{ui:SymbolIcon TextFont24}"
-                                Title="媒体文字大小">
-                                <StackPanel Orientation="Horizontal">
-                                    <Slider
-                                        Maximum="125"
-                                        Minimum="80"
-                                        Style="{StaticResource RowSliderStyle}"
-                                        IsSnapToTickEnabled="True"
-                                        TickFrequency="5"
-                                        Value="{Binding ViewModel.MediaFontSizePercent, Mode=TwoWay}" />
-                                    <TextBlock Style="{StaticResource RowValueStyle}" Text="{Binding ViewModel.MediaFontSizePercent, StringFormat={}{0:0}%}" />
-                                </StackPanel>
+                                Description="静置层底部的只读播放进度条；媒体未报告时长时不显示"
+                                Icon="{ui:SymbolIcon Play24}"
+                                Title="显示播放进度">
+                                <ui:ToggleSwitch IsChecked="{Binding ViewModel.RestProgressVisible, Mode=TwoWay}" />
+                            </components:SettingsRow>
+
+                            <components:SettingsRow
+                                Description="鼠标移入媒体栏或点击文字区顶部细杠时打开完整层"
+                                Icon="{ui:SymbolIcon ChevronUp24}"
+                                Title="显示进入完整层的入口">
+                                <ui:ToggleSwitch IsChecked="{Binding ViewModel.FullPanelEntryVisible, Mode=TwoWay}" />
                             </components:SettingsRow>
 
                             <components:SettingsCallout
                                 Margin="0,4,0,0"
                                 IsAccent="True"
                                 Symbol="DataHistogram24"
-                                Text="频谱与性能组件的开关和参数在「媒体与通知 → 静置层组件」。" />
+                                Text="频谱与性能组件的开关和参数在「媒体与通知 → 静置层组件」；媒体文字大小在「外观 → 媒体栏文字」。" />
                         </StackPanel>
                     </components:SettingsGroup>
 

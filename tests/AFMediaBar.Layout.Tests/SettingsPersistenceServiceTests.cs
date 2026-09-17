@@ -146,7 +146,7 @@ public sealed class SettingsPersistenceServiceTests
             SettingsManager.Current.Update.LastCheckUtc);
         Assert.IsFalse(SettingsManager.Current.Update.LastCheckSucceeded);
         var persisted = File.ReadAllText(reader.SettingsPath);
-        StringAssert.Contains(persisted, "\"schemaVersion\": 10");
+        StringAssert.Contains(persisted, "\"schemaVersion\": 11");
         StringAssert.Contains(persisted, "\"Disabled\"");
     }
 
@@ -195,7 +195,7 @@ public sealed class SettingsPersistenceServiceTests
 
         Assert.IsTrue(SettingsManager.Current.LyricsEnabled);
         Assert.IsTrue(Directory.GetFiles(_directory, "settings.json.unsupported-*").Length == 1);
-        StringAssert.Contains(File.ReadAllText(main), "\"schemaVersion\": 10");
+        StringAssert.Contains(File.ReadAllText(main), "\"schemaVersion\": 11");
     }
 
     [TestMethod]
@@ -263,7 +263,7 @@ public sealed class SettingsPersistenceServiceTests
         Assert.AreEqual("DISPLAY2", SettingsManager.Current.TrackChangeNotification.FixedMonitorDeviceId);
         Assert.AreEqual(TaskbarLengthMode.FollowContent, SettingsManager.Current.TaskbarExperience.LengthMode);
         Assert.AreEqual(TaskbarExperienceSettings.Default.FixedLengthDip, SettingsManager.Current.TaskbarExperience.FixedLengthDip);
-        StringAssert.Contains(File.ReadAllText(service.SettingsPath), "\"schemaVersion\": 10");
+        StringAssert.Contains(File.ReadAllText(service.SettingsPath), "\"schemaVersion\": 11");
     }
 
     [TestMethod]
@@ -343,7 +343,7 @@ public sealed class SettingsPersistenceServiceTests
         Assert.AreEqual(TaskbarInformationDensity.Information, SettingsManager.Current.TaskbarExperience.Density);
         Assert.AreEqual(TaskbarLengthMode.Fixed, SettingsManager.Current.TaskbarExperience.LengthMode);
         Assert.AreEqual(420, SettingsManager.Current.TaskbarExperience.FixedLengthDip);
-        StringAssert.Contains(File.ReadAllText(service.SettingsPath), "\"schemaVersion\": 10");
+        StringAssert.Contains(File.ReadAllText(service.SettingsPath), "\"schemaVersion\": 11");
     }
 
     [TestMethod]
@@ -368,7 +368,7 @@ public sealed class SettingsPersistenceServiceTests
             SettingsManager.Current.Update,
             "schema 8 的文件没有更新设置，必须取默认值，而不是被推断成关闭。");
         Assert.IsTrue(SettingsManager.Current.Update.AutoCheckEnabled);
-        StringAssert.Contains(File.ReadAllText(service.SettingsPath), "\"schemaVersion\": 10");
+        StringAssert.Contains(File.ReadAllText(service.SettingsPath), "\"schemaVersion\": 11");
     }
 
     /// <summary>
@@ -402,7 +402,36 @@ public sealed class SettingsPersistenceServiceTests
         Assert.IsTrue(
             SettingsManager.Current.PerformanceComponent.OpenTaskManagerOnClick,
             "该开关在旧版本里从未生效，旧的 false 不代表用户意图，必须取新的默认值。");
-        StringAssert.Contains(File.ReadAllText(service.SettingsPath), "\"schemaVersion\": 10");
+        StringAssert.Contains(File.ReadAllText(service.SettingsPath), "\"schemaVersion\": 11");
+    }
+
+    /// <summary>
+    /// schema 10 的文件没有「完整层入口」字段：迁移必须显式写回开启，保持细杠与悬停按钮都在的既有行为；
+    /// 同一批次里字体粗细改用九个真实字重、灵敏度按 10 步进，旧文件里的非网格取值由各自的 Normalize 吸附。
+    /// A schema 10 file has no full-layer entry field: the migration must write it back as enabled so the thin bar and the hover
+    /// button stay present. In the same batch the font weight moved onto the nine real weights and the sensitivity onto a ten-step
+    /// grid, so off-grid values from an older file are snapped by their own Normalize.
+    /// </summary>
+    [TestMethod]
+    public void Schema10MigrationKeepsTheFullPanelEntryAndSnapsWeightAndSensitivity()
+    {
+        Directory.CreateDirectory(_directory);
+        File.WriteAllText(
+            Path.Combine(_directory, "settings.json"),
+            """
+            {"schemaVersion":10,"settings":{"appearance":{"fontWeight":350},"spectrumComponent":{"bandCount":12,"refreshRateHz":20,"sensitivityPercent":7}}}
+            """);
+
+        using var service = new SettingsPersistenceService(_directory);
+        service.Initialize();
+
+        Assert.IsTrue(
+            SettingsManager.Current.TaskbarExperience.FullPanelEntryVisible,
+            "旧文件没有入口开关，迁移后必须仍然显示完整层入口。");
+        Assert.AreEqual(400, SettingsManager.Current.Appearance.FontWeight, "350 必须吸附到最近的真实字重 400。");
+        Assert.AreEqual(10, SettingsManager.Current.SpectrumComponent.SensitivityPercent, "7 必须抬到步进下限 10。");
+        Assert.AreEqual(12, SettingsManager.Current.SpectrumComponent.BandCount);
+        StringAssert.Contains(File.ReadAllText(service.SettingsPath), "\"schemaVersion\": 11");
     }
 
     [TestMethod]

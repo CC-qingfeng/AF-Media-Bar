@@ -452,7 +452,10 @@ namespace AFMediaBar.Components
                 AnimateComponentHover(TaskbarSpectrumHoverSurface, false);
                 ApplySpectrum(ReadOnlySpan<float>.Empty);
             }
-            TaskbarRestProgress.Visibility = isHorizontalTaskbar && progressVisible
+            // 静置层进度条只在媒体报告了时长、且开关打开时显示；开关是用户对"静置层要不要这条进度"的回答。
+            // The rest-layer progress bar appears only while the session reports a duration and the switch is on; the switch is the
+            // user's answer to "should the rest layer carry this progress line at all".
+            TaskbarRestProgress.Visibility = isHorizontalTaskbar && progressVisible && experience.RestProgressVisible
                 ? Visibility.Visible
                 : Visibility.Collapsed;
             TaskbarPreviousButton.Visibility = controls.PreviousNextVisible ? Visibility.Visible : Visibility.Collapsed;
@@ -466,7 +469,12 @@ namespace AFMediaBar.Components
             TaskbarHoverProgress.Visibility = controls.ProgressVisible && progressVisible
                 ? Visibility.Visible
                 : Visibility.Collapsed;
-            TaskbarFullPanelHandle.Visibility = experience.FullLayerEnabled
+            // 完整层入口开关同时作用于悬停层的完整层按钮与静置层文字区顶部那条细杠：用户看到的只是"要不要这个入口"，
+            // 因此两个入口必须一起消失，否则关掉开关后细杠没了、悬停按钮还留着。
+            // The full-layer entry switch covers both the hover layer's button and the thin bar above the rest-layer text: what the
+            // user asks for is "do I want this entry", so both have to disappear together, otherwise turning it off would remove
+            // the thin bar while leaving the hover button behind.
+            TaskbarFullPanelHandle.Visibility = experience.FullLayerEnabled && experience.FullPanelEntryVisible
                 ? Visibility.Visible
                 : Visibility.Collapsed;
             var directFullPanelHandleVisible = CanShowDirectFullPanelHandle();
@@ -1083,17 +1091,35 @@ namespace AFMediaBar.Components
             var action = _currentMode == WindowMode.Taskbar
                 ? PlayerClickBindingPolicy.Resolve(SettingsManager.Current.Interaction, artwork: true)
                 : PlayerClickAction.TogglePlayPause;
-            if (action == PlayerClickAction.TogglePlayPause)
-            {
-                if (!_canPlayPause) return;
-                TogglePlayPauseRequested?.Invoke(this, EventArgs.Empty);
-            }
-            else
-            {
-                ActivateSourceRequested?.Invoke(this, EventArgs.Empty);
-            }
+            ExecutePlayerClickAction(action);
             e.Handled = true;
         }
+
+        /// <summary>
+        /// 执行静置层的点击绑定。三个动作各自只发一个请求，因此封面与文字可以绑到不同结果而不会互相触发。
+        /// Runs a rest-layer click binding. Each action raises exactly one request, so artwork and text can be bound to different
+        /// results without triggering each other.
+        /// </summary>
+        private void ExecutePlayerClickAction(PlayerClickAction action)
+        {
+            switch (action)
+            {
+                case PlayerClickAction.TogglePlayPause:
+                    if (!_canPlayPause)
+                        return;
+                    TogglePlayPauseRequested?.Invoke(this, EventArgs.Empty);
+                    break;
+                case PlayerClickAction.OpenFullPanel:
+                    RequestOpenFullPanel();
+                    break;
+                default:
+                    ActivateSourceRequested?.Invoke(this, EventArgs.Empty);
+                    break;
+            }
+        }
+
+        /// <summary>请求宿主打开完整层；细杠、快捷键入口与点击绑定都走这一条路径。 / Requests the host to open the full layer; the thin bar, the click bindings, and any other entry all go through this one path.</summary>
+        public void RequestOpenFullPanel() => OpenFullPanelRequested?.Invoke(this, EventArgs.Empty);
 
         private void InteractionSurface_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
         {
@@ -1182,8 +1208,11 @@ namespace AFMediaBar.Components
             TaskbarHoverProgress.Value = position;
             if (_currentMode == WindowMode.Taskbar && !_isVertical)
             {
-                TaskbarRestProgress.Visibility = hasDuration ? Visibility.Visible : Visibility.Collapsed;
-                TaskbarHoverProgress.Visibility = hasDuration && SettingsManager.Current.TaskbarExperience.HoverControls.ProgressVisible
+                var experience = SettingsManager.Current.TaskbarExperience.Normalize();
+                TaskbarRestProgress.Visibility = hasDuration && experience.RestProgressVisible
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
+                TaskbarHoverProgress.Visibility = hasDuration && experience.HoverControls.ProgressVisible
                     ? Visibility.Visible
                     : Visibility.Collapsed;
             }
@@ -1209,15 +1238,7 @@ namespace AFMediaBar.Components
             var action = _currentMode == WindowMode.Taskbar
                 ? PlayerClickBindingPolicy.Resolve(SettingsManager.Current.Interaction, artwork: false)
                 : PlayerClickAction.ActivateSource;
-            if (action == PlayerClickAction.TogglePlayPause)
-            {
-                if (!_canPlayPause) return;
-                TogglePlayPauseRequested?.Invoke(this, EventArgs.Empty);
-            }
-            else
-            {
-                ActivateSourceRequested?.Invoke(this, EventArgs.Empty);
-            }
+            ExecutePlayerClickAction(action);
             e.Handled = true;
         }
     }

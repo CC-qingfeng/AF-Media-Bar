@@ -57,6 +57,16 @@ public partial class AudioControlViewModel : ObservableObject, IDisposable
     public event EventHandler? SettingsOpenRequested;
 
     /// <summary>
+    /// 请求在托盘图标处打开输出设备菜单。菜单本身属于任务栏宿主，因此这里只表达意图并带上锚点。
+    /// Requests the output-device menu to open at the tray icon. The menu belongs to the taskbar host, so this only expresses the
+    /// intent and carries the anchor.
+    /// </summary>
+    public event Action<TrayIconBounds?>? OutputDeviceMenuRequested;
+
+    /// <summary>请求在托盘图标处打开当前应用音量菜单。/ Requests the current application's volume menu to open at the tray icon.</summary>
+    public event Action<TrayIconBounds?>? CurrentAppVolumeMenuRequested;
+
+    /// <summary>
     /// 创建音频面板状态协调器；设备、应用音量和提示状态均通过注入服务异步刷新。
     /// Creates the audio-panel state coordinator; devices, application volume, and tooltip state are refreshed asynchronously through injected services.
     /// </summary>
@@ -436,6 +446,12 @@ public partial class AudioControlViewModel : ObservableObject, IDisposable
                 break;
             case TrayClickAction.OpenAudioControl:
                 FlyoutToggleRequested?.Invoke(GetTrayBounds());
+                break;
+            case TrayClickAction.OpenOutputDeviceMenu:
+                OutputDeviceMenuRequested?.Invoke(GetTrayBounds());
+                break;
+            case TrayClickAction.OpenCurrentAppVolumeMenu:
+                CurrentAppVolumeMenuRequested?.Invoke(GetTrayBounds());
                 break;
             case TrayClickAction.OpenContextMenu:
                 TrayContextMenuRequested?.Invoke(GetTrayBounds());
