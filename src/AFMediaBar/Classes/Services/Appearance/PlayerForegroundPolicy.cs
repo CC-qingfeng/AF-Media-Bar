@@ -33,6 +33,24 @@ public static class PlayerForegroundPolicy
     private static readonly double SwitchingLuminance =
         Math.Sqrt(1.05 * (DarkTextLuminance + 0.05)) - 0.05;
 
+    /// <summary>
+    /// 频谱前景的不透明度。媒体文字用全不透明画刷，而频谱是实心色块，沿用旧观感的 0xDF 才不会在浅色背景下压得比文字还重。
+    /// Opacity of the spectrum foreground. Media text uses an opaque brush while the spectrum is a solid block, so keeping the
+    /// previous 0xDF alpha stops it from weighing more than the text does on light backgrounds.
+    /// </summary>
+    public const byte SpectrumForegroundAlpha = 0xDF;
+
+    /// <summary>
+    /// 把媒体文字的前景色换算成频谱前景色。频谱与文字铺在同一块任务栏表面上，因此两者必须共用同一个自动决定，
+    /// 只有不透明度按各自的视觉重量取值；分开判断只会在同一背景上给出两种颜色。
+    /// Converts the media text foreground into the spectrum foreground. The spectrum and the text sit on the same taskbar
+    /// surface, so they must share one automatic decision and differ only in the alpha that matches each one's visual weight;
+    /// judging them separately would only produce two colours over one background.
+    /// </summary>
+    /// <param name="textForeground">媒体文字正在使用的不透明前景色。/ Opaque foreground color currently used by the media text.</param>
+    public static Color ToSpectrumForeground(Color textForeground) =>
+        Color.FromArgb(SpectrumForegroundAlpha, textForeground.R, textForeground.G, textForeground.B);
+
     /// <summary>判断异步采样结果是否仍属于当前宿主代际。/ Determines whether an asynchronous sample still belongs to the current host generation.</summary>
     public static bool IsCurrent(bool disposed, int resultGeneration, int currentGeneration) =>
         !disposed && resultGeneration == currentGeneration;

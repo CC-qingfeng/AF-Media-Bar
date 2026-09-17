@@ -185,4 +185,85 @@ public static class SpectrumPresentationPolicy
     /// <param name="style">频谱样式。/ Spectrum style.</param>
     public static bool IsSymmetric(SpectrumStyle style) =>
         style is SpectrumStyle.Waveform or SpectrumStyle.MirroredBars;
+
+    /// <summary>
+    /// 时间跟随的时间常数相对于动效「快速时长」的比例。取 0.25 是为了让跟随响应对齐柱状图那条路径：
+    /// 柱子的 ScaleY 用 120 ms 的 PowerEase(3, EaseOut)，每隔一个采样周期（默认 20 Hz，即 50 ms）重设目标；
+    /// 指数跟随在 τ = 30 ms 时，一个采样周期后走完约 81%，缓出曲线在同一时刻约 80%，两者相差不到两个百分点，
+    /// 因此四种样式的响应速度一致，不会出现"柱状图跟得上、波形慢半拍"。
+    /// Time constant of the temporal follower, as a fraction of the motion profile's fast duration. 0.25 aligns the follower
+    /// with the bar path: bars animate ScaleY with a 120 ms PowerEase(3, EaseOut) retargeted once per sampling cycle (20 Hz by
+    /// default, so every 50 ms). With τ = 30 ms the exponential has covered about 81% after one cycle while the ease-out curve
+    /// has covered about 80% — under two points apart, so all four styles respond at the same speed instead of leaving the
+    /// waveform visibly half a beat behind the bars.
+    /// </summary>
+    public const double TemporalSmoothingTimeConstantFraction = 0.25;
+
+    /// <summary>
+    /// 显示值离目标值小于该距离时直接落到目标值。指数跟随永远只是逼近，没有这一步计时器会为了 0.0001 的差距一直空转。
+    /// Distance under which a displayed level snaps onto its target. An exponential follower only ever approaches, and without
+    /// this snap the frame timer would keep spinning for a remaining gap of 0.0001.
+    /// </summary>
+    public const float DisplayedLevelTolerance = 0.002f;
+
+    /// <summary>
+    /// 该样式是否需要按帧推进显示值。柱状图与对称柱状图把跟随交给 WPF 的 ScaleY 动画（由合成线程插值），
+    /// 像素柱状图与波形的视觉来自量化取值和路径点，没有可交给动画引擎的属性，只能在时间维度自己推进。
+    /// Whether a style needs its displayed levels advanced per frame. The bar styles delegate the follower to the WPF ScaleY
+    /// animation, which interpolates on the composition thread, while the pixel chart and the waveform derive their visuals from
+    /// quantized levels and path points, leaving nothing for the animation engine to interpolate, so time is advanced here.
+    /// </summary>
+    /// <param name="style">频谱样式。/ Spectrum style.</param>
+    public static bool NeedsFrameDrivenSmoothing(SpectrumStyle style) =>
+        style is SpectrumStyle.Waveform or SpectrumStyle.PixelBars;
+
+    /// <summary>
+    /// 把显示值向采样目标推进一个时间步。帧率无关，因此同一段真实时间里无论跑了多少帧，结果都相同。
+    /// Advances one displayed level towards its sampled target. The step is frame-rate independent, so the same real elapsed
+    /// time produces the same result no matter how many frames were rendered.
+    /// </summary>
+    /// <param name="displayed">上一帧的显示值（0–1）。/ Displayed level of the previous frame, 0–1.</param>
+    /// <param name="target">采样目标值（0–1）。/ Sampled target level, 0–1.</param>
+    /// <param name="elapsed">距上一帧的真实经过时间。/ Real time elapsed since the previous frame.</param>
+    /// <param name="settleDuration">动效策略给出的跟随时长，通常取快速时长。/ Follow duration from the motion profile, normally its fast duration.</param>
+    /// <returns>本帧应显示的取值。/ Level to display for this frame.</returns>
+    public static float AdvanceDisplayedLevel(float displayed, float target, TimeSpan elapsed, TimeSpan settleDuration)
+    {
+        var goal = float.IsFinite(target) ? Math.Clamp(target, 0f, 1f) : 0f;
+        if (!float.IsFinite(displayed))
+            return goal;
+
+        // 没有时间可用（首帧、动效关闭或时长退化）时直接落到目标，而不是停在中间值上。
+        // With no usable time (first frame, motion disabled, or a degenerate duration) snap to the target instead of parking at
+        // an intermediate value.
+        if (elapsed <= TimeSpan.Zero || settleDuration <= TimeSpan.Zero)
+            return goal;
+
+        var timeConstant = settleDuration.TotalSeconds * TemporalSmoothingTimeConstantFraction;
+        if (timeConstant <= 0)
+            return goal;
+
+        var factor = 1 - Math.Exp(-elapsed.TotalSeconds / timeConstant);
+        var next = displayed + (goal - displayed) * factor;
+        return IsDisplayedLevelSettled((float)next, goal) ? goal : (float)next;
+    }
+
+    /// <summary>显示值是否已经可以认为落在目标上。/ Whether a displayed level can be considered to have landed on its target.</summary>
+    /// <param name="displayed">显示值。/ Displayed level.</param>
+    /// <param name="target">目标值。/ Target level.</param>
+    public static bool IsDisplayedLevelSettled(float displayed, float target) =>
+        Math.Abs(target - displayed) <= DisplayedLevelTolerance;
+
+    /// <summary>
+    /// 波形轮廓的点数。轮廓长度只由柱数决定，因此控制端可以一次分配点集、之后逐帧原地改写，
+    /// 不必每帧新建几何对象。
+    /// Number of points in a waveform outline. The count depends only on the bar count, so the control can allocate the point
+    /// set once and rewrite it in place every frame instead of building a new geometry each time.
+    /// </summary>
+    /// <param name="bandCount">柱数。/ Bar count.</param>
+    public static int CalculateWaveformPointCount(int bandCount)
+    {
+        var count = SpectrumBandPolicy.ClampBandCount(bandCount);
+        return 2 * (WaveformSegmentsPerGap * (count - 1) + 1);
+    }
 }

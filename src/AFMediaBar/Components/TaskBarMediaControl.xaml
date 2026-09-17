@@ -66,9 +66,11 @@
             </Style.Triggers>
         </Style>
         <!--
-            频谱颜色只有一处定义：柱状图、像素柱状图与波形都取这一支画刷，因此改颜色不会出现某一种样式没跟上。
-            The spectrum colour has one definition: the bar, pixel, and waveform styles all take this brush, so changing it
-            cannot leave one style behind.
+            频谱颜色的默认值。窗口初始化后由 ApplyAppearanceSettings 换成与媒体文字相同的自动前景，
+            因此这里只需要一个与旧观感一致的回退色；四种样式共用同一支画刷，改颜色不会出现某一种样式没跟上。
+            Default spectrum colour. Once the window initializes, ApplyAppearanceSettings replaces it with the same automatic
+            foreground the media text uses, so this only needs to be a fallback matching the previous appearance; the four
+            styles share one brush, so a colour change cannot leave a style behind.
         -->
         <SolidColorBrush x:Key="TaskbarSpectrumBrush" Color="#DFFFFFFF" />
         <Style x:Key="TaskbarSpectrumBar" TargetType="Border">

@@ -157,6 +157,16 @@ namespace AFMediaBar.Components
         /// 返回当前可见文字表面的物理屏幕像素矩形，供宿主采样实际背景。
         /// Returns the physical screen-pixel rectangle of the visible text surface for host background sampling.
         /// </summary>
+        /// <remarks>
+        /// 频谱表面刻意不参与采样：它自己就画在这个矩形里，而频谱取的是同一个自动前景，把画着前景色的区域喂回策略会形成
+        /// 自反馈（亮背景下按白色频谱采样，样本中位数被抬高，决定就会一直停在白色）。性能块参与采样是因为它的底色几乎透明，
+        /// 采样到的仍是它背后的实际背景。
+        /// The spectrum surface deliberately stays out of the sample: the bars are painted inside that very rectangle and the
+        /// spectrum takes the same automatic foreground, so feeding a region covered in the foreground colour back into the
+        /// policy would close a feedback loop (sampling white bars over a bright background lifts the median and pins the
+        /// decision to white). The performance chip does participate because its background is almost transparent, so the
+        /// samples still read the real background behind it.
+        /// </remarks>
         public bool TryGetForegroundSampleBounds(out Int32Rect bounds)
         {
             bounds = Int32Rect.Empty;
@@ -693,6 +703,10 @@ namespace AFMediaBar.Components
             SongLyricsSecondary.Opacity = SystemParameters.HighContrast ? 1 : 0.68;
             SongArtist.Foreground = foreground;
             TaskbarPerformanceText.Foreground = foreground;
+            // 频谱与文字取同一支自动前景：两者铺在同一块任务栏表面上，分开判断只会在同一背景上给出两种颜色。
+            // The spectrum takes the same automatic foreground as the text: both sit on the same taskbar surface, and judging
+            // them separately would only produce two colours over one background.
+            ApplySpectrumForeground(foreground);
             SongInfoStackPanel.Background = Brushes.Transparent;
             ApplyContrastShadow(presentation.NeedsContrastShadow, presentation.UsesLightText);
 

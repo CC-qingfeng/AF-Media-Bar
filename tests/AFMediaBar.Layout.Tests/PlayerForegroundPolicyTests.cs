@@ -170,6 +170,32 @@ public sealed class PlayerForegroundPolicyTests
         Assert.IsFalse(PlayerForegroundPolicy.IsCurrent(disposed: false, resultGeneration: 3, currentGeneration: 4));
     }
 
+    /// <summary>
+    /// 频谱必须与媒体文字共用同一个自动前景决定，只有不透明度按各自的视觉重量取值：
+    /// 色相被改写就会出现「文字已转深、频谱还是白的」这种半跟随状态。
+    /// The spectrum must share the media text's automatic foreground decision and differ only in the alpha that matches its
+    /// own visual weight: rewriting the hue would leave the half-followed state where the text has gone dark while the
+    /// spectrum is still white.
+    /// </summary>
+    [TestMethod]
+    public void ToSpectrumForeground_KeepsTheTextHueAndAppliesTheSpectrumAlpha()
+    {
+        foreach (var textForeground in new[] { Colors.White, Color.FromRgb(0x1C, 0x1C, 0x1C), Color.FromRgb(0x3A, 0x7B, 0xD5) })
+        {
+            var spectrum = PlayerForegroundPolicy.ToSpectrumForeground(textForeground);
+            Assert.AreEqual(PlayerForegroundPolicy.SpectrumForegroundAlpha, spectrum.A);
+            Assert.AreEqual(textForeground.R, spectrum.R);
+            Assert.AreEqual(textForeground.G, spectrum.G);
+            Assert.AreEqual(textForeground.B, spectrum.B);
+        }
+
+        // 深色文字必须真的变成深色频谱，否则浅色背景上仍是旧的白柱。
+        // Dark text must really produce a dark spectrum, otherwise the old white bars survive on light backgrounds.
+        Assert.AreEqual(
+            Color.FromArgb(PlayerForegroundPolicy.SpectrumForegroundAlpha, 0x1C, 0x1C, 0x1C),
+            PlayerForegroundPolicy.ToSpectrumForeground(Color.FromRgb(0x1C, 0x1C, 0x1C)));
+    }
+
     [TestMethod]
     public async Task ScreenSampler_InvalidBounds_ReturnsNoSamples()
     {
