@@ -117,7 +117,13 @@ public partial class TaskBarMediaControl
             ? TaskbarExperiencePolicy.CalculateMarqueeOverflow(measured, available)
             : 0;
         var following = overflow > 1 && state.Base.Length > 0 && IsFollowMarqueeElement(element) && _lyricHighlightActive;
-        var advancing = overflow > 1 && state.Base.Length > 0;
+        // 歌词行的推进属于亮区：暂停时亮区停住，歌词也 MUST NOT 改走轮转自己跑起来（那会让暂停中的歌词一直循环滚动），
+        // 此时它按普通裁剪显示整行开头。标题与歌手没有"唱到哪"这种进度，暂停时照常轮转。
+        // A lyric row advances with the reveal: while playback is paused the reveal stands still, and the row MUST NOT fall back to rotating
+        // on its own, which would keep a paused line scrolling forever; it is then drawn with the regular trimming instead. The title and
+        // artist have no such progress, so they keep rotating while paused.
+        var lyricFrozenByPause = IsLyricMarqueeElement(element) && _isPaused;
+        var advancing = overflow > 1 && state.Base.Length > 0 && !lyricFrozenByPause;
         var key = $"{advancing}|{following}|{available:0.##}|{state.Base}";
         if (!string.Equals(state.Key, key, StringComparison.Ordinal))
         {
@@ -179,6 +185,11 @@ public partial class TaskBarMediaControl
     /// <summary>该元素是否使用跟随式推进（正在逐字擦亮的歌词行）。 / Whether the element uses the follow mode, which means the lyric line currently being revealed.</summary>
     /// <param name="element">文本元素。/ Text element.</param>
     private bool IsFollowMarqueeElement(TextBlock element) => ReferenceEquals(element, SongLyrics);
+
+    /// <summary>该元素是否是歌词行（两行都算）。/ Whether the element is a lyric row, either row.</summary>
+    /// <param name="element">文本元素。/ Text element.</param>
+    private bool IsLyricMarqueeElement(TextBlock element) =>
+        ReferenceEquals(element, SongLyrics) || ReferenceEquals(element, SongLyricsSecondary);
 
     /// <summary>
     /// 按当前位置改写窗口：跟随式按亮区求解起点，轮转式按位置轮转字符串。窗口字符串只在整数位置跨过时才变化，
@@ -274,7 +285,16 @@ public partial class TaskBarMediaControl
             element.TextAlignment = TextAlignment.Left;
 
         UpdateMarqueeWindowMetrics(state);
+        state.DevicePixelScale = ResolveDevicePixelScale(element);
         ApplyMarqueeOffset(state);
+    }
+
+    /// <summary>该元素所在显示器的 DPI 缩放，用于把小数位移对齐到设备像素；取不到时按 1 处理。/ DPI scale of the display the element is on, used to snap the fractional offset to device pixels, or one when it cannot be read.</summary>
+    /// <param name="element">文本元素。/ Text element.</param>
+    private static double ResolveDevicePixelScale(Visual element)
+    {
+        var scale = VisualTreeHelper.GetDpi(element).DpiScaleX;
+        return double.IsFinite(scale) && scale > 0 ? scale : 1;
     }
 
     /// <summary>
@@ -314,9 +334,20 @@ public partial class TaskBarMediaControl
         if (!double.IsFinite(offset))
             offset = 0;
 
+        // 位移对齐到设备像素：字形压在半个像素上会丢掉 ClearType 而发虚，而每帧一个设备像素的步进在 60 fps 下同样是连续的。
+        // Snap the offset to whole device pixels: a glyph sitting on a half pixel loses ClearType and looks soft, while a step of one
+        // device pixel per frame is just as continuous at 60 fps.
+        offset = SnapToDevicePixel(offset, state.DevicePixelScale);
+
         WriteMarqueeOffset(state.Transform, offset);
         WriteMarqueeOffset(state.MirroredTransform, offset);
     }
+
+    /// <summary>把位移对齐到设备像素。/ Snaps an offset to whole device pixels.</summary>
+    /// <param name="offset">位移（DIP）。/ Offset in DIP.</param>
+    /// <param name="scale">该元素所在显示器的 DPI 缩放。/ DPI scale of the display the element is on.</param>
+    private static double SnapToDevicePixel(double offset, double scale) =>
+        double.IsFinite(scale) && scale > 0 ? Math.Round(offset * scale) / scale : offset;
 
     /// <summary>把一个变换的位移写成目标值；变换不存在或已经一致时不做任何事。/ Writes one transform's offset, doing nothing when there is no transform or it already matches.</summary>
     /// <param name="transform">目标变换。/ Target transform.</param>
@@ -489,6 +520,27 @@ public partial class TaskBarMediaControl
     }
 
     /// <summary>
+    /// 把设置里的对齐方式写到元素上，但**正在推进**的元素除外：推进期间窗口必须保持左对齐，否则开头会被推出容器，
+    /// 而停止推进时跑马灯自己会按设置恢复。悬停进入会重跑一次体验设置，因此这里必须让路。
+    /// Writes the configured alignment onto an element, except while that element is advancing: an advancing window has to stay
+    /// left-aligned or its head leaves the container, and the marquee restores the configured value once it stops. Hover entry re-runs the
+    /// experience settings, so this has to yield.
+    /// </summary>
+    /// <param name="element">文本元素。/ Text element.</param>
+    /// <param name="alignment">设置里的对齐方式。/ Alignment from the settings.</param>
+    private void ApplyConfiguredTextAlignment(TextBlock element, TextAlignment alignment)
+    {
+        foreach (var state in _marqueeTexts)
+        {
+            if (ReferenceEquals(state.Element, element) && state.Advancing)
+                return;
+        }
+
+        if (element.TextAlignment != alignment)
+            element.TextAlignment = alignment;
+    }
+
+    /// <summary>
     /// 该元素在设置里配置的对齐方式。推进期间渲染按左对齐，结束后必须回到设置里的值，
     /// 因此这里读设置而不是读元素（元素上那个值可能已经被推进覆盖）。
     /// The alignment configured in the settings for that element. Advancing renders left-aligned and has to return to the configured value
@@ -568,6 +620,9 @@ public partial class TaskBarMediaControl
 
         /// <summary>当前可用宽度（DIP）。/ Current available width in DIP.</summary>
         public double AvailableWidth { get; set; }
+
+        /// <summary>该元素所在显示器的 DPI 缩放，用于把小数位移对齐到设备像素（窗口每次变化时刷新）。/ DPI scale of the display the element is on, used to snap the fractional offset to device pixels; refreshed whenever the window changes.</summary>
+        public double DevicePixelScale { get; set; } = 1;
 
         /// <summary>设置里配置的对齐方式。/ Alignment configured in the settings.</summary>
         public TextAlignment Alignment { get; set; } = TextAlignment.Left;
@@ -871,7 +926,10 @@ public partial class TaskBarMediaControl
         if (!CanUseTaskbarComponentHover())
             return;
 
-        StopMarqueeAnimations();
+        // 悬停不打断跑马灯：指针移入移出只是用户要操作按钮，标题/歌手/歌词的推进位置与节奏 MUST 继续，
+        // 否则每次移入都会从开头重读一遍。
+        // Hovering does not interrupt the marquee: moving the pointer in and out only means the user wants a button, and the advance
+        // position and pace of the title, artist, and lyrics MUST continue, otherwise every entry restarts the text from its head.
         AnimateComponentHover(SongInfoHoverOverlay, true);
         AnimateDirectFullPanelHandle(true);
         _hoverCloseTimer.Stop();

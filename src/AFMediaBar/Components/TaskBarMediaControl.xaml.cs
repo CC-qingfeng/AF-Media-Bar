@@ -706,10 +706,10 @@ namespace AFMediaBar.Components
                 TaskbarMediaTextAlignment.Right => TextAlignment.Right,
                 _ => TextAlignment.Left
             };
-            SongTitle.TextAlignment = metadataAlignment;
-            SongArtist.TextAlignment = metadataAlignment;
-            SongLyrics.TextAlignment = lyricsAlignment;
-            SongLyricsSecondary.TextAlignment = lyricsAlignment;
+            ApplyConfiguredTextAlignment(SongTitle, metadataAlignment);
+            ApplyConfiguredTextAlignment(SongArtist, metadataAlignment);
+            ApplyConfiguredTextAlignment(SongLyrics, lyricsAlignment);
+            ApplyConfiguredTextAlignment(SongLyricsSecondary, lyricsAlignment);
             if (isHorizontalTaskbar && SongMetadataPanel.Visibility == Visibility.Visible)
             {
                 if (experience.ContentLayout == TaskbarContentLayout.CompactInline &&
