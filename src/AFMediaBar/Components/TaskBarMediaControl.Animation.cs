@@ -70,6 +70,12 @@ public partial class TaskBarMediaControl
         AddMarqueeEntry(SongTitle, SongTitleContainer, enabled, availableWidth);
         AddMarqueeEntry(SongArtist, SongArtistContainer, enabled, availableWidth);
         AddMarqueeEntry(SongLyrics, SongLyricsContainer, enabled, availableWidth);
+        // 高亮层跟随同一个溢出量推进，因此它只读度量、不写宽度与裁剪方式：那两个属性由底色层通过绑定镜像过来，
+        // 直接写会顶掉绑定，两层随即错位。
+        // The highlight layer advances with the same overflow, so it only reads the measurement and never writes the width or the
+        // trimming: those two mirror the base layer through bindings, and writing them locally would drop the binding and leave
+        // the two layers out of step.
+        AddMarqueeEntry(SongLyricsHighlight, SongLyricsContainer, enabled, availableWidth, writesTextProperties: false);
         AddMarqueeEntry(SongLyricsSecondary, SongLyricsSecondaryContainer, enabled, availableWidth);
         if (_marqueeEntries.Count == 0)
         {
@@ -85,9 +91,10 @@ public partial class TaskBarMediaControl
         TextBlock text,
         FrameworkElement container,
         bool enabled,
-        double availableWidth)
+        double availableWidth,
+        bool writesTextProperties = true)
     {
-        if (ConfigureMarquee(text, container, enabled, availableWidth) is { } entry)
+        if (ConfigureMarquee(text, container, enabled, availableWidth, writesTextProperties) is { } entry)
             _marqueeEntries.Add(entry);
     }
 
@@ -95,7 +102,8 @@ public partial class TaskBarMediaControl
         TextBlock text,
         FrameworkElement container,
         bool enabled,
-        double availableWidth)
+        double availableWidth,
+        bool writesTextProperties)
     {
         if (text.RenderTransform is not TranslateTransform transform)
         {
@@ -113,16 +121,24 @@ public partial class TaskBarMediaControl
         if (overflow <= 1)
         {
             transform.X = 0;
-            text.Width = Math.Max(0, available);
-            text.TextTrimming = TextTrimming.CharacterEllipsis;
+            if (writesTextProperties)
+            {
+                text.Width = Math.Max(0, available);
+                text.TextTrimming = TextTrimming.CharacterEllipsis;
+            }
+
             return null;
         }
 
         // 宽度必须给足整段文字：只有比容器宽，位移才能把后面那截带进裁剪区。
         // The full text width has to be granted: only a text wider than its container lets the translation bring the tail into
         // the clipped area.
-        text.Width = measured;
-        text.TextTrimming = TextTrimming.None;
+        if (writesTextProperties)
+        {
+            text.Width = measured;
+            text.TextTrimming = TextTrimming.None;
+        }
+
         return new MarqueeEntry(text, transform, overflow);
     }
 
@@ -160,7 +176,7 @@ public partial class TaskBarMediaControl
         _lastMarqueeFingerprint = string.Empty;
         _marqueeEntries.Clear();
         _marqueeTimer.Stop();
-        foreach (var text in new[] { SongTitle, SongArtist, SongLyrics, SongLyricsSecondary })
+        foreach (var text in new[] { SongTitle, SongArtist, SongLyrics, SongLyricsHighlight, SongLyricsSecondary })
         {
             if (text.RenderTransform is TranslateTransform transform)
                 transform.X = 0;
@@ -170,7 +186,18 @@ public partial class TaskBarMediaControl
     /// <summary>一个正在滚动的文字元素：它的位移与需要移动的距离。 / One scrolling text element: its transform and the distance it has to travel.</summary>
     private readonly record struct MarqueeEntry(TextBlock Text, TranslateTransform Transform, double Overflow);
 
-    private static double MeasureTextWidth(string text, TextBlock source)
+    private static double MeasureTextWidth(string text, TextBlock source) =>
+        MeasureTextWidthExact(text, source) + 4;
+
+    /// <summary>
+    /// 测量文字的自然宽度，不含跑马灯为折返预留的 4 DIP。
+    /// Measures the natural text width without the 4 DIP the marquee reserves for its turn-around.
+    ///
+    /// 逐字擦亮需要这个不带补偿的宽度：裁剪边界按字形实际占用的宽度换算，多出来的 4 DIP 会让擦亮在行尾提前结束。
+    /// Syllable highlighting needs the width without that compensation: the clip edge converts glyph width, and the extra 4 DIP
+    /// would make the reveal finish before the end of the line.
+    /// </summary>
+    private static double MeasureTextWidthExact(string text, TextBlock source)
     {
         if (string.IsNullOrEmpty(text))
             return 0;
@@ -187,7 +214,7 @@ public partial class TaskBarMediaControl
         {
             Trimming = TextTrimming.None
         };
-        return formatted.WidthIncludingTrailingWhitespace + 4;
+        return formatted.WidthIncludingTrailingWhitespace;
     }
 
     /// <summary>

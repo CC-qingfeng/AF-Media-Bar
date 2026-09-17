@@ -94,6 +94,14 @@ namespace AFMediaBar.Components
             // clock.
             _marqueeTimer = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(16) };
             _marqueeTimer.Tick += (_, _) => AdvanceMarqueeScroll();
+            // 逐字擦亮按帧推进：只有"当前行带音节时间轴且正在播放"时才由呈现状态启动，其余状态在下一帧自停并还原外观。
+            // Syllable highlighting advances frame by frame: the presentation state starts it only while the active line carries
+            // a syllable timeline and playback runs, and it stops itself on the next frame otherwise, restoring the appearance.
+            _lyricHighlightTimer = new DispatcherTimer(DispatcherPriority.Render)
+            {
+                Interval = TimeSpan.FromMilliseconds(LyricHighlightFrameIntervalMilliseconds)
+            };
+            _lyricHighlightTimer.Tick += (_, _) => AdvanceLyricHighlight();
             // 提示用同一个实例承载，内容随手势与结果实时改写。
             // One tooltip instance carries the text, which is rewritten live as the gesture and its result change.
             _wheelTooltip = new ToolTip { Placement = System.Windows.Controls.Primitives.PlacementMode.Top };
@@ -106,6 +114,7 @@ namespace AFMediaBar.Components
                 _hoverCloseTimer.Stop();
                 _wheelTooltipTimer.Stop();
                 _marqueeTimer.Stop();
+                _lyricHighlightTimer.Stop();
                 _marqueeEntries.Clear();
                 StopMarqueeAnimations();
             };
@@ -896,6 +905,10 @@ namespace AFMediaBar.Components
 
             SongTitle.Foreground = foreground;
             SongLyrics.Foreground = foreground;
+            // 高亮层与底色层共用同一支自动前景：擦亮只是同一颜色下的明暗对比，不引入第二种文字颜色。
+            // The highlight layer shares the base layer's automatic foreground: the reveal is a contrast within one colour and
+            // never introduces a second text colour.
+            SongLyricsHighlight.Foreground = foreground;
             SongLyricsSecondary.Foreground = foreground;
             SongLyricsSecondary.Opacity = SystemParameters.HighContrast ? 1 : 0.68;
             SongArtist.Foreground = foreground;
@@ -954,6 +967,7 @@ namespace AFMediaBar.Components
             SongTitle.Effect = effect;
             SongArtist.Effect = effect;
             SongLyrics.Effect = effect;
+            SongLyricsHighlight.Effect = effect;
             SongLyricsSecondary.Effect = effect;
             TaskbarPerformanceText.Effect = effect;
         }
@@ -989,6 +1003,8 @@ namespace AFMediaBar.Components
                     _canSkipPrevious = false;
                     _canSkipNext = false;
                     _lyricPresenter.Update(null, 0);
+                    SetCurrentLyricLine(null);
+                    StopLyricHighlight();
                     _activeLyric = string.Empty;
                     _nextLyric = string.Empty;
                     _translatedLyric = string.Empty;
@@ -1143,6 +1159,7 @@ namespace AFMediaBar.Components
             _activeLyric = update.Text;
             _nextLyric = update.NextText;
             _translatedLyric = update.TranslationText;
+            SetCurrentLyricLine(update.CurrentLine);
             SongTitle.Text = _actualTitle;
         }
 
@@ -1166,6 +1183,7 @@ namespace AFMediaBar.Components
             SongLyricsContainer.VerticalAlignment = showSecondary
                 ? VerticalAlignment.Stretch
                 : VerticalAlignment.Center;
+            RefreshLyricHighlightPresentation();
         }
 
         /// <summary>根据当前可见文本发布自动尺寸请求。/ Raises an auto-size request for the visible text.</summary>

@@ -78,9 +78,11 @@ namespace AFMediaBar
 
                 // SMTC 媒体会话监听服务，生成 MediaSnapshot 快照供 UI 消费
                 // SMTC media session monitoring service, producing MediaSnapshot for UI consumption
-                services.AddSingleton<LyricsService>(_ => new LyricsService(
-                    new NetEaseLyricsProvider(),
-                    new LrclibLyricsProvider()));
+                //
+                // 歌词提供器的顺序就是优先级：精确来源在前，模糊搜索在后；每多一个来源只增加一次未命中时的尝试。
+                // The provider order is the priority: exact sources first, fuzzy searches last. Every extra source only adds
+                // one attempt after the earlier ones miss.
+                services.AddSingleton<LyricsService>(_ => LyricsProviderFactory.CreateDefaultService());
                 services.AddSingleton<MediaSessionCatalog>();
                 services.AddSingleton<MediaSessionSelectionService>();
                 services.AddSingleton<MediaSnapshotBuilder>();

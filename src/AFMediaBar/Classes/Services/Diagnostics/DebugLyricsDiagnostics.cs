@@ -11,8 +11,7 @@ namespace AFMediaBar.Classes.Services;
 /// </summary>
 public sealed class DebugLyricsDiagnostics
 {
-    private string? _lrc;
-    private IReadOnlyList<LrcLine> _lines = [];
+    private LyricDocument? _document;
     private int _lastIndex = -1;
 
     /// <summary>
@@ -21,22 +20,24 @@ public sealed class DebugLyricsDiagnostics
     /// </summary>
     public void OnSnapshotChanged(object? sender, MediaSnapshot snapshot)
     {
-        if (snapshot.Lyrics is not { } lyrics || string.IsNullOrWhiteSpace(lyrics.Lrc))
+        if (snapshot.Lyrics is not { } lyrics || lyrics.Document.Lines.Count == 0)
             return;
 
-        if (!string.Equals(_lrc, lyrics.Lrc, StringComparison.Ordinal))
+        if (!ReferenceEquals(_document, lyrics.Document))
         {
-            _lrc = lyrics.Lrc;
-            _lines = LrcParser.Parse(lyrics.Lrc);
+            _document = lyrics.Document;
             _lastIndex = -1;
         }
 
-        var index = LrcParser.FindIndex(_lines, TimeSpan.FromSeconds(snapshot.Position));
+        var index = LyricLineIndexPolicy.FindIndex(lyrics.Document.Lines, snapshot.Position);
         if (index < 0 || index == _lastIndex)
             return;
 
         _lastIndex = index;
-        Debug.WriteLine($"[Lyrics][{lyrics.Source}] {_lines[index].Time:mm\\:ss} {_lines[index].Text}");
+        var line = lyrics.Document.Lines[index];
+        Debug.WriteLine(
+            $"[Lyrics][{lyrics.Source}][{lyrics.Document.SourceFormat}/{lyrics.Document.SyncType}] " +
+            $"{TimeSpan.FromSeconds(line.Start):mm\\:ss} {line.Text} (words={line.Words.Count})");
     }
 }
 #endif

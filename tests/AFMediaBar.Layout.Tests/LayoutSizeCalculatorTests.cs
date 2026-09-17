@@ -428,11 +428,24 @@ public sealed class LayoutSizeCalculatorTests
         Assert.IsFalse(TaskbarHostMessagePolicy.ShouldSuppressPropagation(0x000F));
     }
 
+    /// <summary>
+    /// 按解析后的歌词文档构造歌词结果，供呈现器测试使用。
+    /// Builds a lyric result from a parsed document for the presenter tests.
+    /// </summary>
+    private static LyricsResult Lyrics(string source, string lrc, string? translation = null) =>
+        new(
+            source,
+            LyricsTextParser.Parse(
+                lrc,
+                translation,
+                request: new LyricsRequest("title", "artist", string.Empty, 20, NetEaseSongId: null),
+                durationSeconds: 20));
+
     [TestMethod]
     public void LyricLinePresenterCachesLrcAndClearsOnMissingLyrics()
     {
         var presenter = new LyricLinePresenter();
-        var lyrics = new LyricsResult(
+        var lyrics = Lyrics(
             "test",
             "[00:01.00]第一行\n[00:02.00]第二行",
             "[00:01.02]First line\n[00:02.02]Second line");
@@ -459,7 +472,7 @@ public sealed class LayoutSizeCalculatorTests
     public void LyricLinePresenterDoesNotReuseAnUnmatchedTranslation()
     {
         var presenter = new LyricLinePresenter();
-        var lyrics = new LyricsResult(
+        var lyrics = Lyrics(
             "test",
             "[00:01.00]第一行\n[00:03.00]第三行",
             "[00:01.00]First line");
@@ -476,10 +489,8 @@ public sealed class LayoutSizeCalculatorTests
         var presenter = new LyricLinePresenter();
         const string lrc = "[00:01.00]第一行";
 
-        presenter.Update(new LyricsResult("test", lrc, null), 1.1);
-        var enriched = presenter.Update(
-            new LyricsResult("test", lrc, "[00:01.00]First line"),
-            1.1);
+        presenter.Update(Lyrics("test", lrc), 1.1);
+        var enriched = presenter.Update(Lyrics("test", lrc, "[00:01.00]First line"), 1.1);
 
         Assert.IsTrue(enriched.Changed);
         Assert.AreEqual("First line", enriched.TranslationText);

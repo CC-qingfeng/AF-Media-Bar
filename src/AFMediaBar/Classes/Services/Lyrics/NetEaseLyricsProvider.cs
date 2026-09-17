@@ -5,8 +5,12 @@ using Lyricify.Lyrics.Providers.Web.Netease;
 namespace AFMediaBar.Classes.Services.Lyrics;
 
 /// <summary>
-/// 网易云歌词源：用歌曲 id 精确取词，返回 LRC 与可选译文。
-/// NetEase provider: fetches lyrics exactly by song id, returning LRC plus an optional translation.
+/// 网易云歌词源（来源专用）：播放器本身就是网易云时，用歌曲 id 精确取词。
+/// The NetEase source provider for the NetEase player itself: it retrieves exactly by song id.
+///
+/// 通用取词链不会为网易云来源重复请求，因此这里通常是唯一命中网易云歌词的地方；播放其他来源时由搜索兜底提供器负责。
+/// The generic chain never requests NetEase lyrics for a NetEase session, so this is usually the only place a NetEase lyric
+/// is matched; other players are covered by the search fallback provider.
 /// </summary>
 public sealed class NetEaseLyricsProvider : ILyricsProvider
 {
@@ -23,34 +27,8 @@ public sealed class NetEaseLyricsProvider : ILyricsProvider
             return null;
         }
 
-        LyricResult? result;
-        try
-        {
-            result = await _api.GetLyric(request.NetEaseSongId);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch
-        {
-            // 单源网络失败不应中断整个兜底链。 / A single source's failure must not break the fallback chain.
-            return null;
-        }
-
+        var result = await NetEaseLyricFetcher.FetchAsync(_api, request.NetEaseSongId, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
-        var lrc = result?.Lrc?.Lyric;
-        if (string.IsNullOrWhiteSpace(lrc))
-        {
-            return null;
-        }
-
-        return new LyricsResult(
-            SourceName,
-            lrc.Trim(),
-            Normalize(result?.Tlyric?.Lyric));
+        return NetEaseLyricFetcher.BuildResult(SourceName, result, request);
     }
-
-    private static string? Normalize(string? value)
-        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

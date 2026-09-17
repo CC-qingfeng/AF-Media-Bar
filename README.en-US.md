@@ -95,7 +95,7 @@ The app runs in its own process and hosts its WPF player as a taskbar child wind
 | Media | Previous, play/pause, next, repeat, and click-to-position or draggable progress; unavailable controls keep a transparent background and dim their icons; Full always retains explicit buttons |
 | Source interaction | Bind artwork and title/lyric clicks independently to play/pause, activate the media app, or open the full layer; right-click the bar to switch sources |
 | Track-change notification | Optionally show the current track after it changes and starts playing, with six placements, 1–10 second duration, fullscreen suppression, and fixed- or foreground-display targeting |
-| Live lyrics | Lyrics exist only in taskbar rest and replace title plus artist/source when available; configure secondary content and alignment on the Lyrics page |
+| Live lyrics | Lyrics exist only in taskbar rest and replace title plus artist/source when available; configure secondary content and alignment on the Lyrics page; lyrics are found in order across NetEase Cloud Music, LRCLIB, QQ Music, Kugou Music, and Soda Music, and word-by-word lyrics light up with playback |
 | Taskbar behavior | Horizontal taskbars retain the original Rest appearance; Hover directly blurs/dims the original text while controls stay crisp, Full stays outside the taskbar, and a fixed target display can be selected independently |
 | Window modes | Four cards at the top of the settings page cover Taskbar, Dynamic Island, Desktop Card, and Floating Orb; Taskbar is the only runtime mode, the other three are labeled unimplemented, and selecting one swaps the page area and shows a placeholder without switching the running window |
 | Appearance | Global fonts, font weight, player text, light/dark theme, and window material; automatic text follows the actual taskbar color or wallpaper behind transparent surfaces and adds a subtle contrasting shadow on mixed backgrounds; the taskbar body is currently fixed transparent, while the island appearance (background style, opacity, radius) is shown read-only inside its own mode section |
@@ -224,7 +224,7 @@ Remove-Item "$env:LOCALAPPDATA\AFMediaBar" -Recurse -Force
 ## Privacy and Security
 
 - No telemetry, advertisements, accounts, or network analytics are included.
-- Update checks request only the two public manifest endpoints (`docs/latest.json` on `raw.githubusercontent.com` and on `jsdelivr`), never through a third-party proxy. Installer downloads happen only when automatic download is enabled or when you click download; a failed direct connection may fall back to a GH-Proxy accelerated address listed in the manifest, while the installer's SHA-256 always comes from the manifest fetched from a non-proxy endpoint. Lyrics and remote artwork may also request configured lyric/image services using current media metadata, but the app does not upload device information or user settings.
+- Update checks request only the two public manifest endpoints (`docs/latest.json` on `raw.githubusercontent.com` and on `jsdelivr`), never through a third-party proxy. Installer downloads happen only when automatic download is enabled or when you click download; a failed direct connection may fall back to a GH-Proxy accelerated address listed in the manifest, while the installer's SHA-256 always comes from the manifest fetched from a non-proxy endpoint. Lyrics are requested in order from the public endpoints of NetEase Cloud Music, LRCLIB, QQ Music, Kugou Music, and Soda Music (one request per source, stopping at the first hit), and remote artwork requests the configured image service; those requests carry only the title, artist, album, and duration, and the app does not upload device information or user settings.
 - Media metadata, system metrics, and audio operations stay on the local machine.
 - The app runs as the current user, does not request elevation, and does not inject into Explorer.
 - Report security issues privately according to [SECURITY.md](SECURITY.md).
@@ -265,7 +265,7 @@ AF-Media-Bar/
 │       │   │   └── Layout/        # Layout data models (LayoutSchema, ComponentConfig, etc.)
 │       │   ├── Services/          # Business services
 │       │   │   ├── Layout/        # Layout presets and render engine
-│       │   │   ├── Lyrics/        # Lyrics service (NetEase Cloud Music lyrics fetch and parse)
+│       │   │   ├── Lyrics/        # Lyrics service (multi-source retrieval, format detection, syllable timeline and reveal)
 │       │   │   ├── Players/       # Media player services
 │       │   │   └── Win32/         # Windows system services
 │       │   ├── Settings/          # Settings management

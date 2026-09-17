@@ -22,8 +22,15 @@ public sealed class MediaSnapshotBuilder
     /// language switch would otherwise leave the source name in the language the application started in.
     /// </summary>
     private static string UnknownSourceName => Translations.Get("Service.MediaSource.Unknown");
+
+    /// <summary>
+    /// 歌词缓存的容量：来源变多以后必须封顶，否则长时间播放会一直堆积解析结果。
+    /// Capacity of the lyric cache: with more sources it has to be capped, otherwise long playback keeps accumulating parsed results.
+    /// </summary>
+    private const int LyricsCacheCapacity = 64;
+
     private readonly LyricsService _lyricsService;
-    private readonly Dictionary<string, LyricsResult?> _lyricsCache = new(StringComparer.Ordinal);
+    private readonly LruCache<string, LyricsResult?> _lyricsCache = new(LyricsCacheCapacity);
     private readonly HashSet<string> _pendingLyrics = new(StringComparer.Ordinal);
 
     public event Action? EnrichmentCompleted;
@@ -118,7 +125,6 @@ public sealed class MediaSnapshotBuilder
         {
             return cached;
         }
-
         if (_pendingLyrics.Contains(key) ||
             sourceId.Contains("cloudmusic", StringComparison.OrdinalIgnoreCase) ||
             sourceId.Contains("netease", StringComparison.OrdinalIgnoreCase) ||
@@ -148,11 +154,11 @@ public sealed class MediaSnapshotBuilder
                 songInfo.AlbumTitle ?? string.Empty,
                 duration > 0 ? duration : null,
                 NetEaseSongId: null);
-            _lyricsCache[key] = await _lyricsService.GetLyricsAsync(request, CancellationToken.None);
+            _lyricsCache.Set(key, await _lyricsService.GetLyricsAsync(request, CancellationToken.None));
         }
         catch
         {
-            _lyricsCache[key] = null;
+            _lyricsCache.Set(key, null);
         }
         finally
         {

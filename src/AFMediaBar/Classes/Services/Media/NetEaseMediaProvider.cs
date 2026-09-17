@@ -21,11 +21,18 @@ public sealed class NetEaseMediaProvider : IMediaSourceProvider
     private const string MemoryPlayerSourceId = "cloudmusic";
     private const string NetEaseWindowClass = "OrpheusBrowserHost";
     private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(233);
+
+    /// <summary>
+    /// 歌词缓存的容量：来源变多以后必须封顶，否则长时间播放会一直堆积解析结果。
+    /// Capacity of the lyric cache: with more sources it has to be capped, otherwise long playback keeps accumulating parsed results.
+    /// </summary>
+    private const int LyricsCacheCapacity = 64;
+
     private readonly Dispatcher _dispatcher;
     private readonly LyricsService _lyricsService;
     private readonly Dictionary<string, BitmapImage?> _artworkCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _pendingArtwork = new(StringComparer.OrdinalIgnoreCase);
-    private readonly Dictionary<string, LyricsResult?> _lyricsCache = new(StringComparer.Ordinal);
+    private readonly LruCache<string, LyricsResult?> _lyricsCache = new(LyricsCacheCapacity);
     private readonly HashSet<string> _pendingLyrics = new(StringComparer.Ordinal);
     private CancellationTokenSource? _cancellation;
     private NetEase? _memoryPlayer;
@@ -211,8 +218,8 @@ public sealed class NetEaseMediaProvider : IMediaSourceProvider
             _ = LoadArtworkAsync(info.Cover, version, token);
         }
 
-        _lyricsCache.TryGetValue(info.Identity, out var lyrics);
-        var shouldLoadLyrics = !_lyricsCache.ContainsKey(info.Identity) && _pendingLyrics.Add(info.Identity);
+        var hasCachedLyrics = _lyricsCache.TryGetValue(info.Identity, out var lyrics);
+        var shouldLoadLyrics = !hasCachedLyrics && _pendingLyrics.Add(info.Identity);
         PublishSnapshot(CreateSnapshot(info, artwork, lyrics));
         if (shouldLoadLyrics)
         {
@@ -285,7 +292,7 @@ public sealed class NetEaseMediaProvider : IMediaSourceProvider
         {
             var request = new LyricsRequest(info.Title, info.Artists, info.Album, info.Duration, info.Identity);
             var result = await _lyricsService.GetLyricsAsync(request, token);
-            _lyricsCache[info.Identity] = result;
+            _lyricsCache.Set(info.Identity, result);
             if (!_isDisposed && _currentInfo is { } current &&
                 string.Equals(current.Identity, info.Identity, StringComparison.Ordinal))
             {
@@ -298,7 +305,7 @@ public sealed class NetEaseMediaProvider : IMediaSourceProvider
         }
         catch
         {
-            _lyricsCache[info.Identity] = null;
+            _lyricsCache.Set(info.Identity, null);
         }
         finally
         {
