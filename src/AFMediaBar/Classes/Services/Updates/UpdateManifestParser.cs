@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using AFMediaBar.Classes.Models.Updates;
+using AFMediaBar.Resources;
 
 namespace AFMediaBar.Classes.Services.Updates;
 
@@ -40,7 +41,7 @@ public static class UpdateManifestParser
     {
         if (string.IsNullOrWhiteSpace(json))
         {
-            return UpdateManifestParseResult.Failure("清单内容为空");
+            return UpdateManifestParseResult.Failure(Translations.Get("Update.Reason.ManifestEmpty"));
         }
 
         JsonDocument document;
@@ -50,7 +51,7 @@ public static class UpdateManifestParser
         }
         catch (JsonException)
         {
-            return UpdateManifestParseResult.Failure("清单不是合法 JSON");
+            return UpdateManifestParseResult.Failure(Translations.Get("Update.Reason.ManifestInvalidJson"));
         }
 
         using (document)
@@ -58,7 +59,7 @@ public static class UpdateManifestParser
             var root = document.RootElement;
             if (root.ValueKind != JsonValueKind.Object)
             {
-                return UpdateManifestParseResult.Failure("清单根节点不是对象");
+                return UpdateManifestParseResult.Failure(Translations.Get("Update.Reason.ManifestRootNotObject"));
             }
 
             if (root.TryGetProperty("schemaVersion", out var schemaElement))
@@ -67,25 +68,29 @@ public static class UpdateManifestParser
                     !schemaElement.TryGetInt32(out var schemaVersion) ||
                     schemaVersion < 1)
                 {
-                    return UpdateManifestParseResult.Failure("清单的 schemaVersion 不是有效版本号");
+                    return UpdateManifestParseResult.Failure(Translations.Get("Update.Reason.ManifestSchemaInvalid"));
                 }
 
                 if (schemaVersion > SupportedSchemaVersion)
                 {
                     return UpdateManifestParseResult.Failure(
-                        $"清单 schemaVersion {schemaVersion} 高于当前程序支持的 {SupportedSchemaVersion}");
+                        Translations.Format(
+                            "Update.Reason.ManifestSchemaTooNew",
+                            schemaVersion,
+                            SupportedSchemaVersion));
                 }
             }
 
             var version = ReadString(root, "version");
             if (version is null)
             {
-                return UpdateManifestParseResult.Failure("清单缺少 version");
+                return UpdateManifestParseResult.Failure(Translations.Get("Update.Reason.ManifestVersionMissing"));
             }
 
             if (!UpdateVersionPolicy.TryParse(version, out _))
             {
-                return UpdateManifestParseResult.Failure($"清单的 version（{version}）无法解析");
+                return UpdateManifestParseResult.Failure(
+                    Translations.Format("Update.Reason.ManifestVersionUnparsable", version));
             }
 
             var changelog = ReadChangelog(root);

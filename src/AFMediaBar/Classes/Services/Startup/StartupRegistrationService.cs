@@ -1,3 +1,4 @@
+using AFMediaBar.Resources;
 using System.Diagnostics;
 using Microsoft.Win32;
 
@@ -25,14 +26,14 @@ public sealed class StartupRegistrationService
     {
         var executable = ResolveExecutablePath();
         if (executable is null)
-            return "无法确定程序路径，无法写入启动项";
+            return Translations.Get("Service.Startup.ExecutablePathUnavailable");
 
         try
         {
             using var key = Registry.CurrentUser.OpenSubKey(RunKeyPath, writable: true)
                             ?? Registry.CurrentUser.CreateSubKey(RunKeyPath, writable: true);
             if (key is null)
-                return "无法打开启动项注册表键";
+                return Translations.Get("Service.Startup.RegistryKeyUnavailable");
 
             if (enabled)
             {

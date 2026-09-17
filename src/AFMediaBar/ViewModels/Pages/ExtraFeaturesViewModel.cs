@@ -2,7 +2,9 @@ using System.Collections.ObjectModel;
 using System.IO;
 using AFMediaBar.Classes.Models;
 using AFMediaBar.Classes.Services;
+using AFMediaBar.Classes.Services.Localization;
 using AFMediaBar.Classes.Settings;
+using AFMediaBar.Resources;
 
 namespace AFMediaBar.ViewModels.Pages;
 
@@ -11,22 +13,64 @@ public partial class ExtraFeaturesViewModel : ObservableObject
 {
     private readonly MediaSessionService _mediaSessions;
     private readonly IDisplayMonitorService _displayMonitorService;
+    private readonly LocalizationService _localization;
     private bool _isRefreshing;
+    private string? _statusKey;
 
     public ObservableCollection<MediaSourceSettingItem> Sources { get; } = [];
     public ObservableCollection<QuickLaunchEntry> QuickLaunchEntries { get; } = [];
     public IReadOnlyList<DisplayMonitorOption> MonitorOptions { get; private set; } = [];
 
-    [ObservableProperty] private string _statusText = string.Empty;
+    /// <summary>快速启动条目数，显示在「已添加的启动项」行里；单位词属于文案，因此读数由代码拼。/ Number of quick launch entries, shown in the "added entries" row; the unit word is text, so the reading is composed in code.</summary>
+    public string QuickLaunchEntryCountText => Translations.Format("Media.QuickLaunch.EntryCount", QuickLaunchEntries.Count);
 
-    public ExtraFeaturesViewModel(MediaSessionService mediaSessions, IDisplayMonitorService displayMonitorService)
+    /// <summary>
+    /// 快速启动列表下方的状态行。存的是文案键而不是已经拼好的句子：语言变化后这一行必须跟着换语言，
+    /// 而拼好的句子只会在旧语言上停留，直到用户再点一次按钮。
+    /// The status line under the quick launch list. It holds a text key rather than a finished sentence: the line has to
+    /// follow a language change, while a finished sentence would stay in the old language until the next click.
+    /// </summary>
+    public string StatusText => _statusKey is null ? string.Empty : Translations.Get(_statusKey);
+
+    public ExtraFeaturesViewModel(
+        MediaSessionService mediaSessions,
+        IDisplayMonitorService displayMonitorService,
+        LocalizationService localization)
     {
         _mediaSessions = mediaSessions;
         _displayMonitorService = displayMonitorService;
+        _localization = localization;
         _mediaSessions.DiscoveredSourcesChanged += OnDiscoveredSourcesChanged;
         SettingsManager.SettingsChanged += OnSettingsChanged;
         _displayMonitorService.MonitorsChanged += OnMonitorsChanged;
+
+        // 本页是单例，订阅与进程同寿命，不需要在关闭时取消。
+        // This page is a singleton, so the subscription lives as long as the process and needs no unsubscription.
+        _localization.LanguageChanged += OnLanguageChanged;
+
+        // 条目数显示在行内，增删后读数必须重算；绑定落在这个属性上而不是 Count 上，因为单位词属于文案。
+        // The entry count is shown in a row and has to be recomputed when entries are added or removed; the binding targets
+        // this property rather than Count because the unit word is text.
+        QuickLaunchEntries.CollectionChanged += (_, _) => OnPropertyChanged(nameof(QuickLaunchEntryCountText));
+
         RefreshAll();
+    }
+
+    /// <summary>
+    /// 语言变化后重取本页在代码里产出的文案。
+    ///
+    /// 空的属性名让 WPF 重读全部绑定（带单位的读数、状态行都在其中），显示器名称则要先重建一次：它由本页拼出
+    /// 「N. 名称（主显示器）」，绑定的列表实例本身没变，光重读会拿到旧语言拼好的字符串。
+    /// Re-reads the text this page produces in code after a language change.
+    ///
+    /// The empty property name makes WPF re-read every binding, which covers the readings with units and the status line.
+    /// The monitor names are rebuilt first: this page composes "N. name (primary)" and the bound list instance itself does
+    /// not change, so re-reading alone would hand back strings composed in the previous language.
+    /// </summary>
+    private void OnLanguageChanged(object? sender, EventArgs e)
+    {
+        RefreshMonitors();
+        OnPropertyChanged(string.Empty);
     }
 
     public bool SmtcFilterEnabled
@@ -43,8 +87,11 @@ public partial class ExtraFeaturesViewModel : ObservableObject
     public int SpectrumBandCount
     {
         get => SettingsManager.Current.SpectrumComponent.BandCount;
-        set { SettingsManager.SetSpectrumComponentSettings(SettingsManager.Current.SpectrumComponent with { BandCount = value }); OnPropertyChanged(); }
+        set { SettingsManager.SetSpectrumComponentSettings(SettingsManager.Current.SpectrumComponent with { BandCount = value }); OnPropertyChanged(); OnPropertyChanged(nameof(SpectrumBandCountText)); }
     }
+
+    /// <summary>柱数滑杆旁的读数。/ The reading next to the bar-count slider.</summary>
+    public string SpectrumBandCountText => Translations.Format("Media.Spectrum.BandCount.Value", SpectrumBandCount);
 
     public int SpectrumRefreshRateHz
     {
@@ -100,8 +147,12 @@ public partial class ExtraFeaturesViewModel : ObservableObject
             SettingsManager.SetPerformanceComponentSettings(
                 SettingsManager.Current.PerformanceComponent with { RefreshIntervalMilliseconds = milliseconds });
             OnPropertyChanged();
+            OnPropertyChanged(nameof(PerformanceRefreshIntervalText));
         }
     }
+
+    /// <summary>采样间隔滑杆旁的读数，带单位。/ The reading next to the sampling-interval slider, with its unit.</summary>
+    public string PerformanceRefreshIntervalText => Translations.Format("Media.Performance.RefreshInterval.Value", PerformanceRefreshIntervalSeconds);
 
     /// <summary>采样间隔滑杆的下限（秒）。 / Lower bound of the sampling-interval slider, in seconds.</summary>
     public double MinimumPerformanceRefreshIntervalSeconds => PerformanceComponentSettings.MinimumRefreshIntervalMilliseconds / 1000d;
@@ -173,6 +224,10 @@ public partial class ExtraFeaturesViewModel : ObservableObject
     public bool TrackChangeNotificationEnabled { get => Notification.Enabled; set => UpdateNotification(Notification with { Enabled = value }); }
     public bool ShowTrackChangeNotificationWhenFullscreen { get => Notification.ShowWhenFullscreen; set => UpdateNotification(Notification with { ShowWhenFullscreen = value }); }
     public int TrackChangeNotificationDurationSeconds { get => Notification.DurationMilliseconds / 1000; set => UpdateNotification(Notification with { DurationMilliseconds = value * 1000 }); }
+
+    /// <summary>停留时间滑杆旁的读数，带单位。/ The reading next to the duration slider, with its unit.</summary>
+    public string TrackChangeNotificationDurationText => Translations.Format("Media.Notification.Duration.Value", TrackChangeNotificationDurationSeconds);
+
     public TrackChangeNotificationPosition TrackChangeNotificationPosition { get => Notification.Position; set => UpdateNotification(Notification with { Position = value }); }
     public NotificationTargetMode TrackChangeNotificationTargetMode { get => Notification.TargetMode; set => UpdateNotification(Notification with { TargetMode = value }); }
     public string? TrackChangeNotificationFixedMonitorDeviceId { get => Notification.FixedMonitorDeviceId ?? _displayMonitorService.ResolveFixedMonitor(null)?.DeviceId; set => UpdateNotification(Notification with { FixedMonitorDeviceId = value }); }
@@ -185,7 +240,7 @@ public partial class ExtraFeaturesViewModel : ObservableObject
     {
         if (item?.Descriptor is not { CanQuickLaunch: true } descriptor || descriptor.LaunchKind is not { } kind || descriptor.LaunchTarget is null)
         {
-            StatusText = "无法解析该来源的安全启动方式，请浏览 EXE 或 LNK。";
+            SetStatus("Media.Status.SourceLaunchUnresolved");
             return;
         }
         AddQuickLaunch(new QuickLaunchEntry(Guid.NewGuid().ToString("N"), descriptor.DisplayName, kind, descriptor.LaunchTarget, descriptor.SourceId));
@@ -214,7 +269,7 @@ public partial class ExtraFeaturesViewModel : ObservableObject
                 : (QuickLaunchTargetKind?)null;
         if (kind is null || !File.Exists(path))
         {
-            StatusText = "只能添加现有的 EXE 或 LNK 文件。";
+            SetStatus("Media.Status.OnlyExistingFiles");
             return;
         }
         AddQuickLaunch(new QuickLaunchEntry(Guid.NewGuid().ToString("N"), Path.GetFileNameWithoutExtension(path), kind.Value, Path.GetFullPath(path)));
@@ -222,11 +277,25 @@ public partial class ExtraFeaturesViewModel : ObservableObject
 
     public void ResetExtraFeatures() => SettingsManager.ResetExtraFeatures();
 
+    /// <summary>
+    /// 写状态行。参数是文案键而不是拼好的句子，因此语言变化后这一行会自己跟着换语言。
+    /// Writes the status line. The argument is a text key rather than a finished sentence, so the line follows a language
+    /// change on its own.
+    /// </summary>
+    /// <param name="key">状态文案的键。/ Key of the status text.</param>
+    private void SetStatus(string key)
+    {
+        _statusKey = key;
+        OnPropertyChanged(nameof(StatusText));
+    }
+
     private void AddQuickLaunch(QuickLaunchEntry entry)
     {
         var before = SettingsManager.Current.QuickLaunch.Entries?.Count ?? 0;
         SaveQuickLaunch(QuickLaunchEntries.Append(entry));
-        StatusText = (SettingsManager.Current.QuickLaunch.Entries?.Count ?? 0) == before ? "该应用已在快速启动列表中。" : "已添加到快速启动。";
+        SetStatus((SettingsManager.Current.QuickLaunch.Entries?.Count ?? 0) == before
+            ? "Media.Status.AlreadyInQuickLaunch"
+            : "Media.Status.AddedToQuickLaunch");
     }
 
     private void Move(QuickLaunchEntry? entry, int offset)
@@ -241,7 +310,7 @@ public partial class ExtraFeaturesViewModel : ObservableObject
             // 以前这里直接返回，按钮看起来像坏了。现在把原因说出来，用户才知道是到底了而不是没生效。
             // This used to return silently and the button read as broken. Saying why tells the user the list
             // end was reached rather than that the click did nothing.
-            StatusText = offset < 0 ? "已经在列表最前面。" : "已经在列表最后面。";
+            SetStatus(offset < 0 ? "Media.Status.AlreadyFirst" : "Media.Status.AlreadyLast");
             return;
         }
 
@@ -272,6 +341,7 @@ public partial class ExtraFeaturesViewModel : ObservableObject
         OnPropertyChanged(nameof(TrackChangeNotificationEnabled));
         OnPropertyChanged(nameof(ShowTrackChangeNotificationWhenFullscreen));
         OnPropertyChanged(nameof(TrackChangeNotificationDurationSeconds));
+        OnPropertyChanged(nameof(TrackChangeNotificationDurationText));
         OnPropertyChanged(nameof(TrackChangeNotificationPosition));
         OnPropertyChanged(nameof(TrackChangeNotificationTargetMode));
         OnPropertyChanged(nameof(TrackChangeNotificationFixedMonitorDeviceId));
@@ -293,10 +363,12 @@ public partial class ExtraFeaturesViewModel : ObservableObject
             RefreshMonitors();
             OnPropertyChanged(nameof(SmtcFilterEnabled));
             OnPropertyChanged(nameof(SpectrumBandCount));
+            OnPropertyChanged(nameof(SpectrumBandCountText));
             OnPropertyChanged(nameof(SpectrumRefreshRateHz));
             OnPropertyChanged(nameof(SpectrumSensitivityPercent));
             OnPropertyChanged(nameof(SpectrumStyle));
             OnPropertyChanged(nameof(PerformanceRefreshIntervalSeconds));
+            OnPropertyChanged(nameof(PerformanceRefreshIntervalText));
             OnPropertyChanged(nameof(OpenTaskManagerOnMetricsClick));
             OnPropertyChanged(nameof(SpectrumVisible));
             OnPropertyChanged(nameof(PerformanceVisible));
@@ -330,8 +402,15 @@ public partial class ExtraFeaturesViewModel : ObservableObject
 
     private void RefreshMonitors()
     {
+        // 显示器名称带「主显示器」后缀，后缀是一句要看给人看的文案，因此按当前语言取一次；它由显示模式页与本页共用
+        // （键在 CommonStrings 里），语言变化后由 OnLanguageChanged 再调用本方法重建。
+        // The monitor name carries a "primary" suffix, which is text shown to a person, so it is read in the active
+        // language; the suffix is shared with the display-mode page (its key lives in CommonStrings) and a language change
+        // calls this method again through OnLanguageChanged.
         MonitorOptions = _displayMonitorService.GetMonitors().Select((monitor, index) => new DisplayMonitorOption(
-            monitor.DeviceId, $"{index + 1}. {monitor.DeviceName}{(monitor.IsPrimary ? "（主显示器）" : string.Empty)}", monitor.IsPrimary)).ToArray();
+            monitor.DeviceId,
+            $"{index + 1}. {monitor.DeviceName}{(monitor.IsPrimary ? Translations.Get("Common.Monitor.PrimarySuffix") : string.Empty)}",
+            monitor.IsPrimary)).ToArray();
         OnPropertyChanged(nameof(MonitorOptions));
     }
 

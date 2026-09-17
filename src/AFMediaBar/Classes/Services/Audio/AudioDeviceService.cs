@@ -1,11 +1,20 @@
 using System.Runtime.InteropServices;
 using AFMediaBar.Classes.Models;
+using AFMediaBar.Resources;
 using Windows.Devices.Enumeration;
 using Windows.Media.Devices;
 
 namespace AFMediaBar.Classes.Services.Audio;
 
-/// <summary>枚举输出设备，并切换默认 Console/Multimedia 端点。 / Enumerates render devices and switches the default Console/Multimedia endpoint.</summary>
+/// <summary>
+/// 枚举输出设备，并切换默认 Console/Multimedia 端点。
+///
+/// 设备名来自系统（Windows 报告的端点名），不做翻译；只有创建 COM 组件失败时的原因文本按当前界面语言取值。
+/// Enumerates render devices and switches the default Console/Multimedia endpoint.
+///
+/// Device names come from the system (the endpoint names Windows reports) and are not translated; only the reason text for a
+/// failed COM component creation follows the active interface language.
+/// </summary>
 public sealed class AudioDeviceService
 {
     private static readonly Guid PolicyConfigClientClassId = new("870AF99C-171D-4F9E-AF0D-E63DF40C2BC9");
@@ -52,7 +61,8 @@ public sealed class AudioDeviceService
         try
         {
             var type = Type.GetTypeFromCLSID(PolicyConfigClientClassId, throwOnError: true)!;
-            client = Activator.CreateInstance(type) ?? throw new InvalidOperationException("无法创建 Windows 音频策略服务。");
+            client = Activator.CreateInstance(type) ??
+                throw new InvalidOperationException(Translations.Get("Audio.Error.CreatePolicyConfig"));
             var policy = (IPolicyConfig)client;
             Marshal.ThrowExceptionForHR(policy.SetDefaultEndpoint(policyDeviceId, ERole.Console));
             Marshal.ThrowExceptionForHR(policy.SetDefaultEndpoint(policyDeviceId, ERole.Multimedia));

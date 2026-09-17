@@ -8,6 +8,7 @@ using AFMediaBar.Classes.Models;
 using AFMediaBar.Classes.Services.Lyrics;
 using AFMediaBar.Classes.Services.Players;
 using AFMediaBar.Classes.Utils;
+using AFMediaBar.Resources;
 
 namespace AFMediaBar.Classes.Services;
 
@@ -187,7 +188,7 @@ public sealed class NetEaseMediaProvider : IMediaSourceProvider
             CanHandle(_sessionSnapshot.SourceId) ||
             string.Equals(
                 _sessionSnapshot.SourceName,
-                MediaSourceNameFormatter.GetDisplayName(MemoryPlayerSourceId, "未知来源"),
+                MediaSourceNameFormatter.GetDisplayName(MemoryPlayerSourceId, Translations.Get("Service.MediaSource.Unknown")),
                 StringComparison.OrdinalIgnoreCase);
     }
 
@@ -229,7 +230,7 @@ public sealed class NetEaseMediaProvider : IMediaSourceProvider
             info.Title,
             info.Artists,
             MemoryPlayerSourceId,
-            MediaSourceNameFormatter.GetDisplayName(MemoryPlayerSourceId, "未知来源"),
+            MediaSourceNameFormatter.GetDisplayName(MemoryPlayerSourceId, Translations.Get("Service.MediaSource.Unknown")),
             artwork,
             lyrics,
             info.Schedule,

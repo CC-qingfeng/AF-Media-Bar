@@ -15,6 +15,7 @@ using AFMediaBar.Classes.Services.Layout;
 using AFMediaBar.Classes.Services.Lyrics;
 using AFMediaBar.Classes.Settings;
 using AFMediaBar.Classes.Utils;
+using AFMediaBar.Resources;
 using Wpf.Ui.Appearance;
 using Wpf.Ui.Controls;
 
@@ -251,7 +252,13 @@ namespace AFMediaBar.Components
         }
 
         /// <summary>更新音符的快速启动预览提示。 / Updates the note tooltip with the quick-launch preview.</summary>
-        public void SetQuickLaunchPreview(QuickLaunchEntry entry) => SongImageBorder.ToolTip = $"快速启动：{entry.DisplayName}";
+        // 文案在指针悬停的这一刻取：控件是可复用的，拿不到依赖注入，而宿主每次悬停都会重新调用这里，
+        // 因此语言变化后提示自然跟着变，不需要控件自己订阅语言事件。
+        // The text is read at the moment the pointer hovers: the control is reusable and receives no dependency injection, and
+        // the host calls this again on every hover, so the tooltip follows a language change on its own without the control
+        // subscribing to any language event.
+        public void SetQuickLaunchPreview(QuickLaunchEntry entry) =>
+            SongImageBorder.ToolTip = Translations.Format("Panel.QuickLaunch.Preview", entry.DisplayName);
 
         /// <summary>
         /// 刷新整条媒体栏的滚轮提示。悬停时说明当前绑定的滚轮动作，按住组合键后换成组合滚轮的动作，
@@ -412,7 +419,9 @@ namespace AFMediaBar.Components
             // 音量可读但媒体快照暂时没有来源名时给出通用标签，而不是谎报“不可用”。
             // When the volume is readable but the media snapshot has no source name yet, use a generic label instead of
             // reporting the value as unavailable.
-            var sourceName = string.IsNullOrWhiteSpace(_snapshot.SourceName) ? "当前媒体" : _snapshot.SourceName;
+            var sourceName = string.IsNullOrWhiteSpace(_snapshot.SourceName)
+                ? Translations.Get("Panel.Volume.CurrentMedia")
+                : _snapshot.SourceName;
             TaskbarVolumeButton.ToolTip = AudioTooltipPolicy.BuildMediaVolume(sourceName, volume);
         }
 

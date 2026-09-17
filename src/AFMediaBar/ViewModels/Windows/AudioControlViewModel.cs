@@ -5,13 +5,21 @@ using System.Windows.Threading;
 using AFMediaBar.Classes.Models;
 using AFMediaBar.Classes.Services;
 using AFMediaBar.Classes.Services.Audio;
+using AFMediaBar.Classes.Services.Localization;
 using AFMediaBar.Classes.Settings;
+using AFMediaBar.Resources;
 
 namespace AFMediaBar.ViewModels.Windows;
 
 /// <summary>
 /// 协调托盘音频面板的设备预览、应用音量和滚轮语义。
+///
+/// 状态文本与空间音效文本是代码拼出来的，因此订阅语言变化并整批重发属性变更；托盘图标提示是悬停与滚动时重建的，
+/// 不需要在这里缓存。
 /// Coordinates device preview, application volume, and tray-wheel semantics for the audio flyout.
+///
+/// The status text and the spatial-audio text are composed in code, so the view model subscribes to language changes and
+/// republishes every property; the tray icon tooltip is rebuilt on hover and on scroll and is therefore not cached here.
 /// </summary>
 public partial class AudioControlViewModel : ObservableObject, IDisposable
 {
@@ -27,6 +35,7 @@ public partial class AudioControlViewModel : ObservableObject, IDisposable
     private readonly ShellTrayIconService _trayIconService;
     private readonly NativeMouseInputMonitor _mouseInputMonitor;
     private readonly AudioMonitorService _audioMonitorService;
+    private readonly LocalizationService _localization;
     private readonly Dictionary<string, int> _volumeApplyVersions = new(StringComparer.OrdinalIgnoreCase);
     private int _deviceApplyVersion;
     private bool _isRefreshing;
@@ -49,7 +58,7 @@ public partial class AudioControlViewModel : ObservableObject, IDisposable
     public ObservableCollection<ApplicationVolumeItemViewModel> Applications { get; } = [];
 
     [ObservableProperty] private AudioDeviceOption? _selectedOutputDevice;
-    [ObservableProperty] private string _spatialAudioText = "状态不可用";
+    [ObservableProperty] private string _spatialAudioText = Translations.Get("Audio.Spatial.Unavailable");
     [ObservableProperty] private string _statusText = string.Empty;
     [ObservableProperty] private bool _isBusy;
 
@@ -74,6 +83,7 @@ public partial class AudioControlViewModel : ObservableObject, IDisposable
     /// 创建音频面板状态协调器；设备、应用音量和提示状态均通过注入服务异步刷新。
     /// Creates the audio-panel state coordinator; devices, application volume, and tooltip state are refreshed asynchronously through injected services.
     /// </summary>
+    /// <param name="localization">界面语言服务：语言变化时让全部绑定重新取值。/ The interface-language service, which makes every binding re-read its text when the language changes.</param>
     public AudioControlViewModel(
         AudioDeviceService deviceService,
         SpatialAudioService spatialAudioService,
@@ -81,7 +91,8 @@ public partial class AudioControlViewModel : ObservableObject, IDisposable
         MediaSessionService mediaSessionService,
         ShellTrayIconService trayIconService,
         NativeMouseInputMonitor mouseInputMonitor,
-        AudioMonitorService audioMonitorService)
+        AudioMonitorService audioMonitorService,
+        LocalizationService localization)
     {
         _deviceService = deviceService;
         _spatialAudioService = spatialAudioService;
@@ -90,9 +101,11 @@ public partial class AudioControlViewModel : ObservableObject, IDisposable
         _trayIconService = trayIconService;
         _mouseInputMonitor = mouseInputMonitor;
         _audioMonitorService = audioMonitorService;
+        _localization = localization;
 
         RefreshCommand = new AsyncRelayCommand(RefreshAsync);
         OpenSpatialAudioSettingsCommand = new RelayCommand(OpenSpatialAudioSettings);
+        _localization.LanguageChanged += OnLanguageChanged;
         _trayIconService.LeftClicked += OnTrayLeftClicked;
         _trayIconService.ContextMenuRequested += OnTrayContextMenuRequested;
         _trayIconService.TooltipOpening += OnTrayTooltipOpening;
@@ -143,13 +156,13 @@ public partial class AudioControlViewModel : ObservableObject, IDisposable
                 Applications.Add(new ApplicationVolumeItemViewModel(application, QueueApplicationVolume));
             }
 
-            StatusText = applications.Count == 0 ? "当前没有应用音频会话" : string.Empty;
+            StatusText = applications.Count == 0 ? Translations.Get("Audio.Status.NoSessions") : string.Empty;
             UpdateTooltipFromLoadedState();
         }
         catch (Exception exception)
         {
             _isRefreshing = false;
-            StatusText = $"读取音频状态失败：{exception.Message}";
+            StatusText = Translations.Format("Audio.Status.ReadFailed", exception.Message);
             Debug.WriteLine($"[AudioControlViewModel] Refresh failed: {exception}");
         }
         finally
@@ -190,7 +203,7 @@ public partial class AudioControlViewModel : ObservableObject, IDisposable
 
         // 单设备或循环回原设备时属性值不会变化，也必须即时刷新原生提示。
         // Refresh the native tooltip immediately even when one device or a full cycle keeps the same selection.
-        SetTrayTooltip($"输出设备：{device.DisplayName}");
+        SetTrayTooltip(AudioTooltipPolicy.BuildOutputDevice(device));
     }
 
     partial void OnSelectedOutputDeviceChanged(AudioDeviceOption? value)
@@ -207,7 +220,7 @@ public partial class AudioControlViewModel : ObservableObject, IDisposable
     {
         var version = ++_deviceApplyVersion;
         _ = ApplyOutputDeviceAsync(device, version, delay);
-        SetTrayTooltip($"输出设备：{device.DisplayName}");
+        SetTrayTooltip(AudioTooltipPolicy.BuildOutputDevice(device));
     }
 
     private async Task ApplyOutputDeviceAsync(AudioDeviceOption device, int version, TimeSpan delay)
@@ -237,8 +250,8 @@ public partial class AudioControlViewModel : ObservableObject, IDisposable
         }
         catch (Exception exception)
         {
-            StatusText = $"切换输出设备失败：{exception.Message}";
-            SetTrayTooltip("输出设备切换失败");
+            StatusText = Translations.Format("Audio.Status.SwitchOutputDeviceFailed", exception.Message);
+            SetTrayTooltip(Translations.Get("Audio.Tooltip.SwitchOutputDeviceFailed"));
         }
     }
 
@@ -285,7 +298,10 @@ public partial class AudioControlViewModel : ObservableObject, IDisposable
         }
         catch (Exception exception)
         {
-            StatusText = $"调节 {application.DisplayName} 音量失败：{exception.Message}";
+            StatusText = Translations.Format(
+                "Audio.Status.AdjustApplicationVolumeFailed",
+                application.DisplayName,
+                exception.Message);
         }
         finally
         {
@@ -338,7 +354,7 @@ public partial class AudioControlViewModel : ObservableObject, IDisposable
                 if (OutputDevices.Count == 0)
                 {
                     _pendingTrayDeviceSteps = 0;
-                    SetTrayTooltip("输出设备：不可用");
+                    SetTrayTooltip(AudioTooltipPolicy.BuildOutputDevice(null));
                     return;
                 }
 
@@ -350,7 +366,7 @@ public partial class AudioControlViewModel : ObservableObject, IDisposable
         catch (Exception exception)
         {
             Debug.WriteLine($"[AudioControlViewModel] Tray device preview failed: {exception}");
-            SetTrayTooltip("输出设备切换失败");
+            SetTrayTooltip(Translations.Get("Audio.Tooltip.SwitchOutputDeviceFailed"));
         }
         finally
         {
@@ -399,20 +415,20 @@ public partial class AudioControlViewModel : ObservableObject, IDisposable
                     _mediaSessionService.SelectedSourceName));
                 if (current is null)
                 {
-                    SetTrayTooltip("当前媒体音量：不可用");
+                    SetTrayTooltip(AudioTooltipPolicy.BuildMediaVolume(null, null));
                     continue;
                 }
 
                 var next = Math.Clamp(current.VolumePercent + steps * VolumeStepPercent, 0, 100);
                 await Task.Run(() => _volumeService.SetApplicationVolume(current.ProcessName, next));
                 Applications.FirstOrDefault(item => string.Equals(item.ProcessName, current.ProcessName, StringComparison.OrdinalIgnoreCase))?.SynchronizeVolume(next);
-                SetTrayTooltip($"{current.DisplayName}：{next}%");
+                SetTrayTooltip(AudioTooltipPolicy.BuildMediaVolume(current.DisplayName, next));
             }
         }
         catch (Exception exception)
         {
             Debug.WriteLine($"[AudioControlViewModel] Tray volume failed: {exception}");
-            SetTrayTooltip("音量调节失败");
+            SetTrayTooltip(Translations.Get("Audio.Tooltip.AdjustVolumeFailed"));
         }
         finally
         {
@@ -427,7 +443,7 @@ public partial class AudioControlViewModel : ObservableObject, IDisposable
     private void RefreshSpatialAudio()
     {
         SpatialAudioText = SelectedOutputDevice is null
-            ? "无输出设备"
+            ? Translations.Get("Audio.Spatial.NoDevice")
             : _spatialAudioService.GetState(SelectedOutputDevice.Id).DisplayName;
     }
 
@@ -439,9 +455,18 @@ public partial class AudioControlViewModel : ObservableObject, IDisposable
         }
         catch (Exception exception)
         {
-            StatusText = $"无法打开系统声音设置：{exception.Message}";
+            StatusText = Translations.Format("Audio.Status.OpenSoundSettingsFailed", exception.Message);
         }
     }
+
+    /// <summary>
+    /// 界面语言变化时让全部绑定重新取值。状态文本与空间音效文本是代码拼出来的，不会自己跟着资源走；
+    /// <see cref="ObservableObject.OnPropertyChanged(string)"/> 收到空属性名时会重读全部绑定。
+    /// Re-reads every binding when the interface language changes. The status text and the spatial-audio text are composed in
+    /// code and do not follow the resources on their own, and <see cref="ObservableObject.OnPropertyChanged(string)"/>
+    /// re-reads every binding when it receives an empty property name.
+    /// </summary>
+    private void OnLanguageChanged(object? sender, EventArgs e) => OnPropertyChanged(string.Empty);
 
     private void OnTrayLeftClicked(object? sender, EventArgs e)
     {
@@ -574,7 +599,9 @@ public partial class AudioControlViewModel : ObservableObject, IDisposable
     private void UpdateTooltipFromLoadedState() => QueueTrayTooltipRefresh();
 
     private static string? BuildVolumeDetail(ApplicationVolumeSnapshot? application) =>
-        application is null ? null : $"{application.DisplayName} {application.VolumePercent}%";
+        application is null
+            ? null
+            : Translations.Format("Audio.Volume.CurrentValue", application.DisplayName, application.VolumePercent);
 
     /// <summary>
     /// 当前是否按住了共用组合键。托盘的滚轮绑定同样按这个键在普通与组合之间切换；托盘图标是 Shell 图标，
@@ -619,13 +646,14 @@ public partial class AudioControlViewModel : ObservableObject, IDisposable
     private TrayIconBounds? GetTrayBounds() => _trayIconService.TryGetBounds(out var bounds) ? bounds : null;
 
     /// <summary>
-    /// 取消托盘和媒体事件订阅并释放输入监听器。
-    /// Unsubscribes tray and media events and releases the input monitor.
+    /// 取消托盘与媒体事件订阅、取消语言订阅并释放输入监听器。
+    /// Unsubscribes tray and media events, unsubscribes from the language, and releases the input monitor.
     /// </summary>
     public void Dispose()
     {
         _disposed = true;
         _tooltipRefreshVersion++;
+        _localization.LanguageChanged -= OnLanguageChanged;
         _trayIconService.LeftClicked -= OnTrayLeftClicked;
         _trayIconService.ContextMenuRequested -= OnTrayContextMenuRequested;
         _trayIconService.TooltipOpening -= OnTrayTooltipOpening;

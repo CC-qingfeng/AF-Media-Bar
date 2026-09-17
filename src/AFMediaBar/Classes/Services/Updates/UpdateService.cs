@@ -5,6 +5,7 @@ using System.Security.Principal;
 using System.Windows.Threading;
 using AFMediaBar.Classes.Models.Updates;
 using AFMediaBar.Classes.Settings;
+using AFMediaBar.Resources;
 
 namespace AFMediaBar.Classes.Services.Updates;
 
@@ -642,7 +643,9 @@ public sealed class UpdateService : IDisposable
                 case UpdatePendingFileAction.Reuse:
                     record = _store.ReadPendingRecord();
                     outcome = record is null
-                        ? UpdateDownloadOutcome.Failure("已下载的安装包记录缺失", source.HostName)
+                        ? UpdateDownloadOutcome.Failure(
+                            Translations.Get("Update.Reason.PendingRecordMissing"),
+                            source.HostName)
                         : UpdateDownloadOutcome.Success(record, null);
                     break;
 
@@ -650,7 +653,9 @@ public sealed class UpdateService : IDisposable
                     SetPhase(UpdatePhase.Verifying, 0d, null);
                     var existing = _store.ReadPendingRecord();
                     outcome = existing is null
-                        ? UpdateDownloadOutcome.Failure("已下载的安装包记录缺失", source.HostName)
+                        ? UpdateDownloadOutcome.Failure(
+                            Translations.Get("Update.Reason.PendingRecordMissing"),
+                            source.HostName)
                         : await _downloader
                             .VerifyAsync(existing.Path, asset, manifest.Version, progress, token)
                             .ConfigureAwait(false);
@@ -700,7 +705,9 @@ public sealed class UpdateService : IDisposable
                 Phase = UpdatePhase.Failed,
                 ProgressPercent = 0d,
                 ActiveSource = null,
-                FailureReason = token.IsCancellationRequested ? null : lastFailure ?? "所有下载地址都不可用"
+                FailureReason = token.IsCancellationRequested
+                    ? null
+                    : lastFailure ?? Translations.Get("Update.Reason.NoUsableSource")
             });
             return;
         }

@@ -7,6 +7,7 @@ using AFMediaBar.Classes.Settings;
 using AFMediaBar.Classes.Services.Audio;
 using AFMediaBar.Classes.Services.Updates;
 using AFMediaBar.Classes.Utils;
+using AFMediaBar.Resources;
 using AFMediaBar.ViewModels.Windows;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
@@ -818,9 +819,13 @@ namespace AFMediaBar.Views.Windows
                 return;
 
             _notifiedUpdateVersion = version;
+
+            // 通知文本在发布的这一刻才取：窗口长期存活，缓存成字段就会在切换语言后继续用旧语言弹通知。
+            // The notification text is fetched at the moment it is raised: this window lives as long as the process, so
+            // caching it in a field would keep announcing in the old language after a switch.
             _trayIconService.TryShowNotification(
-                "AF Media Bar 有新版本",
-                $"发现 v{version}（当前 v{state.CurrentVersion}）。点击打开设置，查看亮点并下载安装。");
+                Translations.Get("Update.Notification.Title"),
+                Translations.Format("Update.Notification.Body", version, state.CurrentVersion));
         }
 
         private void TrayIconService_OnNotificationClicked(object? sender, EventArgs e)

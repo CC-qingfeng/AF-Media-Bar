@@ -1,4 +1,5 @@
 using AFMediaBar.Classes.Settings;
+using AFMediaBar.Resources;
 
 namespace AFMediaBar.Classes.Services;
 
@@ -14,7 +15,12 @@ public enum WheelGestureSlot
 
 /// <summary>
 /// 滚轮提示文案：悬停时说明"滚轮现在会做什么"，滚动后换成刚刚发生的结果。
+///
+/// 提示是纯策略拼出来的（拿不到依赖注入），因此按当前界面语言取值：语言是进程级状态，唯一写入方是本地化服务。
 /// Wheel tooltip text: while hovering it says what the wheel will do, and after scrolling it becomes the result that just happened.
+///
+/// The text is composed by a pure policy that cannot receive dependency injection and therefore reads the active interface
+/// language: the language is process-wide state whose only writer is the localization service.
 /// </summary>
 public static class WheelTooltipPolicy
 {
@@ -28,36 +34,36 @@ public static class WheelTooltipPolicy
     /// <param name="actionName">该槽位当前绑定的动作名。/ Name of the action currently bound to that slot.</param>
     public static string BuildHint(WheelGestureSlot slot, InteractionModifier modifier, string actionName) =>
         slot == WheelGestureSlot.Chord
-            ? $"{BuildModifierName(modifier)} + 滚轮：{actionName}"
-            : $"普通滚轮：{actionName}";
+            ? Translations.Format("Wheel.Hint.Chord", BuildModifierName(modifier), actionName)
+            : Translations.Format("Wheel.Hint.Plain", actionName);
 
-    /// <summary>共用按键的显示名。/ Display name of the shared modifier.</summary>
+    /// <summary>共用按键的显示名；与交互页的下拉框取自同一组共用键，因此设置里选的名字与提示里读到的名字一致。/ Display name of the shared modifier, read from the same shared keys as the interaction page's drop-down so the name picked in the settings matches the one in the tooltip.</summary>
     /// <param name="modifier">共用的组合键。/ The shared modifier.</param>
     public static string BuildModifierName(InteractionModifier modifier) => modifier switch
     {
-        InteractionModifier.LeftMouseButton => "鼠标左键",
-        InteractionModifier.RightMouseButton => "鼠标右键",
-        _ => "Shift 键"
+        InteractionModifier.LeftMouseButton => Translations.Get("Common.Modifier.LeftMouseButton"),
+        InteractionModifier.RightMouseButton => Translations.Get("Common.Modifier.RightMouseButton"),
+        _ => Translations.Get("Common.Modifier.Shift")
     };
 
     /// <summary>媒体栏滚轮动作的显示名。/ Display name of a media-bar wheel action.</summary>
     /// <param name="action">滚轮动作。/ Wheel action.</param>
     public static string BuildActionName(WheelAction action) => action switch
     {
-        WheelAction.PreviousNext => "上一首 / 下一首",
-        WheelAction.SwitchMediaSource => "切换播放器",
-        WheelAction.OutputDevice => "切换输出设备",
-        WheelAction.CurrentApplicationVolume => "调节当前媒体音量",
-        _ => "未绑定"
+        WheelAction.PreviousNext => Translations.Get("Common.PreviousNextTrack"),
+        WheelAction.SwitchMediaSource => Translations.Get("Common.SwitchPlayer"),
+        WheelAction.OutputDevice => Translations.Get("Common.SwitchOutputDevice"),
+        WheelAction.CurrentApplicationVolume => Translations.Get("Common.AdjustCurrentMediaVolume"),
+        _ => Translations.Get("Common.NotBound")
     };
 
     /// <summary>托盘滚轮动作的显示名。/ Display name of a tray wheel action.</summary>
     /// <param name="behavior">托盘滚轮行为。/ Tray wheel behavior.</param>
     public static string BuildActionName(TrayWheelBehavior behavior) => behavior switch
     {
-        TrayWheelBehavior.SwitchOutputDevice => "切换输出设备",
-        TrayWheelBehavior.AdjustVolume => "调节当前媒体音量",
-        _ => "未绑定"
+        TrayWheelBehavior.SwitchOutputDevice => Translations.Get("Common.SwitchOutputDevice"),
+        TrayWheelBehavior.AdjustVolume => Translations.Get("Common.AdjustCurrentMediaVolume"),
+        _ => Translations.Get("Common.NotBound")
     };
 
     /// <summary>
@@ -69,11 +75,14 @@ public static class WheelTooltipPolicy
     /// <param name="actionName">刚执行的动作名。/ Name of the action just executed.</param>
     /// <param name="detail">结果细节（曲名、媒体名、设备名或音量）。/ Result detail: track title, media name, device name, or volume.</param>
     public static string BuildResult(string actionName, string? detail) =>
-        string.IsNullOrWhiteSpace(detail) ? actionName : $"{actionName}：{detail}";
+        string.IsNullOrWhiteSpace(detail)
+            ? actionName
+            : Translations.Format("Wheel.Line.WithValue", actionName, detail);
 
     /// <summary>切歌动作的方向名：向上滚是上一首，向下滚是下一首。/ Direction name for the skip action: scrolling up is previous, scrolling down is next.</summary>
     /// <param name="delta">滚轮增量，正数表示向上滚。/ Wheel delta, where a positive value means scroll up.</param>
-    public static string BuildSkipActionName(int delta) => delta > 0 ? "上一首" : "下一首";
+    public static string BuildSkipActionName(int delta) =>
+        Translations.Get(delta > 0 ? "Common.PreviousTrack" : "Common.NextTrack");
 
     /// <summary>
     /// 在提示后面附上当前值。悬停时用户既要知道手势会做什么，也要知道它此刻的值，
@@ -84,5 +93,7 @@ public static class WheelTooltipPolicy
     /// <param name="hint">已经拼好的提示文本。/ Already composed hint text.</param>
     /// <param name="currentValue">当前值（设备名或应用与音量）；不可读时为 null。/ Current value (device name, or application and volume), or null when unreadable.</param>
     public static string BuildHintWithValue(string hint, string? currentValue) =>
-        string.IsNullOrWhiteSpace(currentValue) ? hint : $"{hint}（当前：{currentValue}）";
+        string.IsNullOrWhiteSpace(currentValue)
+            ? hint
+            : Translations.Format("Wheel.Hint.WithValue", hint, currentValue);
 }

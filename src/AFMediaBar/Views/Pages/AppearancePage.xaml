@@ -71,9 +71,9 @@
             Margin="{StaticResource AfSettingsHeaderMargin}"
             MaxWidth="{StaticResource AfSettingsContentMaxWidth}"
             PageIcon="{ui:SymbolIcon PaintBrush24}"
-            Subtitle="字体、主题、窗口背景与媒体栏文字"
+            Subtitle="{DynamicResource Loc.Appearance.Header.Subtitle}"
             Target="{Binding ElementName=PageScroll}"
-            Title="外观" />
+            Title="{DynamicResource Loc.Common.Page.Appearance}" />
 
         <ScrollViewer
             x:Name="PageScroll"
@@ -86,12 +86,12 @@
                 MaxWidth="{StaticResource AfSettingsContentMaxWidth}"
                 Loaded="OnPageLoaded">
 
-                <components:SettingsGroup Header="字体" Icon="{ui:SymbolIcon TextFont24}">
+                <components:SettingsGroup Header="{DynamicResource Loc.Common.Group.Fonts}" Icon="{ui:SymbolIcon TextFont24}">
                     <StackPanel>
                         <components:SettingsRow
-                            Description="字母与数字使用的字体"
+                            Description="{DynamicResource Loc.Appearance.Row.LatinFont.Description}"
                             Icon="{ui:SymbolIcon TextFont24}"
-                            Title="西文字体">
+                            Title="{DynamicResource Loc.Appearance.Row.LatinFont.Title}">
                             <ComboBox
                                 MinWidth="200"
                                 SelectedValue="{Binding ViewModel.LatinFont, Mode=TwoWay}"
@@ -106,14 +106,14 @@
                         </components:SettingsRow>
 
                         <components:SettingsRow
-                            Description="汉字使用的字体"
+                            Description="{DynamicResource Loc.Appearance.Row.CjkFont.Description}"
                             Icon="{ui:SymbolIcon LocalLanguage24}"
-                            Title="中文字体">
+                            Title="{DynamicResource Loc.Appearance.Row.CjkFont.Title}">
                             <ComboBox
                                 MinWidth="200"
                                 SelectedValue="{Binding ViewModel.CjkFont, Mode=TwoWay}"
                                 SelectedValuePath="Tag">
-                                <ComboBoxItem Content="跟随系统" Tag="{x:Static settings:CjkFontPreset.SystemDefault}" />
+                                <ComboBoxItem Content="{DynamicResource Loc.Appearance.CjkFont.FollowSystem}" Tag="{x:Static settings:CjkFontPreset.SystemDefault}" />
                                 <ComboBoxItem Content="微软雅黑" Tag="{x:Static settings:CjkFontPreset.MicrosoftYaHei}" />
                                 <ComboBoxItem Content="等线" Tag="{x:Static settings:CjkFontPreset.DengXian}" />
                                 <ComboBoxItem Content="宋体" Tag="{x:Static settings:CjkFontPreset.SimSun}" />
@@ -131,9 +131,9 @@
                             while the binding engine does.
                         -->
                         <components:SettingsRow
-                            Description="设置窗口、媒体栏与通知共用的文字粗细"
+                            Description="{DynamicResource Loc.Appearance.Row.FontWeight.Description}"
                             Icon="{ui:SymbolIcon TextBold24}"
-                            Title="字体粗细">
+                            Title="{DynamicResource Loc.Appearance.Row.FontWeight.Title}">
                             <StackPanel Orientation="Horizontal">
                                 <Slider
                                     IsSnapToTickEnabled="True"
@@ -157,7 +157,7 @@
                                 <TextBlock
                                     Margin="0,0,0,8"
                                     Style="{StaticResource AfSettingsRowDescriptionStyle}"
-                                    Text="字样预览" />
+                                    Text="{DynamicResource Loc.Appearance.Specimen.Label}" />
                                 <TextBlock
                                     FontFamily="{DynamicResource AppTextFontFamily}"
                                     FontSize="20"
@@ -183,33 +183,33 @@
                     </StackPanel>
                 </components:SettingsGroup>
 
-                <components:SettingsGroup Header="主题与背景" Icon="{ui:SymbolIcon Color24}">
+                <components:SettingsGroup Header="{DynamicResource Loc.Common.Group.ThemeAndBackdrop}" Icon="{ui:SymbolIcon Color24}">
                     <StackPanel>
                         <components:SettingsRow
-                            Description="自动跟随 Windows 的浅色 / 深色设置"
+                            Description="{DynamicResource Loc.Appearance.Row.Theme.Description}"
                             Icon="{ui:SymbolIcon Color24}"
-                            Title="应用主题">
+                            Title="{DynamicResource Loc.Appearance.Row.Theme.Title}">
                             <ComboBox
                                 MinWidth="180"
                                 SelectedValue="{Binding ViewModel.ApplicationThemeMode, Mode=TwoWay}"
                                 SelectedValuePath="Tag">
-                                <ComboBoxItem Content="自动（跟随系统）" Tag="{x:Static settings:ApplicationThemeMode.Automatic}" />
-                                <ComboBoxItem Content="浅色" Tag="{x:Static settings:ApplicationThemeMode.Light}" />
-                                <ComboBoxItem Content="深色" Tag="{x:Static settings:ApplicationThemeMode.Dark}" />
+                                <ComboBoxItem Content="{DynamicResource Loc.Appearance.Theme.Automatic}" Tag="{x:Static settings:ApplicationThemeMode.Automatic}" />
+                                <ComboBoxItem Content="{DynamicResource Loc.Appearance.Theme.Light}" Tag="{x:Static settings:ApplicationThemeMode.Light}" />
+                                <ComboBoxItem Content="{DynamicResource Loc.Appearance.Theme.Dark}" Tag="{x:Static settings:ApplicationThemeMode.Dark}" />
                             </ComboBox>
                         </components:SettingsRow>
 
                         <components:SettingsRow
-                            Description="统一设置窗口、托盘弹窗与右键菜单的背衬"
+                            Description="{DynamicResource Loc.Appearance.Row.Backdrop.Description}"
                             Icon="{ui:SymbolIcon WindowConsole20}"
-                            Title="窗口背景材质">
+                            Title="{DynamicResource Loc.Appearance.Row.Backdrop.Title}">
                             <ComboBox
                                 MinWidth="180"
                                 SelectedValue="{Binding ViewModel.BackdropMode, Mode=TwoWay}"
                                 SelectedValuePath="Tag">
-                                <ComboBoxItem Content="纯色" Tag="{x:Static settings:ApplicationBackdropMode.FluentSolid}" />
-                                <ComboBoxItem Content="云母（Mica）" Tag="{x:Static settings:ApplicationBackdropMode.Mica}" />
-                                <ComboBoxItem Content="亚克力（Acrylic）" Tag="{x:Static settings:ApplicationBackdropMode.Acrylic}" />
+                                <ComboBoxItem Content="{DynamicResource Loc.Appearance.Backdrop.Solid}" Tag="{x:Static settings:ApplicationBackdropMode.FluentSolid}" />
+                                <ComboBoxItem Content="{DynamicResource Loc.Appearance.Backdrop.Mica}" Tag="{x:Static settings:ApplicationBackdropMode.Mica}" />
+                                <ComboBoxItem Content="{DynamicResource Loc.Appearance.Backdrop.Acrylic}" Tag="{x:Static settings:ApplicationBackdropMode.Acrylic}" />
                             </ComboBox>
                         </components:SettingsRow>
 
@@ -218,23 +218,23 @@
                             BadgeTone="Accent"
                             Description="{Binding ViewModel.MotionDetailText}"
                             Icon="{ui:SymbolIcon ArrowSync24}"
-                            Title="交互动效" />
+                            Title="{DynamicResource Loc.Appearance.Row.Motion.Title}" />
                     </StackPanel>
                 </components:SettingsGroup>
 
-                <components:SettingsGroup Header="媒体栏文字" Icon="{ui:SymbolIcon TextColor24}">
+                <components:SettingsGroup Header="{DynamicResource Loc.Common.Group.MediaBarText}" Icon="{ui:SymbolIcon TextColor24}">
                     <StackPanel>
                         <components:SettingsRow
-                            Description="自动依据文字背后的实际颜色选择深浅"
+                            Description="{DynamicResource Loc.Appearance.Row.TextColor.Description}"
                             Icon="{ui:SymbolIcon TextColor24}"
-                            Title="文字颜色">
+                            Title="{DynamicResource Loc.Appearance.Row.TextColor.Title}">
                             <ComboBox
                                 MinWidth="200"
                                 SelectedValue="{Binding ViewModel.PlayerForegroundMode, Mode=TwoWay}"
                                 SelectedValuePath="Tag">
-                                <ComboBoxItem Content="自动（根据背景）" Tag="{x:Static settings:PlayerForegroundMode.Automatic}" />
-                                <ComboBoxItem Content="始终浅色文字" Tag="{x:Static settings:PlayerForegroundMode.LightText}" />
-                                <ComboBoxItem Content="始终深色文字" Tag="{x:Static settings:PlayerForegroundMode.DarkText}" />
+                                <ComboBoxItem Content="{DynamicResource Loc.Appearance.TextColor.Automatic}" Tag="{x:Static settings:PlayerForegroundMode.Automatic}" />
+                                <ComboBoxItem Content="{DynamicResource Loc.Appearance.TextColor.LightText}" Tag="{x:Static settings:PlayerForegroundMode.LightText}" />
+                                <ComboBoxItem Content="{DynamicResource Loc.Appearance.TextColor.DarkText}" Tag="{x:Static settings:PlayerForegroundMode.DarkText}" />
                             </ComboBox>
                         </components:SettingsRow>
 
@@ -246,9 +246,9 @@
                             is unchanged.
                         -->
                         <components:SettingsRow
-                            Description="按百分比缩放静置层的标题、歌手与歌词字号（80%–125%）"
+                            Description="{DynamicResource Loc.Appearance.Row.MediaFontSize.Description}"
                             Icon="{ui:SymbolIcon TextFont24}"
-                            Title="媒体文字大小">
+                            Title="{DynamicResource Loc.Appearance.Row.MediaFontSize.Title}">
                             <StackPanel Orientation="Horizontal">
                                 <Slider
                                     IsSnapToTickEnabled="True"
@@ -278,7 +278,7 @@
                                         Margin="0,4,0,0"
                                         FontSize="11"
                                         Foreground="#B3FFFFFF"
-                                        Text="深色壁纸" />
+                                        Text="{DynamicResource Loc.Appearance.Preview.DarkWallpaper}" />
                                 </StackPanel>
                             </Border>
                             <Border
@@ -292,14 +292,14 @@
                                         Margin="0,4,0,0"
                                         FontSize="11"
                                         Foreground="#B3000000"
-                                        Text="浅色壁纸" />
+                                        Text="{DynamicResource Loc.Appearance.Preview.LightWallpaper}" />
                                 </StackPanel>
                             </Border>
                         </Grid>
                         <TextBlock
                             Margin="0,8,0,0"
                             Style="{StaticResource AfSettingsHintTextStyle}"
-                            Text="自动模式的结果取决于任务栏那一块的实际颜色，因此两块预览为示意；强制模式在两块上使用同一种文字颜色。" />
+                            Text="{DynamicResource Loc.Appearance.Preview.Hint}" />
                     </StackPanel>
                 </components:SettingsGroup>
 
@@ -307,7 +307,7 @@
                     Margin="0,16,0,40"
                     HorizontalAlignment="Left"
                     Click="ResetButton_Click"
-                    Content="恢复本页默认设置"
+                    Content="{DynamicResource Loc.Common.ResetPageDefaults}"
                     Icon="{ui:SymbolIcon ArrowReset24}"
                     Style="{StaticResource AfSettingsButtonStyle}" />
             </StackPanel>

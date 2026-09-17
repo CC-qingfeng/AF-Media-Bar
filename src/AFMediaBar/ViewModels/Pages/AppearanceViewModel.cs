@@ -1,6 +1,8 @@
 using AFMediaBar.Classes.Settings;
 using AFMediaBar.Classes.Models.Layout;
 using AFMediaBar.Classes.Services;
+using AFMediaBar.Classes.Services.Localization;
+using AFMediaBar.Resources;
 
 namespace AFMediaBar.ViewModels.Pages;
 
@@ -10,6 +12,7 @@ namespace AFMediaBar.ViewModels.Pages;
 /// </summary>
 public partial class AppearanceViewModel : ObservableObject
 {
+    private readonly LocalizationService _localization;
     private LatinFontPreset _latinFont;
     private CjkFontPreset _cjkFont;
     private int _fontWeight;
@@ -18,8 +21,22 @@ public partial class AppearanceViewModel : ObservableObject
     private ApplicationBackdropMode _backdropMode;
     private bool _isRefreshing;
 
-    public AppearanceViewModel()
+    /// <summary>
+    /// 创建外观页视图模型，并订阅设置变更与界面语言变化。
+    ///
+    /// 下拉框的选项名由 XAML 的动态资源提供，页面自己就会换字；本视图模型产出的动效读数是代码拼出来的文案，因此必须
+    /// 订阅语言变化并让 WPF 重读全部绑定。视图模型是单例，两个订阅都与进程同寿命，不需要退订。
+    /// Creates the appearance view model and subscribes to settings changes and interface-language changes.
+    ///
+    /// The drop-down option names come from XAML dynamic resources and follow a language change on their own, while the motion
+    /// reading this view model produces is text built in code, so it has to subscribe and make WPF re-read every binding. The
+    /// view model is a singleton, so both subscriptions live as long as the process and no unsubscription is needed.
+    /// </summary>
+    /// <param name="localization">界面语言服务：本页在它变化后刷新自己产出的文案。/ The interface-language service, whose change this page follows to refresh its own text.</param>
+    public AppearanceViewModel(LocalizationService localization)
     {
+        _localization = localization;
+
         var appearance = SettingsManager.Current.Appearance.Normalize();
         _latinFont = appearance.LatinFont;
         _cjkFont = appearance.CjkFont;
@@ -28,6 +45,7 @@ public partial class AppearanceViewModel : ObservableObject
         _applicationThemeMode = appearance.ApplicationThemeMode;
         _backdropMode = appearance.BackdropMode;
         SettingsManager.SettingsChanged += OnSettingsChanged;
+        _localization.LanguageChanged += OnLanguageChanged;
     }
 
     public LatinFontPreset LatinFont
@@ -134,18 +152,21 @@ public partial class AppearanceViewModel : ObservableObject
     /// <summary>当前桌面环境的动效级别。/ Current motion level for the desktop environment.</summary>
     public string MotionModeText => MotionPolicy.ResolveCurrent().Mode switch
     {
-        MotionMode.Full => "完整动效",
-        MotionMode.Reduced => "轻量动效",
-        _ => "即时更新"
+        MotionMode.Full => Translations.Get("Appearance.Motion.Mode.Full"),
+        MotionMode.Reduced => Translations.Get("Appearance.Motion.Mode.Reduced"),
+        _ => Translations.Get("Appearance.Motion.Mode.Instant")
     };
 
     /// <summary>当前动效策略的简短说明。/ Short explanation of the current motion policy.</summary>
     public string MotionDetailText => MotionPolicy.ResolveCurrent().Mode switch
     {
-        MotionMode.Full => "保留展开、反馈和频谱过渡",
-        MotionMode.Reduced => "已关闭模糊、跑马灯和连续频谱",
-        _ => "跟随系统设置，避免过渡延迟"
+        MotionMode.Full => Translations.Get("Appearance.Motion.Detail.Full"),
+        MotionMode.Reduced => Translations.Get("Appearance.Motion.Detail.Reduced"),
+        _ => Translations.Get("Appearance.Motion.Detail.Instant")
     };
+
+    /// <summary>界面语言变化后让 WPF 重读全部绑定，本页由代码产出的读数因此一起换语言。/ Makes WPF re-read every binding after a language change, so the readings this page builds in code change language with it.</summary>
+    private void OnLanguageChanged(object? sender, EventArgs e) => OnPropertyChanged(string.Empty);
 
     [RelayCommand]
     private void SetPlayerForegroundMode(PlayerForegroundMode mode) => PlayerForegroundMode = mode;

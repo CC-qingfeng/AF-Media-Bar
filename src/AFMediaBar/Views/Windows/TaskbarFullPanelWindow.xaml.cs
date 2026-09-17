@@ -2,6 +2,7 @@ using AFMediaBar.Classes.Models;
 using AFMediaBar.Classes.Services;
 using AFMediaBar.Classes.Services.Audio;
 using AFMediaBar.Classes.Settings;
+using AFMediaBar.Resources;
 using System.Diagnostics;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -172,7 +173,7 @@ public partial class TaskbarFullPanelWindow : FluentWindow
     private void ApplySnapshot(MediaSnapshot snapshot)
     {
         _snapshot = snapshot;
-        TitleText.Text = string.IsNullOrWhiteSpace(snapshot.Title) ? "暂无媒体" : snapshot.Title;
+        TitleText.Text = string.IsNullOrWhiteSpace(snapshot.Title) ? Translations.Get("Panel.FullPanel.NoMedia") : snapshot.Title;
         ArtistText.Text = string.IsNullOrWhiteSpace(snapshot.Artist) ? snapshot.SourceName : snapshot.Artist;
         SourceText.Text = snapshot.SourceName;
         ArtworkImage.Source = snapshot.Artwork;
@@ -183,10 +184,10 @@ public partial class TaskbarFullPanelWindow : FluentWindow
         SetButtonAvailability(RepeatButton, snapshot.CanChangeRepeat);
         RepeatButton.ToolTip = snapshot.RepeatMode switch
         {
-            MediaRepeatMode.One => "单曲循环",
-            MediaRepeatMode.All => "列表循环",
-            MediaRepeatMode.Off => "循环关闭",
-            _ => "循环不可用"
+            MediaRepeatMode.One => Translations.Get("Panel.Repeat.One"),
+            MediaRepeatMode.All => Translations.Get("Panel.Repeat.All"),
+            MediaRepeatMode.Off => Translations.Get("Panel.Repeat.Off"),
+            _ => Translations.Get("Panel.Repeat.Unavailable")
         };
         PlayIcon.Symbol = snapshot.IsPlaying ? SymbolRegular.Pause24 : SymbolRegular.Play24;
         ProgressSlider.IsEnabled = snapshot.CanSeek;
@@ -343,7 +344,7 @@ public partial class TaskbarFullPanelWindow : FluentWindow
             _currentVolume = await Task.Run(_audioInteractionService.GetCurrentMediaVolume);
             VolumeSlider.IsEnabled = _currentVolume is not null;
             VolumeSlider.Value = _currentVolume?.VolumePercent ?? 0;
-            VolumeText.Text = _currentVolume is null ? "不可用" : $"{_currentVolume.VolumePercent}%";
+            VolumeText.Text = _currentVolume is null ? Translations.Get("Panel.Volume.Unavailable") : $"{_currentVolume.VolumePercent}%";
         }
         finally
         {

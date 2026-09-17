@@ -8,6 +8,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using AFMediaBar.Classes.Services;
+using AFMediaBar.Resources;
 using Wpf.Ui.Controls;
 
 namespace AFMediaBar.Components;
@@ -117,7 +118,29 @@ public class SettingsGroupStrip : Control
     {
         JumpCommand = new JumpToGroupCommand(this);
         SetValue(GroupsPropertyKey, _groups);
+
+        // 标签文本是分组标题的快照（SettingsGroupItem.Name 是只读字符串），因此切换界面语言后必须重建一次：
+        // 页面的分组标题走动态资源会自动换成新语言，而已经建好的标签不会。控件拿不到依赖注入，所以这里订阅的是
+        // 文案表自己的语言变化事件（它的唯一发布方是 LocalizationService），并且只在该条子在场时订阅。
+        // The tab text is a snapshot of the group headers — SettingsGroupItem.Name is a read-only string — so a language switch
+        // has to rebuild it once: the pages' headers follow the dynamic resources into the new language while the tabs already
+        // built do not. A control cannot receive dependency injection, so it subscribes to the text table's own language-change
+        // event, whose only publisher is LocalizationService, and only while the strip is in the tree.
+        Loaded += OnStripLoaded;
+        Unloaded += OnStripUnloaded;
     }
+
+    private void OnStripLoaded(object sender, RoutedEventArgs e)
+    {
+        // 先减后加：同一个控件重新进入可视树时不会累积第二次订阅。
+        // Subtract before adding, so re-entering the visual tree cannot accumulate a second subscription.
+        Translations.LanguageChanged -= OnLanguageChanged;
+        Translations.LanguageChanged += OnLanguageChanged;
+    }
+
+    private void OnStripUnloaded(object sender, RoutedEventArgs e) => Translations.LanguageChanged -= OnLanguageChanged;
+
+    private void OnLanguageChanged(object? sender, EventArgs e) => Rebuild();
 
     /// <summary>分组标签集合。/ The group tab collection.</summary>
     public ObservableCollection<SettingsGroupItem> Groups => _groups;

@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using AFMediaBar.Classes.Models;
+using AFMediaBar.Resources;
 
 namespace AFMediaBar.Classes.Services.Audio;
 
@@ -9,6 +10,10 @@ namespace AFMediaBar.Classes.Services.Audio;
 ///
 /// 注意：跨端点聚合可保持音量合成器列表稳定，但不会迁移应用已有的音频流。
 /// Note: Cross-endpoint aggregation keeps the mixer list stable but does not migrate an application's existing audio stream.
+///
+/// 会话显示名与进程名来自系统；只有系统声音这一条的名字由本程序给出，因此按当前界面语言取值。
+/// Session display names and process names come from the system; only the system-sounds entry is named by this application
+/// and therefore follows the active interface language.
 /// </summary>
 public sealed class ApplicationVolumeService
 {
@@ -134,7 +139,7 @@ public sealed class ApplicationVolumeService
         {
             var type = Type.GetTypeFromCLSID(DeviceEnumeratorClassId, throwOnError: true)!;
             enumeratorObject = Activator.CreateInstance(type) ??
-                throw new InvalidOperationException("无法创建 Windows 音频设备枚举器。");
+                throw new InvalidOperationException(Translations.Get("Audio.Error.CreateDeviceEnumerator"));
             var enumerator = (IMMDeviceEnumerator)enumeratorObject;
             Marshal.ThrowExceptionForHR(enumerator.EnumAudioEndpoints(EDataFlow.Render, DeviceStateActive, out devices));
             Marshal.ThrowExceptionForHR(devices.GetCount(out var deviceCount));
@@ -253,7 +258,7 @@ public sealed class ApplicationVolumeService
 
         public string ProcessName { get; } = processName;
         public string DisplayName => isSystemSounds
-            ? "系统声音"
+            ? Translations.Get("Audio.Application.SystemSounds")
             : string.IsNullOrWhiteSpace(_sessionName) || _sessionName.StartsWith('@')
             ? MediaSourceNameFormatter.GetDisplayName(ProcessName, ProcessName)
             : _sessionName;

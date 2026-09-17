@@ -33,9 +33,9 @@
             Margin="{StaticResource AfSettingsHeaderMargin}"
             MaxWidth="{StaticResource AfSettingsContentMaxWidth}"
             PageIcon="{ui:SymbolIcon HandDraw24}"
-            Subtitle="为媒体栏与托盘上的每种操作指定结果"
+            Subtitle="{DynamicResource Loc.Interaction.Header.Subtitle}"
             Target="{Binding ElementName=PageScroll}"
-            Title="交互" />
+            Title="{DynamicResource Loc.Common.Page.Interaction}" />
 
         <ScrollViewer
             x:Name="PageScroll"
@@ -49,23 +49,23 @@
                 Loaded="OnPageLoaded">
 
                 <components:SettingsGroup
-                    Description="按住该按键再滚动滚轮，触发「组合滚轮」"
-                    Header="共用的按键"
+                    Description="{DynamicResource Loc.Interaction.SharedModifier.Group.Description}"
+                    Header="{DynamicResource Loc.Common.Group.SharedModifier}"
                     Icon="{ui:SymbolIcon Keyboard24}">
                     <StackPanel>
                         <components:SettingsDiagram Margin="0,0,0,12" Kind="WheelGestures" />
 
                         <components:SettingsRow
-                            Description="媒体栏与托盘共用同一个按键"
+                            Description="{DynamicResource Loc.Interaction.Row.Modifier.Description}"
                             Icon="{ui:SymbolIcon Keyboard24}"
-                            Title="组合滚轮按键">
+                            Title="{DynamicResource Loc.Interaction.Row.Modifier.Title}">
                             <ComboBox
                                 MinWidth="150"
                                 SelectedValue="{Binding ViewModel.Modifier, Mode=TwoWay}"
                                 SelectedValuePath="Tag">
-                                <ComboBoxItem Content="Shift 键" Tag="{x:Static settings:InteractionModifier.Shift}" />
-                                <ComboBoxItem Content="鼠标左键" Tag="{x:Static settings:InteractionModifier.LeftMouseButton}" />
-                                <ComboBoxItem Content="鼠标右键" Tag="{x:Static settings:InteractionModifier.RightMouseButton}" />
+                                <ComboBoxItem Content="{DynamicResource Loc.Common.Modifier.Shift}" Tag="{x:Static settings:InteractionModifier.Shift}" />
+                                <ComboBoxItem Content="{DynamicResource Loc.Common.Modifier.LeftMouseButton}" Tag="{x:Static settings:InteractionModifier.LeftMouseButton}" />
+                                <ComboBoxItem Content="{DynamicResource Loc.Common.Modifier.RightMouseButton}" Tag="{x:Static settings:InteractionModifier.RightMouseButton}" />
                             </ComboBox>
                         </components:SettingsRow>
 
@@ -73,119 +73,119 @@
                             Margin="0,4,0,0"
                             IsAccent="False"
                             Symbol="Info24"
-                            Text="使用鼠标左键或右键作为按键时，滚轮后产生的点击或菜单会被抑制，避免误触。" />
+                            Text="{DynamicResource Loc.Interaction.SharedModifier.Callout}" />
                     </StackPanel>
                 </components:SettingsGroup>
 
                 <components:SettingsGroup
-                    Description="点在静置层上的结果"
-                    Header="程序内（静置层）"
+                    Description="{DynamicResource Loc.Interaction.InApp.Group.Description}"
+                    Header="{DynamicResource Loc.Common.Group.InAppRestLayer}"
                     Icon="{ui:SymbolIcon CursorClick24}">
                     <StackPanel>
                         <components:SettingsDiagram Margin="0,0,0,12" Kind="InputGestures" />
 
                         <components:SettingsRow
-                            Description="与下一项可分别设置"
+                            Description="{DynamicResource Loc.Interaction.Row.ArtworkClick.Description}"
                             Icon="{ui:SymbolIcon Play24}"
-                            Title="点击封面">
+                            Title="{DynamicResource Loc.Interaction.Row.ArtworkClick.Title}">
                             <ComboBox
                                 MinWidth="200"
                                 SelectedValue="{Binding ViewModel.ArtworkClickAction, Mode=TwoWay}"
                                 SelectedValuePath="Tag">
-                                <ComboBoxItem Content="播放 / 暂停" Tag="{x:Static settings:PlayerClickAction.TogglePlayPause}" />
-                                <ComboBoxItem Content="打开播放中的程序" Tag="{x:Static settings:PlayerClickAction.ActivateSource}" />
-                                <ComboBoxItem Content="打开完整层" Tag="{x:Static settings:PlayerClickAction.OpenFullPanel}" />
+                                <ComboBoxItem Content="{DynamicResource Loc.Common.PlayPause}" Tag="{x:Static settings:PlayerClickAction.TogglePlayPause}" />
+                                <ComboBoxItem Content="{DynamicResource Loc.Common.ActivateSourceApplication}" Tag="{x:Static settings:PlayerClickAction.ActivateSource}" />
+                                <ComboBoxItem Content="{DynamicResource Loc.Common.OpenFullPanel}" Tag="{x:Static settings:PlayerClickAction.OpenFullPanel}" />
                             </ComboBox>
                         </components:SettingsRow>
 
                         <components:SettingsRow
                             Icon="{ui:SymbolIcon TextQuote24}"
-                            Title="点击标题或歌词">
+                            Title="{DynamicResource Loc.Interaction.Row.TextClick.Title}">
                             <ComboBox
                                 MinWidth="200"
                                 SelectedValue="{Binding ViewModel.TextClickAction, Mode=TwoWay}"
                                 SelectedValuePath="Tag">
-                                <ComboBoxItem Content="打开播放中的程序" Tag="{x:Static settings:PlayerClickAction.ActivateSource}" />
-                                <ComboBoxItem Content="播放 / 暂停" Tag="{x:Static settings:PlayerClickAction.TogglePlayPause}" />
-                                <ComboBoxItem Content="打开完整层" Tag="{x:Static settings:PlayerClickAction.OpenFullPanel}" />
+                                <ComboBoxItem Content="{DynamicResource Loc.Common.ActivateSourceApplication}" Tag="{x:Static settings:PlayerClickAction.ActivateSource}" />
+                                <ComboBoxItem Content="{DynamicResource Loc.Common.PlayPause}" Tag="{x:Static settings:PlayerClickAction.TogglePlayPause}" />
+                                <ComboBoxItem Content="{DynamicResource Loc.Common.OpenFullPanel}" Tag="{x:Static settings:PlayerClickAction.OpenFullPanel}" />
                             </ComboBox>
                         </components:SettingsRow>
 
                         <components:SettingsRow
-                            Description="不按组合键时的滚轮行为"
+                            Description="{DynamicResource Loc.Interaction.Row.PrimaryWheel.Description}"
                             Icon="{ui:SymbolIcon Cursor24}"
-                            Title="普通滚轮">
+                            Title="{DynamicResource Loc.Interaction.Wheel.Primary.Title}">
                             <ComboBox
                                 MinWidth="200"
                                 SelectedValue="{Binding ViewModel.PrimaryWheelAction, Mode=TwoWay}"
                                 SelectedValuePath="Tag">
-                                <ComboBoxItem Content="上一首 / 下一首" Tag="{x:Static settings:WheelAction.PreviousNext}" />
-                                <ComboBoxItem Content="切换输出设备" Tag="{x:Static settings:WheelAction.OutputDevice}" />
-                                <ComboBoxItem Content="调节当前媒体音量" Tag="{x:Static settings:WheelAction.CurrentApplicationVolume}" />
-                                <ComboBoxItem Content="切换播放器" Tag="{x:Static settings:WheelAction.SwitchMediaSource}" />
+                                <ComboBoxItem Content="{DynamicResource Loc.Common.PreviousNextTrack}" Tag="{x:Static settings:WheelAction.PreviousNext}" />
+                                <ComboBoxItem Content="{DynamicResource Loc.Common.SwitchOutputDevice}" Tag="{x:Static settings:WheelAction.OutputDevice}" />
+                                <ComboBoxItem Content="{DynamicResource Loc.Common.AdjustCurrentMediaVolume}" Tag="{x:Static settings:WheelAction.CurrentApplicationVolume}" />
+                                <ComboBoxItem Content="{DynamicResource Loc.Common.SwitchPlayer}" Tag="{x:Static settings:WheelAction.SwitchMediaSource}" />
                             </ComboBox>
                         </components:SettingsRow>
 
                         <components:SettingsRow
-                            Description="按住上述按键再滚动滚轮"
+                            Description="{DynamicResource Loc.Interaction.Row.ChordWheel.Description}"
                             Icon="{ui:SymbolIcon Keyboard24}"
-                            Title="组合滚轮">
+                            Title="{DynamicResource Loc.Interaction.Wheel.Chord.Title}">
                             <ComboBox
                                 MinWidth="200"
                                 SelectedValue="{Binding ViewModel.ChordWheelAction, Mode=TwoWay}"
                                 SelectedValuePath="Tag">
-                                <ComboBoxItem Content="切换播放器" Tag="{x:Static settings:WheelAction.SwitchMediaSource}" />
-                                <ComboBoxItem Content="调节当前媒体音量" Tag="{x:Static settings:WheelAction.CurrentApplicationVolume}" />
-                                <ComboBoxItem Content="切换输出设备" Tag="{x:Static settings:WheelAction.OutputDevice}" />
-                                <ComboBoxItem Content="上一首 / 下一首" Tag="{x:Static settings:WheelAction.PreviousNext}" />
+                                <ComboBoxItem Content="{DynamicResource Loc.Common.SwitchPlayer}" Tag="{x:Static settings:WheelAction.SwitchMediaSource}" />
+                                <ComboBoxItem Content="{DynamicResource Loc.Common.AdjustCurrentMediaVolume}" Tag="{x:Static settings:WheelAction.CurrentApplicationVolume}" />
+                                <ComboBoxItem Content="{DynamicResource Loc.Common.SwitchOutputDevice}" Tag="{x:Static settings:WheelAction.OutputDevice}" />
+                                <ComboBoxItem Content="{DynamicResource Loc.Common.PreviousNextTrack}" Tag="{x:Static settings:WheelAction.PreviousNext}" />
                             </ComboBox>
                         </components:SettingsRow>
                     </StackPanel>
                 </components:SettingsGroup>
 
-                <components:SettingsGroup Header="托盘图标" Icon="{ui:SymbolIcon Apps24}">
+                <components:SettingsGroup Header="{DynamicResource Loc.Common.TrayIcon}" Icon="{ui:SymbolIcon Apps24}">
                     <StackPanel>
                         <components:SettingsDiagram Margin="0,0,0,12" Kind="TrayOverflow" />
 
                         <components:SettingsRow
-                            Description="右键始终打开菜单；此处设置左键单击行为"
+                            Description="{DynamicResource Loc.Interaction.Row.TrayClick.Description}"
                             Icon="{ui:SymbolIcon CursorClick24}"
-                            Title="点击托盘图标">
+                            Title="{DynamicResource Loc.Interaction.Row.TrayClick.Title}">
                             <ComboBox
                                 MinWidth="200"
                                 SelectedValue="{Binding ViewModel.TrayClickAction, Mode=TwoWay}"
                                 SelectedValuePath="Tag">
-                                <ComboBoxItem Content="打开音频控制菜单" Tag="{x:Static settings:TrayClickAction.OpenAudioControl}" />
-                                <ComboBoxItem Content="打开输出设备菜单" Tag="{x:Static settings:TrayClickAction.OpenOutputDeviceMenu}" />
-                                <ComboBoxItem Content="打开当前应用音量菜单" Tag="{x:Static settings:TrayClickAction.OpenCurrentAppVolumeMenu}" />
-                                <ComboBoxItem Content="打开设置页" Tag="{x:Static settings:TrayClickAction.OpenSettings}" />
-                                <ComboBoxItem Content="打开右键菜单" Tag="{x:Static settings:TrayClickAction.OpenContextMenu}" />
+                                <ComboBoxItem Content="{DynamicResource Loc.Interaction.TrayAction.OpenAudioControl}" Tag="{x:Static settings:TrayClickAction.OpenAudioControl}" />
+                                <ComboBoxItem Content="{DynamicResource Loc.Interaction.TrayAction.OpenOutputDeviceMenu}" Tag="{x:Static settings:TrayClickAction.OpenOutputDeviceMenu}" />
+                                <ComboBoxItem Content="{DynamicResource Loc.Interaction.TrayAction.OpenCurrentAppVolumeMenu}" Tag="{x:Static settings:TrayClickAction.OpenCurrentAppVolumeMenu}" />
+                                <ComboBoxItem Content="{DynamicResource Loc.Interaction.TrayAction.OpenSettings}" Tag="{x:Static settings:TrayClickAction.OpenSettings}" />
+                                <ComboBoxItem Content="{DynamicResource Loc.Interaction.TrayAction.OpenContextMenu}" Tag="{x:Static settings:TrayClickAction.OpenContextMenu}" />
                             </ComboBox>
                         </components:SettingsRow>
 
                         <components:SettingsRow
-                            Description="仅在指针位于托盘图标上时生效"
+                            Description="{DynamicResource Loc.Interaction.Row.TrayPrimaryWheel.Description}"
                             Icon="{ui:SymbolIcon Cursor24}"
-                            Title="普通滚轮">
+                            Title="{DynamicResource Loc.Interaction.Wheel.Primary.Title}">
                             <ComboBox
                                 MinWidth="200"
                                 SelectedValue="{Binding ViewModel.TrayPrimaryWheelAction, Mode=TwoWay}"
                                 SelectedValuePath="Tag">
-                                <ComboBoxItem Content="切换输出设备" Tag="{x:Static settings:TrayWheelBehavior.SwitchOutputDevice}" />
-                                <ComboBoxItem Content="调节当前媒体音量" Tag="{x:Static settings:TrayWheelBehavior.AdjustVolume}" />
+                                <ComboBoxItem Content="{DynamicResource Loc.Common.SwitchOutputDevice}" Tag="{x:Static settings:TrayWheelBehavior.SwitchOutputDevice}" />
+                                <ComboBoxItem Content="{DynamicResource Loc.Common.AdjustCurrentMediaVolume}" Tag="{x:Static settings:TrayWheelBehavior.AdjustVolume}" />
                             </ComboBox>
                         </components:SettingsRow>
 
                         <components:SettingsRow
-                            Description="先显示设备候选，停止滚动约 1.2 秒后应用"
+                            Description="{DynamicResource Loc.Interaction.Row.TrayChordWheel.Description}"
                             Icon="{ui:SymbolIcon Keyboard24}"
-                            Title="组合滚轮">
+                            Title="{DynamicResource Loc.Interaction.Wheel.Chord.Title}">
                             <ComboBox
                                 MinWidth="200"
                                 SelectedValue="{Binding ViewModel.TrayChordWheelAction, Mode=TwoWay}"
                                 SelectedValuePath="Tag">
-                                <ComboBoxItem Content="调节当前媒体音量" Tag="{x:Static settings:TrayWheelBehavior.AdjustVolume}" />
-                                <ComboBoxItem Content="切换输出设备" Tag="{x:Static settings:TrayWheelBehavior.SwitchOutputDevice}" />
+                                <ComboBoxItem Content="{DynamicResource Loc.Common.AdjustCurrentMediaVolume}" Tag="{x:Static settings:TrayWheelBehavior.AdjustVolume}" />
+                                <ComboBoxItem Content="{DynamicResource Loc.Common.SwitchOutputDevice}" Tag="{x:Static settings:TrayWheelBehavior.SwitchOutputDevice}" />
                             </ComboBox>
                         </components:SettingsRow>
                     </StackPanel>
@@ -195,7 +195,7 @@
                     Margin="0,16,0,40"
                     HorizontalAlignment="Left"
                     Click="ResetButton_Click"
-                    Content="恢复本页默认设置"
+                    Content="{DynamicResource Loc.Common.ResetPageDefaults}"
                     Icon="{ui:SymbolIcon ArrowReset24}"
                     Style="{StaticResource AfSettingsButtonStyle}" />
             </StackPanel>

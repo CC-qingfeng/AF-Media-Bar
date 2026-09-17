@@ -1,11 +1,17 @@
 using AFMediaBar.Classes.Models;
 using AFMediaBar.Classes.Settings;
+using AFMediaBar.Resources;
 
 namespace AFMediaBar.Classes.Services;
 
 /// <summary>
 /// 生成托盘音频状态提示文本，不执行音频读取或 UI 更新。
+///
+/// 提示是纯策略拼出来的（拿不到依赖注入），因此按当前界面语言取值；设备名与应用名来自系统，原样保留。
 /// Builds tray audio status text without performing audio reads or UI updates.
+///
+/// The text is composed by a pure policy that cannot receive dependency injection and therefore reads the active interface
+/// language; device and application names come from the system and are kept as they are.
 /// </summary>
 public static class AudioTooltipPolicy
 {
@@ -22,7 +28,7 @@ public static class AudioTooltipPolicy
         {
             TrayWheelBehavior.AdjustVolume => BuildMediaVolume(application?.DisplayName, application?.VolumePercent),
             TrayWheelBehavior.SwitchOutputDevice => BuildOutputDevice(device),
-            _ => "托盘滚轮已禁用"
+            _ => Translations.Get("Audio.Tooltip.WheelDisabled")
         };
     }
 
@@ -31,7 +37,9 @@ public static class AudioTooltipPolicy
     /// Builds the output-device tooltip; the tray and the taskbar hover-layer button share this wording.
     /// </summary>
     public static string BuildOutputDevice(AudioDeviceOption? device) =>
-        device is null ? "输出设备：不可用" : $"输出设备：{device.DisplayName}";
+        device is null
+            ? Translations.Get("Audio.OutputDevice.Unavailable")
+            : Translations.Format("Audio.OutputDevice.Value", device.DisplayName);
 
     /// <summary>
     /// 生成当前媒体音量提示；无媒体应用或音量不可读时给出明确回退。
@@ -39,6 +47,6 @@ public static class AudioTooltipPolicy
     /// </summary>
     public static string BuildMediaVolume(string? displayName, int? volumePercent) =>
         string.IsNullOrWhiteSpace(displayName) || volumePercent is null
-            ? "当前媒体音量：不可用"
-            : $"{displayName}：{volumePercent}%";
+            ? Translations.Get("Audio.Volume.Unavailable")
+            : Translations.Format("Audio.Volume.Value", displayName, volumePercent);
 }

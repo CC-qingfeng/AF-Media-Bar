@@ -6,6 +6,7 @@ using AFMediaBar.Classes.Abstractions;
 using AFMediaBar.Classes.Models;
 using AFMediaBar.Classes.Services.Lyrics;
 using AFMediaBar.Classes.Settings;
+using AFMediaBar.Resources;
 using Windows.Media.Control;
 using Windows.Media;
 using WindowsMediaController;
@@ -404,7 +405,7 @@ public sealed class MediaSessionService : IDisposable
             occurrences.TryGetValue(sourceId, out var occurrence);
             occurrence++;
             occurrences[sourceId] = occurrence;
-            var displayName = MediaSourceNameFormatter.GetDisplayName(sourceId, "未知来源");
+            var displayName = MediaSourceNameFormatter.GetDisplayName(sourceId, Translations.Get("Service.MediaSource.Unknown"));
             if (occurrence > 1)
             {
                 displayName = $"{displayName} ({occurrence})";

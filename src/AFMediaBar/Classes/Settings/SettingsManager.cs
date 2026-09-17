@@ -1,4 +1,5 @@
 using AFMediaBar.Classes.Models.Layout;
+using AFMediaBar.Classes.Services.Localization;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 
@@ -52,6 +53,7 @@ public sealed class AppSettings : INotifyPropertyChanged
     private PerformanceComponentSettings _performanceComponent = PerformanceComponentSettings.Default;
     private UpdateSettings _update = UpdateSettings.Default;
     private bool _launchAtStartup = true;
+    private InterfaceLanguage _interfaceLanguage = InterfaceLanguage.System;
 
     public AppearanceSettings Appearance { get => _appearance; set => Set(ref _appearance, value.Normalize()); }
     public TrayWheelBehavior TrayWheelBehavior { get => _trayWheelBehavior; set => Set(ref _trayWheelBehavior, value); }
@@ -105,6 +107,15 @@ public sealed class AppSettings : INotifyPropertyChanged
     /// </summary>
     public bool LaunchAtStartup { get => _launchAtStartup; set => Set(ref _launchAtStartup, value); }
 
+    /// <summary>
+    /// 界面语言选项。默认「跟随系统」：全新安装时不猜用户想用哪一种中文，而是按系统 UI 语言解析。
+    /// 这里存的是选项本身，实际生效的语言由 <see cref="LocalizationService"/> 解析并发布。
+    /// The interface-language option. "Follow the system" by default: a fresh installation does not guess which kind of
+    /// Chinese the user wants but resolves it against the system UI language. What is stored here is the option itself;
+    /// <see cref="LocalizationService"/> resolves and publishes the language actually in effect.
+    /// </summary>
+    public InterfaceLanguage InterfaceLanguage { get => _interfaceLanguage; set => Set(ref _interfaceLanguage, value); }
+
     public event PropertyChangedEventHandler? PropertyChanged;
 
     public AppSettings Normalize()
@@ -130,6 +141,7 @@ public sealed class AppSettings : INotifyPropertyChanged
         result.SpectrumComponent = result.SpectrumComponent.Normalize();
         result.PerformanceComponent = result.PerformanceComponent.Normalize();
         result.Update = result.Update.Normalize();
+        if (!Enum.IsDefined(result.InterfaceLanguage)) result.InterfaceLanguage = defaults.InterfaceLanguage;
         result.TaskbarTargetMonitorDeviceId = string.IsNullOrWhiteSpace(result.TaskbarTargetMonitorDeviceId)
             ? null
             : result.TaskbarTargetMonitorDeviceId.Trim();
@@ -179,7 +191,8 @@ public sealed class AppSettings : INotifyPropertyChanged
         SpectrumComponent = SpectrumComponent,
         PerformanceComponent = PerformanceComponent,
         Update = Update,
-        LaunchAtStartup = LaunchAtStartup
+        LaunchAtStartup = LaunchAtStartup,
+        InterfaceLanguage = InterfaceLanguage
     };
 
     private void Set<T>(ref T field, T value, [CallerMemberName] string? name = null)

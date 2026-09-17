@@ -3,6 +3,7 @@ using System.IO;
 using System.Net.Http;
 using System.Security.Cryptography;
 using AFMediaBar.Classes.Models.Updates;
+using AFMediaBar.Resources;
 
 namespace AFMediaBar.Classes.Services.Updates;
 
@@ -107,7 +108,9 @@ public sealed class UpdatePackageDownloader
                 .ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
             {
-                return UpdateDownloadOutcome.Failure($"下载失败（HTTP {(int)response.StatusCode}）", source.HostName);
+                return UpdateDownloadOutcome.Failure(
+                    Translations.Format("Update.Reason.DownloadHttp", (int)response.StatusCode),
+                    source.HostName);
             }
 
             // 不再用服务器声明的 Content-Length 做预检：清单一律只以 SHA-256 判定，长度既不是承诺也不是证据。
@@ -156,7 +159,9 @@ public sealed class UpdatePackageDownloader
             if (!string.Equals(actual, asset.Sha256, StringComparison.OrdinalIgnoreCase))
             {
                 _store.RemoveInstaller(temporary);
-                return UpdateDownloadOutcome.Failure($"安装包校验失败（SHA-256 不匹配，收到 {received} 字节）", source.HostName);
+                return UpdateDownloadOutcome.Failure(
+                    Translations.Format("Update.Reason.DownloadHashMismatch", received),
+                    source.HostName);
             }
 
             _store.RemoveInstaller(target);
@@ -181,7 +186,9 @@ public sealed class UpdatePackageDownloader
             Debug.WriteLine($"[Update] Download from {source.Url} failed: {exception.Message}");
             _store.RemoveInstaller(temporary);
             return UpdateDownloadOutcome.Failure(
-                exception is TaskCanceledException ? "下载超时" : "下载失败（网络或磁盘错误）",
+                exception is TaskCanceledException
+                    ? Translations.Get("Update.Reason.DownloadTimeout")
+                    : Translations.Get("Update.Reason.DownloadFailed"),
                 source.HostName);
         }
     }
@@ -237,7 +244,9 @@ public sealed class UpdatePackageDownloader
             {
                 _store.RemoveInstaller(path);
                 _store.ClearPendingRecord();
-                return UpdateDownloadOutcome.Failure("已下载的安装包 SHA-256 与清单不符，已删除", null);
+                return UpdateDownloadOutcome.Failure(
+                    Translations.Get("Update.Reason.VerifyHashMismatch"),
+                    null);
             }
 
             var record = UpdatePendingFilePolicy.CreateRecord(
@@ -259,7 +268,7 @@ public sealed class UpdatePackageDownloader
             Debug.WriteLine($"[Update] Re-verification of {path} failed: {exception.Message}");
             _store.RemoveInstaller(path);
             _store.ClearPendingRecord();
-            return UpdateDownloadOutcome.Failure("已下载的安装包无法读取，已删除", null);
+            return UpdateDownloadOutcome.Failure(Translations.Get("Update.Reason.VerifyUnreadable"), null);
         }
     }
 }

@@ -19,6 +19,7 @@ using AFMediaBar.Classes.Services.Audio;
 using AFMediaBar.Classes.Utils;
 using AFMediaBar.ViewModels.Windows;
 using AFMediaBar.Components;
+using AFMediaBar.Resources;
 using MenuItem = Wpf.Ui.Controls.MenuItem;
 using static AFMediaBar.Classes.Interop.NativeMethods;
 
@@ -1073,10 +1074,21 @@ public partial class TaskbarWindow : Window
         _compactFlyout.ShowQuickLaunch(
             SettingsManager.Current.QuickLaunch.Entries ?? [],
             MediaControl.GetQuickLaunchAnchor());
-        _compactFlyout.ShowQuickLaunchStatus(result == QuickLaunchResult.InvalidTarget
-            ? "启动目标已失效，请在额外功能中重新添加。"
-            : "无法启动此应用，请检查应用是否仍可用。");
+        _compactFlyout.ShowQuickLaunchStatus(DescribeQuickLaunchResult(result));
     }
+
+    /// <summary>
+    /// 取快速启动的失败原因：文案在写进菜单的这一刻按当前界面语言解析，不缓存到字段里，因此界面上不会留下上一种语言
+    /// 的那一句，也不需要额外的刷新路径。
+    /// Resolves the quick-launch failure reason: the sentence is resolved in the active interface language at the moment it
+    /// is handed to the menu and is never cached in a field, so no line is left behind in the previous language and no
+    /// extra refresh path is needed.
+    /// </summary>
+    /// <param name="result">失败的启动结果。/ The failed launch result.</param>
+    private static string DescribeQuickLaunchResult(QuickLaunchResult result) =>
+        Translations.Get(result == QuickLaunchResult.InvalidTarget
+            ? "Shell.QuickLaunch.Status.InvalidTarget"
+            : "Shell.QuickLaunch.Status.Failed");
 
     private void MediaControl_QuickLaunchMenuRequested(object? sender, EventArgs e)
     {

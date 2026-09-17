@@ -1,10 +1,14 @@
 using AFMediaBar.Classes.Settings;
 using AFMediaBar.Classes.Services.Audio;
+using AFMediaBar.Resources;
 namespace AFMediaBar.Classes.Services;
 
 /// <summary>解析并执行播放器表面共用的媒体滚轮语义。 / Resolves and executes media-wheel semantics shared by player surfaces.</summary>
 public sealed class GlobalInteractionRouter
 {
+    /// <summary>标签与结果之间可能出现的分隔符：中文用全角冒号，英文用半角冒号。/ Separators that may sit between a label and its value: a full-width colon in Chinese and a colon in English.</summary>
+    private static readonly char[] LabelSeparators = ['：', ':'];
+
     private readonly MediaSessionService _mediaSessionService;
     private readonly AudioInteractionService _audioInteractionService;
 
@@ -56,13 +60,13 @@ public sealed class GlobalInteractionRouter
             case WheelAction.CurrentApplicationVolume:
             {
                 var detail = await _audioInteractionService.AdjustCurrentMediaVolumeAsync(delta > 0 ? steps : -steps);
-                return new WheelTooltipResult("当前媒体音量", detail);
+                return new WheelTooltipResult(Translations.Get("Wheel.Action.CurrentMediaVolume"), detail);
             }
 
             case WheelAction.OutputDevice:
             {
                 var detail = await _audioInteractionService.CycleOutputDeviceAsync(delta > 0 ? -steps : steps, deferApply: true);
-                return new WheelTooltipResult("输出设备", StripLabel(detail));
+                return new WheelTooltipResult(Translations.Get("Common.OutputDevice"), StripLabel(detail));
             }
 
             default:
@@ -76,19 +80,27 @@ public sealed class GlobalInteractionRouter
     /// <summary>
     /// 去掉音频服务返回文本里已经带上的标签。音频服务把"输出设备：X"整句交给托盘提示用，
     /// 而这里的提示自己拼"动作名：结果"，两层标签会变成"输出设备：输出设备：X"。
+    ///
+    /// 标签本身按当前界面语言取值，因此这里也按同一语言匹配：简繁用全角冒号，英文用半角冒号加空格，
+    /// 只认一种冒号会让另一种语言整句留在结果里。
     /// Strips the label the audio service already embedded. That service hands the tray tooltip a whole sentence such as
     /// "output device: X", while this tooltip composes its own "action: result", and two labels would read
     /// "output device: output device: X".
+    ///
+    /// The label itself is read in the active interface language, so it is matched in that language too: Chinese writes a
+    /// full-width colon and English a colon followed by a space, and accepting only one of them would leave the whole
+    /// sentence in the result for the other.
     /// </summary>
     private static string? StripLabel(string? detail)
     {
         if (string.IsNullOrWhiteSpace(detail))
             return null;
 
-        var separator = detail.IndexOf('：');
-        return separator >= 0 && separator < detail.Length - 1
-            ? detail[(separator + 1)..].Trim()
-            : detail.Trim();
+        var label = Translations.Get("Common.OutputDevice");
+        var remainder = detail.StartsWith(label, StringComparison.Ordinal)
+            ? detail[label.Length..]
+            : detail;
+        return remainder.TrimStart(LabelSeparators).Trim();
     }
 
     private WheelTooltipResult? CycleMediaSource(int signedSteps)
@@ -102,7 +114,7 @@ public sealed class GlobalInteractionRouter
             current = 0;
         var target = sessions[WheelInput.MoveCircular(current, signedSteps, sessions.Count)];
         _mediaSessionService.SelectSession(target.Key);
-        return new WheelTooltipResult("播放源", target.DisplayName);
+        return new WheelTooltipResult(Translations.Get("Wheel.Action.MediaSource"), target.DisplayName);
     }
 }
 

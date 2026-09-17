@@ -33,7 +33,10 @@ namespace AFMediaBar.Views.Pages
 
         private async void ResetButton_Click(object sender, RoutedEventArgs e)
         {
-            if (await SettingsResetDialog.ConfirmAsync("布局页")) ViewModel.ResetLayout();
+            // 传的是作用域名称的文案键，句子由语言文件拼装：切换语言后对话框跟着换语言。
+            // The argument is the localization key of the scope name; the language file composes the sentence, so the dialog
+            // follows a language change.
+            if (await SettingsResetDialog.ConfirmAsync("Layout.Page.Title")) ViewModel.ResetLayout();
         }
     }
 }

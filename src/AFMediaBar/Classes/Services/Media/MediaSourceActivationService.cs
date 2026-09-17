@@ -3,6 +3,7 @@ using System.IO;
 using AFMediaBar.Classes.Interop;
 using AFMediaBar.Classes.Models;
 using AFMediaBar.Classes.Services.Audio;
+using AFMediaBar.Resources;
 
 namespace AFMediaBar.Classes.Services;
 
@@ -97,7 +98,7 @@ public sealed class MediaSourceActivationService
     /// <summary>解析当前已发现来源的安全启动描述。 / Resolves a safe launch descriptor for a currently discovered source.</summary>
     public MediaSourceDescriptor Describe(string sourceId)
     {
-        var displayName = MediaSourceNameFormatter.GetDisplayName(sourceId, "未知来源");
+        var displayName = MediaSourceNameFormatter.GetDisplayName(sourceId, Translations.Get("Service.MediaSource.Unknown"));
         if (string.IsNullOrWhiteSpace(sourceId))
             return new MediaSourceDescriptor(string.Empty, displayName, null, null);
         if (sourceId.Contains('!'))

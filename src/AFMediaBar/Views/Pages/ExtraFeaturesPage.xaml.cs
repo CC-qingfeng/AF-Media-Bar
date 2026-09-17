@@ -1,4 +1,5 @@
 using AFMediaBar.Classes.Utils;
+using AFMediaBar.Resources;
 using AFMediaBar.ViewModels.Pages;
 using Wpf.Ui.Abstractions.Controls;
 using Microsoft.Win32;
@@ -23,10 +24,13 @@ public partial class ExtraFeaturesPage : INavigableView<ExtraFeaturesViewModel>
 
     private void BrowseQuickLaunch_Click(object sender, System.Windows.RoutedEventArgs e)
     {
+        // 对话框在打开的这一刻取文案：它是系统窗口，不会跟随 XAML 的动态资源刷新，因此每次点击都重新取一次。
+        // The dialog reads its text at the moment it opens: it is a system window that does not follow the XAML dynamic
+        // resources, so the text is fetched again on every click.
         var dialog = new OpenFileDialog
         {
-            Title = "选择媒体应用或快捷方式",
-            Filter = "应用和快捷方式 (*.exe;*.lnk)|*.exe;*.lnk",
+            Title = Translations.Get("Media.Dialog.Browse.Title"),
+            Filter = Translations.Get("Media.Dialog.Browse.Filter"),
             Multiselect = false,
             CheckFileExists = true
         };
@@ -36,7 +40,7 @@ public partial class ExtraFeaturesPage : INavigableView<ExtraFeaturesViewModel>
 
     private async void ResetButton_Click(object sender, System.Windows.RoutedEventArgs e)
     {
-        if (await SettingsResetDialog.ConfirmAsync("媒体与通知"))
+        if (await SettingsResetDialog.ConfirmAsync("Common.Page.MediaAndNotifications"))
             ViewModel.ResetExtraFeatures();
     }
 }

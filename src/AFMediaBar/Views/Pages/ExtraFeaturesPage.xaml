@@ -41,7 +41,7 @@
             <Setter Property="IsEnabled" Value="{Binding ViewModel.SpectrumVisible}" />
             <Style.Triggers>
                 <DataTrigger Binding="{Binding ViewModel.SpectrumVisible}" Value="False">
-                    <Setter Property="Badge" Value="需先启用" />
+                    <Setter Property="Badge" Value="{DynamicResource Loc.Media.Badge.EnableFirst}" />
                     <Setter Property="BadgeTone" Value="Attention" />
                 </DataTrigger>
             </Style.Triggers>
@@ -55,7 +55,7 @@
             <Setter Property="IsEnabled" Value="{Binding ViewModel.PerformanceVisible}" />
             <Style.Triggers>
                 <DataTrigger Binding="{Binding ViewModel.PerformanceVisible}" Value="False">
-                    <Setter Property="Badge" Value="需先启用" />
+                    <Setter Property="Badge" Value="{DynamicResource Loc.Media.Badge.EnableFirst}" />
                     <Setter Property="BadgeTone" Value="Attention" />
                 </DataTrigger>
             </Style.Triggers>
@@ -73,9 +73,9 @@
             Margin="{StaticResource AfSettingsHeaderMargin}"
             MaxWidth="{StaticResource AfSettingsContentMaxWidth}"
             PageIcon="{ui:SymbolIcon PuzzlePiece24}"
-            Subtitle="媒体来源、快速启动、静置层组件与曲目通知"
+            Subtitle="{DynamicResource Loc.Media.Header.Subtitle}"
             Target="{Binding ElementName=PageScroll}"
-            Title="媒体与通知" />
+            Title="{DynamicResource Loc.Common.Page.MediaAndNotifications}" />
 
         <ScrollViewer
             x:Name="PageScroll"
@@ -88,12 +88,12 @@
                 MaxWidth="{StaticResource AfSettingsContentMaxWidth}"
                 Loaded="OnPageLoaded">
 
-                <components:SettingsGroup Header="媒体来源" Icon="{ui:SymbolIcon Filter24}">
+                <components:SettingsGroup Header="{DynamicResource Loc.Common.MediaSource}" Icon="{ui:SymbolIcon Filter24}">
                     <StackPanel>
                         <components:SettingsRow
-                            Description="仅接收列表内的应用；关闭后列表仍然保留"
+                            Description="{DynamicResource Loc.Media.SourceFilter.Description}"
                             Icon="{ui:SymbolIcon Filter24}"
-                            Title="来源允许列表">
+                            Title="{DynamicResource Loc.Media.SourceFilter.Title}">
                             <ui:ToggleSwitch IsChecked="{Binding ViewModel.SmtcFilterEnabled, Mode=TwoWay}" />
                         </components:SettingsRow>
 
@@ -103,8 +103,8 @@
                             IsExpanded="True">
                             <ui:CardExpander.Header>
                                 <StackPanel>
-                                    <TextBlock Style="{StaticResource AfSettingsRowTitleStyle}" Text="已检测来源" />
-                                    <TextBlock Style="{StaticResource AfSettingsRowDescriptionStyle}" Text="先运行一次播放器，它才会出现在这里" />
+                                    <TextBlock Style="{StaticResource AfSettingsRowTitleStyle}" Text="{DynamicResource Loc.Media.SourceList.Title}" />
+                                    <TextBlock Style="{StaticResource AfSettingsRowDescriptionStyle}" Text="{DynamicResource Loc.Media.SourceList.Description}" />
                                 </StackPanel>
                             </ui:CardExpander.Header>
                             <ItemsControl ItemsSource="{Binding ViewModel.Sources}">
@@ -116,16 +116,16 @@
                                             Title="{Binding Descriptor.DisplayName}">
                                             <StackPanel Orientation="Horizontal">
                                                 <ui:ToggleSwitch
-                                                    Content="允许"
+                                                    Content="{DynamicResource Loc.Media.SourceList.Allow}"
                                                     IsChecked="{Binding IsAllowed, Mode=TwoWay}" />
                                                 <ui:Button
                                                     Margin="12,0,0,0"
                                                     Command="{Binding DataContext.ViewModel.AddDetectedSourceCommand, RelativeSource={RelativeSource AncestorType=Page}}"
                                                     CommandParameter="{Binding}"
-                                                    Content="加入快速启动"
+                                                    Content="{DynamicResource Loc.Media.SourceList.AddToQuickLaunch}"
                                                     IsEnabled="{Binding Descriptor.CanQuickLaunch}"
                                                     Style="{StaticResource AfSettingsButtonStyle}"
-                                                    ToolTip="只有能自动找到启动方式的播放器才能加入；找不到时请用「浏览程序或快捷方式」。"
+                                                    ToolTip="{DynamicResource Loc.Media.SourceList.AddToQuickLaunch.ToolTip}"
                                                     ToolTipService.ShowOnDisabled="True" />
                                             </StackPanel>
                                         </components:SettingsRow>
@@ -136,26 +136,26 @@
                     </StackPanel>
                 </components:SettingsGroup>
 
-                <components:SettingsGroup Header="快速启动" Icon="{ui:SymbolIcon Rocket24}">
+                <components:SettingsGroup Header="{DynamicResource Loc.Common.Group.QuickLaunch}" Icon="{ui:SymbolIcon Rocket24}">
                     <StackPanel>
                         <components:SettingsRow
-                            Description="点击音符打开快速启动列表；滚轮预览，停止约 1.2 秒后启动最后一项"
+                            Description="{DynamicResource Loc.Media.QuickLaunch.FromNote.Description}"
                             Icon="{ui:SymbolIcon Rocket24}"
-                            Title="无媒体时从音符启动">
+                            Title="{DynamicResource Loc.Media.QuickLaunch.FromNote.Title}">
                             <ui:Button
                                 Click="BrowseQuickLaunch_Click"
-                                Content="浏览程序或快捷方式"
+                                Content="{DynamicResource Loc.Media.QuickLaunch.Browse}"
                                 Icon="{ui:SymbolIcon FolderOpen24}"
                                 Style="{StaticResource AfSettingsButtonStyle}" />
                         </components:SettingsRow>
 
                         <components:SettingsRow
-                            Description="调整顺序只影响本列表的启动优先级"
+                            Description="{DynamicResource Loc.Media.QuickLaunch.Entries.Description}"
                             Icon="{ui:SymbolIcon AppsListDetail24}"
-                            Title="已添加的启动项">
+                            Title="{DynamicResource Loc.Media.QuickLaunch.Entries.Title}">
                             <TextBlock
                                 Style="{StaticResource AfSettingsRowValueStyle}"
-                                Text="{Binding ViewModel.QuickLaunchEntries.Count, StringFormat={}{0} 项}" />
+                                Text="{Binding ViewModel.QuickLaunchEntryCountText}" />
                         </components:SettingsRow>
 
                         <ItemsControl Margin="0,0,0,4" ItemsSource="{Binding ViewModel.QuickLaunchEntries}">
@@ -171,21 +171,21 @@
                                                 CommandParameter="{Binding}"
                                                 Icon="{ui:SymbolIcon ArrowUp24}"
                                                 Style="{StaticResource AfSettingsIconButtonStyle}"
-                                                ToolTip="上移一位" />
+                                                ToolTip="{DynamicResource Loc.Media.QuickLaunch.MoveUp}" />
                                             <ui:Button
                                                 Margin="4,0,0,0"
                                                 Command="{Binding DataContext.ViewModel.MoveQuickLaunchDownCommand, RelativeSource={RelativeSource AncestorType=Page}}"
                                                 CommandParameter="{Binding}"
                                                 Icon="{ui:SymbolIcon ArrowDown24}"
                                                 Style="{StaticResource AfSettingsIconButtonStyle}"
-                                                ToolTip="下移一位" />
+                                                ToolTip="{DynamicResource Loc.Media.QuickLaunch.MoveDown}" />
                                             <ui:Button
                                                 Margin="4,0,0,0"
                                                 Command="{Binding DataContext.ViewModel.RemoveQuickLaunchCommand, RelativeSource={RelativeSource AncestorType=Page}}"
                                                 CommandParameter="{Binding}"
                                                 Icon="{ui:SymbolIcon Delete24}"
                                                 Style="{StaticResource AfSettingsIconButtonStyle}"
-                                                ToolTip="从快速启动中移除" />
+                                                ToolTip="{DynamicResource Loc.Media.QuickLaunch.Remove}" />
                                         </StackPanel>
                                     </components:SettingsRow>
                                 </DataTemplate>
@@ -200,16 +200,16 @@
                 </components:SettingsGroup>
 
                 <components:SettingsGroup
-                    Description="叠加在静置层右侧的两个小组件"
-                    Header="静置层组件"
+                    Description="{DynamicResource Loc.Media.RestComponents.Description}"
+                    Header="{DynamicResource Loc.Common.Group.RestLayerComponents}"
                     Icon="{ui:SymbolIcon DataHistogram24}">
                     <StackPanel>
                         <components:SettingsDiagram Margin="0,0,0,12" Kind="Spectrum" />
 
                         <components:SettingsRow
-                            Description="在静置层右侧显示实时音频频谱"
+                            Description="{DynamicResource Loc.Media.Spectrum.Visible.Description}"
                             Icon="{ui:SymbolIcon DataHistogram24}"
-                            Title="显示频谱">
+                            Title="{DynamicResource Loc.Media.Spectrum.Visible.Title}">
                             <ui:ToggleSwitch IsChecked="{Binding ViewModel.SpectrumVisible, Mode=TwoWay}" />
                         </components:SettingsRow>
 
@@ -219,33 +219,33 @@
                             IsExpanded="{Binding ViewModel.SpectrumVisible, Mode=OneWay}">
                             <ui:CardExpander.Header>
                                 <StackPanel>
-                                    <TextBlock Style="{StaticResource AfSettingsRowTitleStyle}" Text="频谱参数" />
-                                    <TextBlock Style="{StaticResource AfSettingsRowDescriptionStyle}" Text="柱数、刷新率与灵敏度" />
+                                    <TextBlock Style="{StaticResource AfSettingsRowTitleStyle}" Text="{DynamicResource Loc.Media.Spectrum.Parameters.Title}" />
+                                    <TextBlock Style="{StaticResource AfSettingsRowDescriptionStyle}" Text="{DynamicResource Loc.Media.Spectrum.Parameters.Description}" />
                                 </StackPanel>
                             </ui:CardExpander.Header>
                             <StackPanel>
                                 <components:SettingsRow
-                                    Description="频谱的绘制方式，不改变柱数与占用宽度"
+                                    Description="{DynamicResource Loc.Media.Spectrum.Style.Description}"
                                     Icon="{ui:SymbolIcon PaintBrush24}"
                                     IsNested="True"
                                     Style="{StaticResource SpectrumParameterRowStyle}"
-                                    Title="样式">
+                                    Title="{DynamicResource Loc.Media.Spectrum.Style.Title}">
                                     <ComboBox
                                         MinWidth="160"
                                         SelectedValue="{Binding ViewModel.SpectrumStyle, Mode=TwoWay}"
                                         SelectedValuePath="Tag">
-                                        <ComboBoxItem Content="柱状图" Tag="{x:Static settings:SpectrumStyle.Bars}" />
-                                        <ComboBoxItem Content="波形图" Tag="{x:Static settings:SpectrumStyle.Waveform}" />
-                                        <ComboBoxItem Content="像素柱状图" Tag="{x:Static settings:SpectrumStyle.PixelBars}" />
-                                        <ComboBoxItem Content="上下对称柱状图" Tag="{x:Static settings:SpectrumStyle.MirroredBars}" />
+                                        <ComboBoxItem Content="{DynamicResource Loc.Media.Spectrum.Style.Bars}" Tag="{x:Static settings:SpectrumStyle.Bars}" />
+                                        <ComboBoxItem Content="{DynamicResource Loc.Media.Spectrum.Style.Waveform}" Tag="{x:Static settings:SpectrumStyle.Waveform}" />
+                                        <ComboBoxItem Content="{DynamicResource Loc.Media.Spectrum.Style.PixelBars}" Tag="{x:Static settings:SpectrumStyle.PixelBars}" />
+                                        <ComboBoxItem Content="{DynamicResource Loc.Media.Spectrum.Style.MirroredBars}" Tag="{x:Static settings:SpectrumStyle.MirroredBars}" />
                                     </ComboBox>
                                 </components:SettingsRow>
                                 <components:SettingsRow
-                                    Description="频谱柱的数量（9–24）；柱宽固定，柱数越多频谱越宽"
+                                    Description="{DynamicResource Loc.Media.Spectrum.BandCount.Description}"
                                     Icon="{ui:SymbolIcon DataBarVertical24}"
                                     IsNested="True"
                                     Style="{StaticResource SpectrumParameterRowStyle}"
-                                    Title="柱数">
+                                    Title="{DynamicResource Loc.Media.Spectrum.BandCount.Title}">
                                     <StackPanel Orientation="Horizontal">
                                         <Slider
                                             IsSnapToTickEnabled="True"
@@ -254,15 +254,15 @@
                                             Style="{StaticResource AfSettingsRowSliderStyle}"
                                             TickFrequency="1"
                                             Value="{Binding ViewModel.SpectrumBandCount, Mode=TwoWay}" />
-                                        <TextBlock Style="{StaticResource AfSettingsRowValueStyle}" Text="{Binding ViewModel.SpectrumBandCount, StringFormat={}{0} 根}" />
+                                        <TextBlock Style="{StaticResource AfSettingsRowValueStyle}" Text="{Binding ViewModel.SpectrumBandCountText}" />
                                     </StackPanel>
                                 </components:SettingsRow>
                                 <components:SettingsRow
-                                    Description="频谱刷新频率（5–30 Hz）"
+                                    Description="{DynamicResource Loc.Media.Spectrum.RefreshRate.Description}"
                                     Icon="{ui:SymbolIcon Timer24}"
                                     IsNested="True"
                                     Style="{StaticResource SpectrumParameterRowStyle}"
-                                    Title="刷新率">
+                                    Title="{DynamicResource Loc.Media.Spectrum.RefreshRate.Title}">
                                     <StackPanel Orientation="Horizontal">
                                         <Slider
                                             IsSnapToTickEnabled="True"
@@ -275,11 +275,11 @@
                                     </StackPanel>
                                 </components:SettingsRow>
                                 <components:SettingsRow
-                                    Description="频谱柱达到最大高度时对应的音频音量（10%–400%）"
+                                    Description="{DynamicResource Loc.Media.Spectrum.Sensitivity.Description}"
                                     Icon="{ui:SymbolIcon TopSpeed24}"
                                     IsNested="True"
                                     Style="{StaticResource SpectrumParameterRowStyle}"
-                                    Title="灵敏度">
+                                    Title="{DynamicResource Loc.Media.Spectrum.Sensitivity.Title}">
                                     <StackPanel Orientation="Horizontal">
                                         <Slider
                                             IsSnapToTickEnabled="True"
@@ -295,9 +295,9 @@
                         </ui:CardExpander>
 
                         <components:SettingsRow
-                            Description="在静置层右侧轮换显示选中的指标"
+                            Description="{DynamicResource Loc.Media.Performance.Visible.Description}"
                             Icon="{ui:SymbolIcon Gauge24}"
-                            Title="显示性能组件">
+                            Title="{DynamicResource Loc.Media.Performance.Visible.Title}">
                             <ui:ToggleSwitch IsChecked="{Binding ViewModel.PerformanceVisible, Mode=TwoWay}" />
                         </components:SettingsRow>
 
@@ -307,17 +307,17 @@
                             IsExpanded="{Binding ViewModel.PerformanceVisible, Mode=OneWay}">
                             <ui:CardExpander.Header>
                                 <StackPanel>
-                                    <TextBlock Style="{StaticResource AfSettingsRowTitleStyle}" Text="显示哪些指标" />
-                                    <TextBlock Style="{StaticResource AfSettingsRowDescriptionStyle}" Text="选中多个时轮流显示" />
+                                    <TextBlock Style="{StaticResource AfSettingsRowTitleStyle}" Text="{DynamicResource Loc.Media.Performance.Metrics.Title}" />
+                                    <TextBlock Style="{StaticResource AfSettingsRowDescriptionStyle}" Text="{DynamicResource Loc.Media.Performance.Metrics.Description}" />
                                 </StackPanel>
                             </ui:CardExpander.Header>
                             <StackPanel>
                                 <components:SettingsRow
-                                    Description="至少保留一项，最后一项无法取消"
+                                    Description="{DynamicResource Loc.Media.Metric.SystemMemory.Description}"
                                     Icon="{ui:SymbolIcon Storage24}"
                                     IsNested="True"
                                     Style="{StaticResource PerformanceParameterRowStyle}"
-                                    Title="系统内存">
+                                    Title="{DynamicResource Loc.Media.Metric.SystemMemory.Title}">
                                     <ui:ToggleSwitch
                                         IsChecked="{Binding ViewModel.ShowSystemMemory, Mode=TwoWay}"
                                         IsEnabled="{Binding ViewModel.CanUncheckSystemMemory}" />
@@ -344,17 +344,17 @@
                                     Icon="{ui:SymbolIcon Apps24}"
                                     IsNested="True"
                                     Style="{StaticResource PerformanceParameterRowStyle}"
-                                    Title="本程序内存">
+                                    Title="{DynamicResource Loc.Media.Metric.ProcessMemory.Title}">
                                     <ui:ToggleSwitch
                                         IsChecked="{Binding ViewModel.ShowProcessMemory, Mode=TwoWay}"
                                         IsEnabled="{Binding ViewModel.CanUncheckProcessMemory}" />
                                 </components:SettingsRow>
                                 <components:SettingsRow
-                                    Description="采样间隔，越小越灵敏（0.5–5 秒）"
+                                    Description="{DynamicResource Loc.Media.Performance.RefreshInterval.Description}"
                                     Icon="{ui:SymbolIcon Timer24}"
                                     IsNested="True"
                                     Style="{StaticResource PerformanceParameterRowStyle}"
-                                    Title="刷新间隔">
+                                    Title="{DynamicResource Loc.Media.Performance.RefreshInterval.Title}">
                                     <StackPanel Orientation="Horizontal">
                                         <Slider
                                             IsSnapToTickEnabled="True"
@@ -363,15 +363,15 @@
                                             Style="{StaticResource AfSettingsRowSliderStyle}"
                                             TickFrequency="{Binding ViewModel.PerformanceRefreshIntervalStepSeconds}"
                                             Value="{Binding ViewModel.PerformanceRefreshIntervalSeconds, Mode=TwoWay}" />
-                                        <TextBlock Style="{StaticResource AfSettingsRowValueStyle}" Text="{Binding ViewModel.PerformanceRefreshIntervalSeconds, StringFormat={}{0:0.#} 秒}" />
+                                        <TextBlock Style="{StaticResource AfSettingsRowValueStyle}" Text="{Binding ViewModel.PerformanceRefreshIntervalText}" />
                                     </StackPanel>
                                 </components:SettingsRow>
                                 <components:SettingsRow
-                                    Description="关闭后点击性能组件不执行任何操作"
+                                    Description="{DynamicResource Loc.Media.Performance.OpenTaskManager.Description}"
                                     Icon="{ui:SymbolIcon CursorClick24}"
                                     IsNested="True"
                                     Style="{StaticResource PerformanceParameterRowStyle}"
-                                    Title="点击性能组件时打开任务管理器">
+                                    Title="{DynamicResource Loc.Media.Performance.OpenTaskManager.Title}">
                                     <ui:ToggleSwitch IsChecked="{Binding ViewModel.OpenTaskManagerOnMetricsClick, Mode=TwoWay}" />
                                 </components:SettingsRow>
                             </StackPanel>
@@ -379,12 +379,12 @@
                     </StackPanel>
                 </components:SettingsGroup>
 
-                <components:SettingsGroup Header="曲目切换通知" Icon="{ui:SymbolIcon MusicNote220}">
+                <components:SettingsGroup Header="{DynamicResource Loc.Common.Group.TrackChangeNotification}" Icon="{ui:SymbolIcon MusicNote220}">
                     <StackPanel>
                         <components:SettingsRow
-                            Description="曲目切换并开始播放时显示当前曲目"
+                            Description="{DynamicResource Loc.Media.Notification.Enabled.Description}"
                             Icon="{ui:SymbolIcon MusicNote220}"
-                            Title="启用通知">
+                            Title="{DynamicResource Loc.Media.Notification.Enabled.Title}">
                             <ui:ToggleSwitch IsChecked="{Binding ViewModel.TrackChangeNotificationEnabled, Mode=TwoWay}" />
                         </components:SettingsRow>
 
@@ -394,40 +394,40 @@
                             IsExpanded="{Binding ViewModel.TrackChangeNotificationEnabled, Mode=OneWay}">
                             <ui:CardExpander.Header>
                                 <StackPanel>
-                                    <TextBlock Style="{StaticResource AfSettingsRowTitleStyle}" Text="通知细节" />
-                                    <TextBlock Style="{StaticResource AfSettingsRowDescriptionStyle}" Text="选择位置、停留时间与目标显示器" />
+                                    <TextBlock Style="{StaticResource AfSettingsRowTitleStyle}" Text="{DynamicResource Loc.Media.Notification.Details.Title}" />
+                                    <TextBlock Style="{StaticResource AfSettingsRowDescriptionStyle}" Text="{DynamicResource Loc.Media.Notification.Details.Description}" />
                                 </StackPanel>
                             </ui:CardExpander.Header>
                             <StackPanel>
                                 <components:SettingsDiagram Margin="0,0,0,12" Kind="NotificationPlacement" />
 
                                 <components:SettingsRow
-                                    Description="默认在全屏窗口前抑制通知"
+                                    Description="{DynamicResource Loc.Media.Notification.Fullscreen.Description}"
                                     Icon="{ui:SymbolIcon FullScreenMaximize24}"
                                     IsNested="True"
-                                    Title="全屏时仍然显示">
+                                    Title="{DynamicResource Loc.Media.Notification.Fullscreen.Title}">
                                     <ui:ToggleSwitch IsChecked="{Binding ViewModel.ShowTrackChangeNotificationWhenFullscreen, Mode=TwoWay}" />
                                 </components:SettingsRow>
                                 <components:SettingsRow
                                     Icon="{ui:SymbolIcon Pin24}"
                                     IsNested="True"
-                                    Title="显示位置">
+                                    Title="{DynamicResource Loc.Media.Notification.Position.Title}">
                                     <ComboBox
                                         MinWidth="140"
                                         SelectedValue="{Binding ViewModel.TrackChangeNotificationPosition, Mode=TwoWay}"
                                         SelectedValuePath="Tag">
-                                        <ComboBoxItem Content="左上" Tag="{x:Static settings:TrackChangeNotificationPosition.TopLeft}" />
-                                        <ComboBoxItem Content="中上" Tag="{x:Static settings:TrackChangeNotificationPosition.TopCenter}" />
-                                        <ComboBoxItem Content="右上" Tag="{x:Static settings:TrackChangeNotificationPosition.TopRight}" />
-                                        <ComboBoxItem Content="左下" Tag="{x:Static settings:TrackChangeNotificationPosition.BottomLeft}" />
-                                        <ComboBoxItem Content="中下" Tag="{x:Static settings:TrackChangeNotificationPosition.BottomCenter}" />
-                                        <ComboBoxItem Content="右下" Tag="{x:Static settings:TrackChangeNotificationPosition.BottomRight}" />
+                                        <ComboBoxItem Content="{DynamicResource Loc.Media.Notification.Position.TopLeft}" Tag="{x:Static settings:TrackChangeNotificationPosition.TopLeft}" />
+                                        <ComboBoxItem Content="{DynamicResource Loc.Media.Notification.Position.TopCenter}" Tag="{x:Static settings:TrackChangeNotificationPosition.TopCenter}" />
+                                        <ComboBoxItem Content="{DynamicResource Loc.Media.Notification.Position.TopRight}" Tag="{x:Static settings:TrackChangeNotificationPosition.TopRight}" />
+                                        <ComboBoxItem Content="{DynamicResource Loc.Media.Notification.Position.BottomLeft}" Tag="{x:Static settings:TrackChangeNotificationPosition.BottomLeft}" />
+                                        <ComboBoxItem Content="{DynamicResource Loc.Media.Notification.Position.BottomCenter}" Tag="{x:Static settings:TrackChangeNotificationPosition.BottomCenter}" />
+                                        <ComboBoxItem Content="{DynamicResource Loc.Media.Notification.Position.BottomRight}" Tag="{x:Static settings:TrackChangeNotificationPosition.BottomRight}" />
                                     </ComboBox>
                                 </components:SettingsRow>
                                 <components:SettingsRow
                                     Icon="{ui:SymbolIcon Timer24}"
                                     IsNested="True"
-                                    Title="停留时间">
+                                    Title="{DynamicResource Loc.Media.Notification.Duration.Title}">
                                     <StackPanel Orientation="Horizontal">
                                         <Slider
                                             IsSnapToTickEnabled="True"
@@ -436,27 +436,27 @@
                                             Style="{StaticResource AfSettingsRowSliderStyle}"
                                             TickFrequency="1"
                                             Value="{Binding ViewModel.TrackChangeNotificationDurationSeconds, Mode=TwoWay}" />
-                                        <TextBlock Style="{StaticResource AfSettingsRowValueStyle}" Text="{Binding ViewModel.TrackChangeNotificationDurationSeconds, StringFormat={}{0} 秒}" />
+                                        <TextBlock Style="{StaticResource AfSettingsRowValueStyle}" Text="{Binding ViewModel.TrackChangeNotificationDurationText}" />
                                     </StackPanel>
                                 </components:SettingsRow>
                                 <components:SettingsRow
-                                    Description="固定显示器，或跟随前台窗口所在显示器"
+                                    Description="{DynamicResource Loc.Media.Notification.TargetMode.Description}"
                                     Icon="{ui:SymbolIcon ProjectionScreen24}"
                                     IsNested="True"
-                                    Title="目标显示器">
+                                    Title="{DynamicResource Loc.Common.TargetMonitor}">
                                     <ComboBox
                                         MinWidth="200"
                                         SelectedValue="{Binding ViewModel.TrackChangeNotificationTargetMode, Mode=TwoWay}"
                                         SelectedValuePath="Tag">
-                                        <ComboBoxItem Content="固定显示器" Tag="{x:Static settings:NotificationTargetMode.Fixed}" />
-                                        <ComboBoxItem Content="跟随前台窗口所在显示器" Tag="{x:Static settings:NotificationTargetMode.ForegroundWindow}" />
+                                        <ComboBoxItem Content="{DynamicResource Loc.Media.Notification.TargetMode.Fixed}" Tag="{x:Static settings:NotificationTargetMode.Fixed}" />
+                                        <ComboBoxItem Content="{DynamicResource Loc.Media.Notification.TargetMode.ForegroundWindow}" Tag="{x:Static settings:NotificationTargetMode.ForegroundWindow}" />
                                     </ComboBox>
                                 </components:SettingsRow>
                                 <components:SettingsRow
                                     Icon="{ui:SymbolIcon Desktop24}"
                                     IsEnabled="{Binding ViewModel.CanSelectTrackChangeNotificationMonitor}"
                                     IsNested="True"
-                                    Title="固定到哪一块显示器">
+                                    Title="{DynamicResource Loc.Media.Notification.FixedMonitor.Title}">
                                     <ComboBox
                                         DisplayMemberPath="DisplayName"
                                         ItemsSource="{Binding ViewModel.MonitorOptions}"
@@ -473,7 +473,7 @@
                     Margin="0,16,0,40"
                     HorizontalAlignment="Left"
                     Click="ResetButton_Click"
-                    Content="恢复本页默认设置"
+                    Content="{DynamicResource Loc.Common.ResetPageDefaults}"
                     Icon="{ui:SymbolIcon ArrowReset24}"
                     Style="{StaticResource AfSettingsButtonStyle}" />
             </StackPanel>

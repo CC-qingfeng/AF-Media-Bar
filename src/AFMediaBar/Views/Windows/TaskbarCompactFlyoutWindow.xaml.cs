@@ -7,6 +7,7 @@ using System.Windows.Threading;
 using AFMediaBar.Classes.Interop;
 using AFMediaBar.Classes.Models;
 using AFMediaBar.Classes.Services;
+using AFMediaBar.Resources;
 using Wpf.Ui.Controls;
 using Button = System.Windows.Controls.Button;
 
@@ -69,10 +70,13 @@ public partial class TaskbarCompactFlyoutWindow : FluentWindow, IDisposable
     public void ShowVolume(string sourceName, int? volume, TrayIconBounds anchor)
     {
         _isUpdating = true;
-        VolumeSourceText.Text = string.IsNullOrWhiteSpace(sourceName) ? "当前媒体" : sourceName;
+        // 文案在每次显示时按当前语言取：窗口长期存在，但可见内容每次都重新填，因此不需要订阅语言变化。
+        // The text is read in the active language every time the menu is shown: the window lives on, but its visible content is
+        // filled again on each presentation, so no language subscription is needed.
+        VolumeSourceText.Text = string.IsNullOrWhiteSpace(sourceName) ? Translations.Get("Panel.Volume.CurrentMedia") : sourceName;
         VolumeSlider.IsEnabled = volume is not null;
         VolumeSlider.Value = volume ?? 0;
-        VolumePercentText.Text = volume is int value ? $"{value}%" : "不可用";
+        VolumePercentText.Text = volume is int value ? $"{value}%" : Translations.Get("Panel.Volume.Unavailable");
         _isUpdating = false;
         Width = 100;
         ShowMode(TaskbarCompactFlyoutMode.Volume, anchor);

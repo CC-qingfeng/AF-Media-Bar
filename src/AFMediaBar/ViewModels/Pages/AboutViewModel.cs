@@ -1,8 +1,10 @@
 using System.Collections.ObjectModel;
 using AFMediaBar.Classes.Models.Updates;
 using AFMediaBar.Classes.Services;
+using AFMediaBar.Classes.Services.Localization;
 using AFMediaBar.Classes.Services.Updates;
 using AFMediaBar.Classes.Settings;
+using AFMediaBar.Resources;
 
 namespace AFMediaBar.ViewModels.Pages
 {
@@ -22,6 +24,7 @@ namespace AFMediaBar.ViewModels.Pages
         private readonly UpdateService _updateService;
         private readonly SettingsPersistenceService _settingsPersistence;
         private readonly StartupRegistrationService _startupRegistration;
+        private readonly LocalizationService _localization;
 
         /// <summary>设置启动自动启动之后的状态说明；失败原因必须可见，而不是让开关静默弹回。/ Status text after applying run-at-startup; a failure reason has to be visible instead of the switch silently bouncing back.</summary>
         [ObservableProperty]
@@ -101,17 +104,46 @@ namespace AFMediaBar.ViewModels.Pages
         /// <param name="updateService">更新下载器协调器。/ Update downloader coordinator.</param>
         /// <param name="settingsPersistence">设置文件与「我的默认设置」快照的所有者。/ Owner of the settings file and the user-defaults snapshot.</param>
         /// <param name="startupRegistration">开机自动启动的注册表登记。/ Registry registration for run-at-startup.</param>
+        /// <param name="localization">界面语言：本页既修改它，也要在它变化后刷新自己产出的文案。/ Interface language: this page changes it and refreshes its own text when it changes.</param>
         public AboutViewModel(
             UpdateService updateService,
             SettingsPersistenceService settingsPersistence,
-            StartupRegistrationService startupRegistration)
+            StartupRegistrationService startupRegistration,
+            LocalizationService localization)
         {
             _updateService = updateService;
             _settingsPersistence = settingsPersistence;
             _startupRegistration = startupRegistration;
+            _localization = localization;
             CurrentVersion = updateService.CurrentVersion;
             _updateService.UpdateStateChanged += ApplyState;
+
+            // 本页有三处文案是代码拼出来的（启动项失败原因、默认设置状态、更新状态行），它们的取值在语言变化时
+            // 必须重取；空的属性名让 WPF 重新读取全部绑定，而不是逐个列出属性名——漏掉一个就会留下半页旧语言。
+            // Three strings on this page are composed in code (the startup failure reason, the defaults status, and the
+            // update status line) and have to be re-read when the language changes; the empty property name makes WPF
+            // re-read every binding instead of listing properties one by one, where missing one leaves half a page in the
+            // old language.
+            _localization.LanguageChanged += OnLanguageChanged;
+
             ApplyState(_updateService.CurrentState);
+        }
+
+        /// <summary>
+        /// 语言变化后按当前状态重算本页文案。
+        ///
+        /// 只发通知是不够的：更新状态行、亮点标题与渠道说明是**上一次状态发布时**按当时的语言拼好并存在属性里的，
+        /// 重新读取绑定拿到的仍是那句旧语言。因此先按当前状态重算，再让 WPF 重读全部绑定。
+        /// Recomputes this page's text from the current state after a language change.
+        ///
+        /// Raising notifications alone is not enough: the update status line, the highlight title, and the channel description were
+        /// composed in the language of the *last state publication* and stored in properties, so re-reading the bindings would
+        /// still yield that old sentence. The state is therefore applied again first, and WPF then re-reads every binding.
+        /// </summary>
+        private void OnLanguageChanged(object? sender, EventArgs e)
+        {
+            ApplyState(_updateService.CurrentState);
+            OnPropertyChanged(string.Empty);
         }
 
         /// <summary>自动检查更新开关；与设置文件双向同步。/ Automatic update check toggle, synchronized with the settings file.</summary>
@@ -181,7 +213,7 @@ namespace AFMediaBar.ViewModels.Pages
                 var failure = _startupRegistration.Apply(value);
                 if (failure is not null)
                 {
-                    StartupStatusText = $"无法修改启动项：{failure}";
+                    StartupStatusText = Translations.Format("About.Status.StartupFailed", failure);
                     OnPropertyChanged();
                     return;
                 }
@@ -197,15 +229,36 @@ namespace AFMediaBar.ViewModels.Pages
 
         /// <summary>「我的默认设置」的状态说明。/ Status text for the user-defaults snapshot.</summary>
         public string UserDefaultsStatusText => HasUserDefaults
-            ? "已保存：各页的「恢复默认设置」都会回到这份快照"
-            : "未保存：各页的「恢复默认设置」回到程序内置默认值";
+            ? Translations.Get("About.Row.SaveDefaults.Saved")
+            : Translations.Get("About.Row.SaveDefaults.NotSaved");
+
+        /// <summary>
+        /// 界面语言选项。写入设置后由 <see cref="LocalizationService"/> 解析并生效：本页只负责保存选项，
+        /// 不直接修改任何界面文案，因此"选择语言"和"界面换语言"永远只有一条路径。
+        /// The interface-language option. Writing the setting is all this page does; <see cref="LocalizationService"/>
+        /// resolves and applies it, so "choosing a language" and "the interface changing language" always follow one path.
+        /// </summary>
+        public InterfaceLanguage InterfaceLanguage
+        {
+            get => SettingsManager.Current.InterfaceLanguage;
+            set
+            {
+                if (SettingsManager.Current.InterfaceLanguage == value)
+                {
+                    return;
+                }
+
+                SettingsManager.Current.InterfaceLanguage = value;
+                OnPropertyChanged();
+            }
+        }
 
         /// <summary>把当前设置保存为「我的默认设置」，此后所有重置入口都以它为准。/ Saves the current settings as the user's defaults; every reset entry then uses them.</summary>
         [RelayCommand]
         private void SaveUserDefaults()
         {
             var failure = _settingsPersistence.SaveCurrentAsUserDefaults();
-            StartupStatusText = failure is null ? string.Empty : $"无法保存默认设置：{failure}";
+            StartupStatusText = failure is null ? string.Empty : Translations.Format("About.Status.SaveDefaultsFailed", failure);
             OnPropertyChanged(nameof(HasUserDefaults));
             OnPropertyChanged(nameof(UserDefaultsStatusText));
         }
@@ -215,7 +268,7 @@ namespace AFMediaBar.ViewModels.Pages
         private void ClearUserDefaults()
         {
             var failure = _settingsPersistence.ClearUserDefaults();
-            StartupStatusText = failure is null ? string.Empty : $"无法删除默认设置：{failure}";
+            StartupStatusText = failure is null ? string.Empty : Translations.Format("About.Status.ClearDefaultsFailed", failure);
             OnPropertyChanged(nameof(HasUserDefaults));
             OnPropertyChanged(nameof(UserDefaultsStatusText));
         }
@@ -235,6 +288,7 @@ namespace AFMediaBar.ViewModels.Pages
         {
             OnPropertyChanged(nameof(AutoCheckEnabled));
             OnPropertyChanged(nameof(LaunchAtStartup));
+            OnPropertyChanged(nameof(InterfaceLanguage));
             OnPropertyChanged(nameof(HasUserDefaults));
             OnPropertyChanged(nameof(UserDefaultsStatusText));
             ApplyState(_updateService.CurrentState);
@@ -274,7 +328,12 @@ namespace AFMediaBar.ViewModels.Pages
             CanSkip = UpdatePresentationPolicy.CanSkipVersion(state);
             CanOpenDownloadPage = state.Phase is UpdatePhase.ManualOnly or UpdatePhase.Failed ||
                                   state.Phase == UpdatePhase.Ready && state.IsInstallBlocked;
-            IsPortable = state.InstallBlockedReason == UpdateInstallPlanPolicy.PortableBlockedReason;
+            // 判断依据是"这条原因是不是便携版那一条"，而不是"它是否等于当前语言的便携版文案"：状态里的文本是
+            // 做出判断那一刻的语言，切换语言后两次取值属于不同语言，直接比较会让便携版提示消失。
+            // The criterion is "is this reason the portable one" rather than "does it equal the portable wording in the active
+            // language": the text inside the state belongs to the language of the decision, so a direct comparison would make
+            // the portable notice vanish after a language switch.
+            IsPortable = UpdateInstallPlanPolicy.IsPortableBlockedReason(state.InstallBlockedReason);
             HasSkippedVersion = !string.IsNullOrEmpty(SettingsManager.Current.Update.SkippedVersion);
 
             HighlightTitle = state.Manifest?.Title ?? (state.AvailableVersion is { } version ? $"AF Media Bar {version}" : string.Empty);

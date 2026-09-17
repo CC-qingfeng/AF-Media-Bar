@@ -1,3 +1,6 @@
+using AFMediaBar.Classes.Services.Localization;
+using AFMediaBar.Resources;
+
 namespace AFMediaBar.Classes.Services.Updates;
 
 /// <summary>
@@ -25,11 +28,58 @@ public sealed record UpdateInstallDecision(bool CanInstall, bool UseRunAs, strin
 /// </summary>
 public static class UpdateInstallPlanPolicy
 {
-    /// <summary>便携版不能自动安装：没有安装记录，也就没有可以原位替换的目录。/ A portable copy cannot be installed automatically, having no installation to replace in place.</summary>
-    public const string PortableBlockedReason = "当前是便携版，无法自动安装";
+    /// <summary>
+    /// 便携版不能自动安装：没有安装记录，也就没有可以原位替换的目录。
+    ///
+    /// 它是属性而不是常量：常量会在编译期把某一种语言写死进调用方，而这一句会出现在设置页的状态行上，必须跟着
+    /// 界面语言走。<c>UpdateState.InstallBlockedReason</c> 保存的是做出判断时那一刻的文案，因此界面比较这两者时
+    /// 要使用同一个语言的取值。
+    /// A portable copy cannot be installed automatically, having no installation to replace in place.
+    ///
+    /// It is a property rather than a constant: a constant would bake one language into every caller at compile time,
+    /// while this sentence appears on the settings status line and has to follow the interface language.
+    /// <c>UpdateState.InstallBlockedReason</c> holds the wording as it was when the decision was made, so a surface
+    /// comparing the two has to read them in the same language.
+    /// </summary>
+    public static string PortableBlockedReason => Translations.Get("Update.Install.Blocked.Portable");
 
     /// <summary>其它实例在运行时推迟安装，避免两个实例争抢同一份设置与托盘图标。/ Installing is deferred while other instances run, so two instances cannot fight over settings and the tray icon.</summary>
-    public const string OtherInstancesBlockedReason = "程序还有其它实例在运行";
+    public static string OtherInstancesBlockedReason => Translations.Get("Update.Install.Blocked.OtherInstances");
+
+    /// <summary>
+    /// 判断一个已经发布的原因文本是否就是"便携版"这一条。
+    ///
+    /// 界面不能只把它与当前语言的取值比一次：<c>UpdateState.InstallBlockedReason</c> 保存的是**做出判断那一刻**的文案，
+    /// 而用户可以在那之后切换界面语言，此时两种取值属于不同语言，比较会失败，便携版提示就会在切换语言后突然消失。
+    /// 因此这里对三种语言的取值都比一次，只回答"是不是这一条原因"，不参与任何显示。
+    /// Decides whether a published reason text is the portable one.
+    ///
+    /// A surface cannot compare it against the active language alone: <c>UpdateState.InstallBlockedReason</c> holds the wording
+    /// of the *moment the decision was made*, and a user may switch the interface language afterwards, at which point the two
+    /// values belong to different languages, the comparison fails, and the portable notice silently disappears. This compares
+    /// against all three languages and answers only "is this that reason", taking no part in display.
+    /// </summary>
+    /// <param name="reason">已发布的原因文本；为 null 或空时返回 false。/ The published reason text; null or empty yields false.</param>
+    public static bool IsPortableBlockedReason(string? reason)
+    {
+        if (string.IsNullOrEmpty(reason))
+        {
+            return false;
+        }
+
+        foreach (var language in Enum.GetValues<LocalizationLanguage>())
+        {
+            if (string.Equals(
+                    Translations.Get("Update.Install.Blocked.Portable", language),
+                    reason,
+                    StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     /// <summary>
     /// 组装静默安装参数。

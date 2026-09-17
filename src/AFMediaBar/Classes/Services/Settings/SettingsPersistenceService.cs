@@ -1,5 +1,6 @@
 using AFMediaBar.Classes.Settings;
 using AFMediaBar.Classes.Models.Layout;
+using AFMediaBar.Classes.Services.Localization;
 using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
@@ -11,7 +12,7 @@ namespace AFMediaBar.Classes.Services;
 /// <summary>负责用户设置 JSON 的加载、恢复、原子保存和防抖。 / Owns loading, recovery, atomic saving and debouncing of user settings JSON.</summary>
 public sealed class SettingsPersistenceService : IDisposable
 {
-    public const int CurrentSchemaVersion = 12;
+    public const int CurrentSchemaVersion = 13;
     private readonly string _directoryPath;
     private readonly string _settingsPath;
     private readonly string _backupPath;
@@ -363,6 +364,17 @@ public sealed class SettingsPersistenceService : IDisposable
             // default; the assignment is explicit anyway, because "on by default" is a product decision that belongs in the
             // migration instead of resting on the coincidence that a missing field equals a default.
             result.LaunchAtStartup = true;
+        }
+        if (envelope.SchemaVersion <= 12)
+        {
+            // Schema 13 新增界面语言。旧文件里没有该字段，反序列化会保留声明处的默认值，这里仍然显式赋值：
+            // 默认「跟随系统」是产品决定，而不是"缺字段恰好等于枚举值 0"这种巧合；同时它保证旧用户不会被
+            // 悄悄固定到某一种语言上——他们的系统是什么语言，界面就是什么语言。
+            // Schema 13 adds the interface language. Older files have no such field and deserialization would keep the
+            // declared default; the assignment is explicit anyway, because "follow the system" is a product decision
+            // rather than the coincidence that a missing field reads as enum value zero. It also keeps an existing user
+            // from being silently pinned to one language: their interface follows whatever their system speaks.
+            result.InterfaceLanguage = InterfaceLanguage.System;
         }
         return result.Normalize();
     }

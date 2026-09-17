@@ -2,7 +2,9 @@ using System.Diagnostics;
 using System.Windows.Input;
 using AFMediaBar.Classes.Models.Updates;
 using AFMediaBar.Classes.Services;
+using AFMediaBar.Classes.Services.Localization;
 using AFMediaBar.Classes.Services.Updates;
+using AFMediaBar.Resources;
 using CommunityToolkit.Mvvm.Input;
 
 namespace AFMediaBar.ViewModels.Windows
@@ -16,6 +18,7 @@ namespace AFMediaBar.ViewModels.Windows
     public partial class MainWindowViewModel : ObservableObject
     {
         private readonly UpdateService _updateService;
+        private readonly LocalizationService _localization;
 
         [ObservableProperty]
         private string _applicationTitle = "AFMediaBar";
@@ -26,7 +29,7 @@ namespace AFMediaBar.ViewModels.Windows
         /// and the "click to restart and install" offer become visible inside the menu.
         /// </summary>
         [ObservableProperty]
-        private string _updateMenuHeader = "检查更新";
+        private string _updateMenuHeader = Translations.Get("Update.Tray.Check");
 
         /// <summary>更新那一行当前是否可点击：检查、下载与校验期间不可点击。/ Whether the update entry is clickable: it is not during a check, download or verification.</summary>
         [ObservableProperty]
@@ -85,9 +88,14 @@ namespace AFMediaBar.ViewModels.Windows
         /// </summary>
         /// <param name="mediaSessionService">媒体会话协调器。/ Media session coordinator.</param>
         /// <param name="updateService">更新下载器协调器。/ Update downloader coordinator.</param>
-        public MainWindowViewModel(MediaSessionService mediaSessionService, UpdateService updateService)
+        /// <param name="localization">界面语言：更新那一行的标题由代码拼出，必须在语言变化后重取。/ Interface language: the update entry's title is composed in code and has to be fetched again when the language changes.</param>
+        public MainWindowViewModel(
+            MediaSessionService mediaSessionService,
+            UpdateService updateService,
+            LocalizationService localization)
         {
             _updateService = updateService;
+            _localization = localization;
             SelectMediaSessionCommand = new RelayCommand<string>(key => mediaSessionService.SelectSession(key ?? string.Empty));
             ReconnectMediaSessionCommand = new AsyncRelayCommand(() => mediaSessionService.ReconnectAsync());
             OpenSettingsCommand = new RelayCommand(() => OpenSettingsRequested?.Invoke(this, EventArgs.Empty));
@@ -104,7 +112,24 @@ namespace AFMediaBar.ViewModels.Windows
             // Both the view model and the update service are singletons, so the subscription lives as long as the
             // process; state events are always published on the UI thread.
             _updateService.UpdateStateChanged += ApplyUpdateState;
+
+            // 托盘菜单那一行的标题是拼出来的文案，不是 XAML 里的动态资源，因此语言变化后要按新语言重新求值：
+            // 只发 PropertyChanged 而不重算，属性值仍然是旧语言的那一句。
+            // The tray entry's title is composed in code rather than being a dynamic resource in XAML, so it has to be
+            // recomputed in the new language: raising PropertyChanged without recomputing would keep the old wording.
+            _localization.LanguageChanged += OnLanguageChanged;
+
             ApplyUpdateState(_updateService.CurrentState);
+        }
+
+        private void OnLanguageChanged(object? sender, EventArgs e)
+        {
+            ApplyUpdateState(_updateService.CurrentState);
+
+            // 空的属性名让 WPF 重读全部绑定（CommunityToolkit 的 ObservableObject 支持）。
+            // The empty property name makes WPF re-read every binding, which CommunityToolkit's ObservableObject
+            // supports.
+            OnPropertyChanged(string.Empty);
         }
 
         private void ApplyUpdateState(UpdateState state)

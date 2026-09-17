@@ -106,6 +106,9 @@ public partial class DisplayModesPage : INavigableView<DisplayModesViewModel>
 
     private async void ResetButton_Click(object sender, RoutedEventArgs e)
     {
-        if (await SettingsResetDialog.ConfirmAsync("显示模式")) ViewModel.ResetDisplayModes();
+        // 传的是作用域名称的文案键而不是名称本身：句子由语言文件拼装，页面不参与翻译。
+        // The argument is the localization key of the scope name rather than the name itself: the language file composes
+        // the sentence and the page never takes part in translation.
+        if (await SettingsResetDialog.ConfirmAsync("Common.Page.DisplayModes")) ViewModel.ResetDisplayModes();
     }
 }

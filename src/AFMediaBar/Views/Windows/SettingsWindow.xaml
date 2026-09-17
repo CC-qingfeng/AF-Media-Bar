@@ -75,7 +75,7 @@
                         Margin="30,3,0,0"
                         FontSize="11"
                         Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                        Text="设置" />
+                        Text="{DynamicResource Loc.Common.Settings}" />
                 </StackPanel>
             </ui:NavigationView.PaneHeader>
             <ui:NavigationView.AutoSuggestBox>
@@ -87,7 +87,7 @@
                 -->
                 <ui:AutoSuggestBox
                     x:Name="AutoSuggestBox"
-                    PlaceholderText="搜索设置"
+                    PlaceholderText="{DynamicResource Loc.Settings.Search.Placeholder}"
                     SuggestionChosen="OnSearchSuggestionChosen"
                     TextChanged="OnSearchTextChanged">
                     <ui:AutoSuggestBox.Icon>
@@ -128,15 +128,15 @@
                     "appearance", because the first name said nothing about its contents and the second page also
                     owns window material.
                 -->
-                <ui:NavigationViewItem Content="显示模式" Icon="{ui:SymbolIcon Desktop24}"
+                <ui:NavigationViewItem Content="{DynamicResource Loc.Common.Page.DisplayModes}" Icon="{ui:SymbolIcon Desktop24}"
                                        TargetPageType="{x:Type pages:DisplayModesPage}" />
-                <ui:NavigationViewItem Content="媒体与通知" Icon="{ui:SymbolIcon PuzzlePiece24}"
+                <ui:NavigationViewItem Content="{DynamicResource Loc.Common.Page.MediaAndNotifications}" Icon="{ui:SymbolIcon PuzzlePiece24}"
                                        TargetPageType="{x:Type pages:ExtraFeaturesPage}" />
-                <ui:NavigationViewItem Content="交互" Icon="{ui:SymbolIcon HandDraw24}"
+                <ui:NavigationViewItem Content="{DynamicResource Loc.Common.Page.Interaction}" Icon="{ui:SymbolIcon HandDraw24}"
                                        TargetPageType="{x:Type pages:InteractionPage}" />
-                <ui:NavigationViewItem Content="歌词" Icon="{ui:SymbolIcon TextQuote24}"
+                <ui:NavigationViewItem Content="{DynamicResource Loc.Common.Page.Lyrics}" Icon="{ui:SymbolIcon TextQuote24}"
                                        TargetPageType="{x:Type pages:LyricsPage}" />
-                <ui:NavigationViewItem Content="外观"
+                <ui:NavigationViewItem Content="{DynamicResource Loc.Common.Page.Appearance}"
                                        Icon="{ui:SymbolIcon PaintBrush24}"
                                        TargetPageType="{x:Type pages:AppearancePage}" />
             </ui:NavigationView.MenuItems>
@@ -156,7 +156,7 @@
                     Content="{Binding ViewModel.UpdateNoticeTitle}"
                     Icon="{ui:SymbolIcon ArrowSync24}"
                     Visibility="Collapsed" />
-                <ui:NavigationViewItem Content="应用与关于" Icon="{ui:SymbolIcon QuestionCircle24}"
+                <ui:NavigationViewItem Content="{DynamicResource Loc.Common.Page.AppAndAbout}" Icon="{ui:SymbolIcon QuestionCircle24}"
                                        TargetPageType="{x:Type pages:AboutPage}" />
             </ui:NavigationView.FooterMenuItems>
 

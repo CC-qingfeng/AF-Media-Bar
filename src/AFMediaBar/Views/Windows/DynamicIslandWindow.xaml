@@ -26,17 +26,17 @@
                      BorderThickness="1"
                      DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
             <ui:MenuItem x:Name="SessionsMenuItem"
-                         Header="切换媒体源"
+                         Header="{DynamicResource Loc.Common.SwitchMediaSource}"
                          Icon="{ui:SymbolIcon MusicNote216}" />
             <Separator />
-            <ui:MenuItem Header="重新连接 SMTC"
+            <ui:MenuItem Header="{DynamicResource Loc.Common.ReconnectSmtc}"
                          Icon="{ui:SymbolIcon ArrowSync24}"
                          Command="{Binding ViewModel.ReconnectMediaSessionCommand}" />
-            <ui:MenuItem Header="设置"
+            <ui:MenuItem Header="{DynamicResource Loc.Common.Settings}"
                          Icon="{ui:SymbolIcon Settings24}"
                          Command="{Binding ViewModel.OpenSettingsCommand}" />
             <Separator />
-            <ui:MenuItem Header="退出"
+            <ui:MenuItem Header="{DynamicResource Loc.Common.Exit}"
                          Icon="{ui:SymbolIcon ArrowExit20}"
                          Command="{Binding ViewModel.ExitApplicationCommand}" />
         </ContextMenu>

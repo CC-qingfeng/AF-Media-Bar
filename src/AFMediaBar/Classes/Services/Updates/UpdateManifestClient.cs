@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
 using AFMediaBar.Classes.Models.Updates;
+using AFMediaBar.Resources;
 
 namespace AFMediaBar.Classes.Services.Updates;
 
@@ -81,7 +82,10 @@ public sealed class UpdateManifestClient
             firstFailure ??= parsed.FailureReason;
         }
 
-        return new UpdateManifestFetchResult(null, firstFailure ?? "无法访问版本清单", null);
+        return new UpdateManifestFetchResult(
+            null,
+            firstFailure ?? Translations.Get("Update.Reason.ManifestUnreachable"),
+            null);
     }
 
     /// <summary>当前会尝试的端点列表，已包含测试覆盖变量。/ Endpoints that will be attempted, including the test override.</summary>
@@ -111,7 +115,7 @@ public sealed class UpdateManifestClient
             if (!Uri.TryCreate(endpoint, UriKind.Absolute, out var uri) ||
                 (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp))
             {
-                return (null, "清单地址无效");
+                return (null, Translations.Get("Update.Reason.ManifestEndpointInvalid"));
             }
 
             using var request = new HttpRequestMessage(HttpMethod.Get, uri);
@@ -120,7 +124,7 @@ public sealed class UpdateManifestClient
             using var response = await HttpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
             {
-                return (null, $"无法访问版本清单（HTTP {(int)response.StatusCode}）");
+                return (null, Translations.Format("Update.Reason.ManifestHttp", (int)response.StatusCode));
             }
 
             return (await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false), null);
@@ -132,7 +136,7 @@ public sealed class UpdateManifestClient
         catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or IOException or UnauthorizedAccessException)
         {
             Debug.WriteLine($"[Update] Manifest endpoint failed ({endpoint}): {exception.Message}");
-            return (null, "无法访问版本清单（网络错误）");
+            return (null, Translations.Get("Update.Reason.ManifestNetwork"));
         }
     }
 }

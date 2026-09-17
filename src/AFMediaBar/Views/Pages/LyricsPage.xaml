@@ -37,7 +37,7 @@
             <Setter Property="Badge" Value="" />
             <Style.Triggers>
                 <DataTrigger Binding="{Binding ViewModel.CanConfigureTwoLine}" Value="False">
-                    <Setter Property="Badge" Value="需先启用歌词" />
+                    <Setter Property="Badge" Value="{DynamicResource Loc.Lyrics.Row.TwoLine.Badge}" />
                     <Setter Property="BadgeTone" Value="Attention" />
                 </DataTrigger>
             </Style.Triggers>
@@ -55,9 +55,9 @@
             Margin="{StaticResource AfSettingsHeaderMargin}"
             MaxWidth="{StaticResource AfSettingsContentMaxWidth}"
             PageIcon="{ui:SymbolIcon TextQuote24}"
-            Subtitle="在任务栏静置层显示当前歌词"
+            Subtitle="{DynamicResource Loc.Lyrics.Header.Subtitle}"
             Target="{Binding ElementName=PageScroll}"
-            Title="歌词" />
+            Title="{DynamicResource Loc.Common.Page.Lyrics}" />
 
         <ScrollViewer
             x:Name="PageScroll"
@@ -70,26 +70,26 @@
                 MaxWidth="{StaticResource AfSettingsContentMaxWidth}"
                 Loaded="OnPageLoaded">
 
-                <components:SettingsGroup Header="显示" Icon="{ui:SymbolIcon TextQuote24}">
+                <components:SettingsGroup Header="{DynamicResource Loc.Common.Group.LyricsDisplay}" Icon="{ui:SymbolIcon TextQuote24}">
                     <StackPanel>
                         <components:SettingsCallout
                             Margin="0,0,0,12"
                             IsAccent="True"
                             Symbol="TextQuote24"
-                            Text="有歌词时，媒体栏显示歌词；没有歌词时显示标题与歌手。" />
+                            Text="{DynamicResource Loc.Lyrics.Callout.Display}" />
 
                         <components:SettingsRow
-                            Description="按播放进度同步显示当前句；关闭后显示标题与歌手"
+                            Description="{DynamicResource Loc.Lyrics.Row.ShowLyrics.Description}"
                             Icon="{ui:SymbolIcon TextQuote24}"
-                            Title="显示实时歌词">
+                            Title="{DynamicResource Loc.Lyrics.Row.ShowLyrics.Title}">
                             <ui:ToggleSwitch IsChecked="{Binding ViewModel.LyricsEnabled, Mode=TwoWay}" />
                         </components:SettingsRow>
 
                         <components:SettingsRow
-                            Description="在当前句下方再显示一行"
+                            Description="{DynamicResource Loc.Lyrics.Row.TwoLine.Description}"
                             Icon="{ui:SymbolIcon TextAlignJustify24}"
                             Style="{StaticResource TwoLineRowStyle}"
-                            Title="双行歌词">
+                            Title="{DynamicResource Loc.Lyrics.Row.TwoLine.Title}">
                             <ui:ToggleSwitch
                                 IsChecked="{Binding ViewModel.TwoLineLyricsEnabled, Mode=TwoWay}"
                                 IsEnabled="{Binding ViewModel.CanConfigureTwoLine}" />
@@ -101,24 +101,24 @@
                             IsExpanded="{Binding ViewModel.TwoLineLyricsEnabled, Mode=OneWay}">
                             <ui:CardExpander.Header>
                                 <StackPanel>
-                                    <TextBlock Style="{StaticResource AfSettingsRowTitleStyle}" Text="第二行内容" />
-                                    <TextBlock Style="{StaticResource AfSettingsRowDescriptionStyle}" Text="选择下一句歌词或当前句翻译" />
+                                    <TextBlock Style="{StaticResource AfSettingsRowTitleStyle}" Text="{DynamicResource Loc.Lyrics.Row.SecondLine.Title}" />
+                                    <TextBlock Style="{StaticResource AfSettingsRowDescriptionStyle}" Text="{DynamicResource Loc.Lyrics.Row.SecondLine.Description}" />
                                 </StackPanel>
                             </ui:CardExpander.Header>
                             <StackPanel>
                                 <components:SettingsDiagram Margin="0,0,0,12" Kind="LyricsTwoLine" />
 
                                 <components:SettingsRow
-                                    Description="翻译缺失时不会留下空白占位"
+                                    Description="{DynamicResource Loc.Lyrics.Row.SecondLine.Note}"
                                     Icon="{ui:SymbolIcon TextBulletListSquare24}"
                                     IsNested="True"
-                                    Title="第二行内容">
+                                    Title="{DynamicResource Loc.Lyrics.Row.SecondLine.Title}">
                                     <ComboBox
                                         MinWidth="160"
                                         SelectedValue="{Binding ViewModel.SecondaryLineMode, Mode=TwoWay}"
                                         SelectedValuePath="Tag">
-                                        <ComboBoxItem Content="下一句歌词" Tag="{x:Static settings:LyricsSecondaryLineMode.NextLine}" />
-                                        <ComboBoxItem Content="当前句翻译" Tag="{x:Static settings:LyricsSecondaryLineMode.Translation}" />
+                                        <ComboBoxItem Content="{DynamicResource Loc.Lyrics.SecondLine.NextLine}" Tag="{x:Static settings:LyricsSecondaryLineMode.NextLine}" />
+                                        <ComboBoxItem Content="{DynamicResource Loc.Lyrics.SecondLine.Translation}" Tag="{x:Static settings:LyricsSecondaryLineMode.Translation}" />
                                     </ComboBox>
                                 </components:SettingsRow>
                             </StackPanel>
@@ -126,21 +126,21 @@
                     </StackPanel>
                 </components:SettingsGroup>
 
-                <components:SettingsGroup Header="对齐" Icon="{ui:SymbolIcon TextAlignLeft24}">
+                <components:SettingsGroup Header="{DynamicResource Loc.Common.Group.LyricsAlignment}" Icon="{ui:SymbolIcon TextAlignLeft24}">
                     <StackPanel>
                         <components:SettingsDiagram Margin="0,0,0,12" Kind="LyricsAlignment" />
 
                         <components:SettingsRow
-                            Description="歌词在静置层的对齐方式；标题与歌手的对齐在显示模式页"
+                            Description="{DynamicResource Loc.Lyrics.Row.Alignment.Description}"
                             Icon="{ui:SymbolIcon TextAlignLeft24}"
-                            Title="歌词对齐">
+                            Title="{DynamicResource Loc.Lyrics.Row.Alignment.Title}">
                             <ComboBox
                                 MinWidth="160"
                                 SelectedValue="{Binding ViewModel.TextAlignment, Mode=TwoWay}"
                                 SelectedValuePath="Tag">
-                                <ComboBoxItem Content="左对齐" Tag="{x:Static settings:LyricsTextAlignment.Left}" />
-                                <ComboBoxItem Content="居中" Tag="{x:Static settings:LyricsTextAlignment.Center}" />
-                                <ComboBoxItem Content="右对齐" Tag="{x:Static settings:LyricsTextAlignment.Right}" />
+                                <ComboBoxItem Content="{DynamicResource Loc.Common.AlignLeft}" Tag="{x:Static settings:LyricsTextAlignment.Left}" />
+                                <ComboBoxItem Content="{DynamicResource Loc.Common.AlignCenter}" Tag="{x:Static settings:LyricsTextAlignment.Center}" />
+                                <ComboBoxItem Content="{DynamicResource Loc.Common.AlignRight}" Tag="{x:Static settings:LyricsTextAlignment.Right}" />
                             </ComboBox>
                         </components:SettingsRow>
                     </StackPanel>
@@ -150,7 +150,7 @@
                     Margin="0,16,0,40"
                     HorizontalAlignment="Left"
                     Click="ResetButton_Click"
-                    Content="恢复本页默认设置"
+                    Content="{DynamicResource Loc.Common.ResetPageDefaults}"
                     Icon="{ui:SymbolIcon ArrowReset24}"
                     Style="{StaticResource AfSettingsButtonStyle}" />
             </StackPanel>

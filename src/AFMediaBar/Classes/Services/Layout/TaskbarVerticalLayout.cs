@@ -1,5 +1,7 @@
 using AFMediaBar.Classes.Models.Layout;
 
+using AFMediaBar.Resources;
+
 namespace AFMediaBar.Classes.Services.Layout;
 
 /// <summary>
@@ -32,7 +34,7 @@ public static class TaskbarVerticalLayout
     public static LayoutSchema Create() => new()
     {
         Orientation = LayoutOrientation.Vertical,
-        Description = "任务栏主题（竖向）：适配任务栏在屏幕左侧或右侧",
+        Description = Translations.Get("Layout.Preset.TaskbarVertical"),
         Canvas = new CanvasConfig
         {
             Width = 80,

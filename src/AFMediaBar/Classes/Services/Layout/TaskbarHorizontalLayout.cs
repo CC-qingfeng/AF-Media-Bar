@@ -1,5 +1,7 @@
 using AFMediaBar.Classes.Models.Layout;
 
+using AFMediaBar.Resources;
+
 namespace AFMediaBar.Classes.Services.Layout;
 
 /// <summary>
@@ -26,7 +28,7 @@ public static class TaskbarHorizontalLayout
     public static LayoutSchema Create() => new()
     {
         Orientation = LayoutOrientation.Horizontal,
-        Description = "任务栏主题（横向）：适配任务栏在屏幕顶部或底部",
+        Description = Translations.Get("Layout.Preset.TaskbarHorizontal"),
         Canvas = new CanvasConfig
         {
             Width = 300,

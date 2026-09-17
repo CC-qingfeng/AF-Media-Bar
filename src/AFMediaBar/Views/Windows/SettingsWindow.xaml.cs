@@ -1,6 +1,7 @@
 using AFMediaBar.ViewModels.Windows;
 using AFMediaBar.Classes.Services;
 using AFMediaBar.Components;
+using AFMediaBar.Resources;
 using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
@@ -143,7 +144,14 @@ namespace AFMediaBar.Views.Windows
 
         /// <summary>
         /// 搜索候选项：主文案是「页面 › 分组」，副文案说明该分组能改什么。
+        ///
+        /// 主文案的拼装样式（分隔符与两侧顺序）取自语言文件，两个名称则已经分别是当前
+        /// 语言的页面名与分组名，因此候选行不会拼出半句旧语言。
         /// Search suggestion: the primary line is "page › group" and the secondary line says what it changes.
+        ///
+        /// The pattern of the primary line, its separator and the order of its two sides, comes from the language file,
+        /// while each name is already a page name and a group name in the active language, so a suggestion line can
+        /// never be composed half in the old language.
         /// </summary>
         private sealed class SettingsSearchSuggestion
         {
@@ -153,7 +161,7 @@ namespace AFMediaBar.Views.Windows
             public SettingsSearchHit Hit { get; }
 
             /// <summary>主文案。/ Primary line.</summary>
-            public string Title => $"{Hit.PageTitle} › {Hit.Title}";
+            public string Title => Translations.Format("Settings.Search.Suggestion.Title", Hit.PageTitle, Hit.Title);
 
             /// <summary>副文案。/ Secondary line.</summary>
             public string Subtitle => Hit.Description;

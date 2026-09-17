@@ -19,14 +19,14 @@
     <StackPanel MaxWidth="1000"
                 Margin="16"
                 VerticalAlignment="Center">
-        <TextBlock Text="布局"
+        <TextBlock Text="{DynamicResource Loc.Layout.Page.Title}"
                    FontSize="32"
                    FontWeight="{DynamicResource AppTextStrongFontWeight}" />
-        <ui:TextBlock Text="调整窗口模式、排列方式和尺寸"
+        <ui:TextBlock Text="{DynamicResource Loc.Layout.Page.Subtitle}"
                       Appearance="Secondary"
                       Margin="0,8,0,28" />
 
-        <TextBlock Text="窗口"
+        <TextBlock Text="{DynamicResource Loc.Layout.Group.Window}"
                    FontSize="18"
                    FontWeight="{DynamicResource AppTextStrongFontWeight}"
                    Margin="0,0,0,12" />
@@ -34,20 +34,20 @@
                         Icon="{ui:SymbolIcon WindowConsole20}">
             <ui:CardControl.Header>
                 <StackPanel>
-                    <ui:TextBlock Text="窗口模式"
+                    <ui:TextBlock Text="{DynamicResource Loc.Layout.Row.WindowMode.Title}"
                                   FontWeight="{DynamicResource AppTextStrongFontWeight}" />
-                    <ui:TextBlock Text="选择媒体栏显示在哪里"
+                    <ui:TextBlock Text="{DynamicResource Loc.Layout.Row.WindowMode.Description}"
                                   Appearance="Secondary"
                                   FontSize="12" />
                 </StackPanel>
             </ui:CardControl.Header>
             <StackPanel Orientation="Horizontal">
-                <RadioButton Content="停靠任务栏"
+                <RadioButton Content="{DynamicResource Loc.Layout.WindowMode.Taskbar}"
                              GroupName="HostMode"
                              IsChecked="{Binding ViewModel.CurrentWindowMode, Converter={StaticResource GenericEnumToBooleanConverter}, ConverterParameter=Taskbar, Mode=OneWay}"
                              Command="{Binding ViewModel.SwitchToTaskbarModeCommand, Mode=OneWay}"
                              Margin="0,0,12,0" />
-                <RadioButton Content="灵动岛"
+                <RadioButton Content="{DynamicResource Loc.Common.DynamicIsland}"
                              GroupName="HostMode"
                              IsChecked="{Binding ViewModel.CurrentWindowMode, Converter={StaticResource GenericEnumToBooleanConverter}, ConverterParameter=DynamicIsland, Mode=OneWay}"
                              Command="{Binding ViewModel.SwitchToDynamicIslandModeCommand, Mode=OneWay}"
@@ -59,25 +59,25 @@
                         Icon="{ui:SymbolIcon ArrowAutofitContent24}">
             <ui:CardControl.Header>
                 <StackPanel>
-                    <ui:TextBlock Text="排列方式"
+                    <ui:TextBlock Text="{DynamicResource Loc.Layout.Row.Arrangement.Title}"
                                   FontWeight="{DynamicResource AppTextStrongFontWeight}" />
-                    <ui:TextBlock Text="设置媒体内容的排列方向"
+                    <ui:TextBlock Text="{DynamicResource Loc.Layout.Row.Arrangement.Description}"
                                   Appearance="Secondary"
                                   FontSize="12" />
                 </StackPanel>
             </ui:CardControl.Header>
             <StackPanel Orientation="Horizontal">
-                <RadioButton Content="自动"
+                <RadioButton Content="{DynamicResource Loc.Layout.Arrangement.Auto}"
                              GroupName="LayoutMode"
                              IsChecked="{Binding ViewModel.CurrentLayoutOrientationMode, Converter={StaticResource GenericEnumToBooleanConverter}, ConverterParameter=Auto, Mode=OneWay}"
                              Command="{Binding ViewModel.SwitchToAutoLayoutCommand, Mode=OneWay}"
                              Margin="0,0,12,0" />
-                <RadioButton Content="横向"
+                <RadioButton Content="{DynamicResource Loc.Layout.Arrangement.Horizontal}"
                              GroupName="LayoutMode"
                              IsChecked="{Binding ViewModel.CurrentLayoutOrientationMode, Converter={StaticResource GenericEnumToBooleanConverter}, ConverterParameter=Horizontal, Mode=OneWay}"
                              Command="{Binding ViewModel.SwitchToHorizontalLayoutCommand, Mode=OneWay}"
                              Margin="0,0,12,0" />
-                <RadioButton Content="纵向"
+                <RadioButton Content="{DynamicResource Loc.Layout.Arrangement.Vertical}"
                              GroupName="LayoutMode"
                              IsChecked="{Binding ViewModel.CurrentLayoutOrientationMode, Converter={StaticResource GenericEnumToBooleanConverter}, ConverterParameter=Vertical, Mode=OneWay}"
                              Command="{Binding ViewModel.SwitchToVerticalLayoutCommand, Mode=OneWay}" />
@@ -85,7 +85,7 @@
         </ui:CardControl>
 
         <StackPanel Visibility="{Binding ViewModel.IsDynamicIslandMode, Converter={StaticResource BooleanToVisibilityConverter}}">
-            <TextBlock Text="灵动岛外观"
+            <TextBlock Text="{DynamicResource Loc.Common.Group.IslandAppearance}"
                        FontSize="18"
                        FontWeight="{DynamicResource AppTextStrongFontWeight}"
                        Margin="0,0,0,12" />
@@ -93,20 +93,20 @@
                             Icon="{ui:SymbolIcon ColorBackground20}">
                 <ui:CardControl.Header>
                     <StackPanel>
-                        <ui:TextBlock Text="背景方案"
+                        <ui:TextBlock Text="{DynamicResource Loc.Layout.Row.IslandBackground.Title}"
                                       FontWeight="{DynamicResource AppTextStrongFontWeight}" />
-                        <ui:TextBlock Text="使用系统主题配色或透明背景"
+                        <ui:TextBlock Text="{DynamicResource Loc.Layout.Row.IslandBackground.Description}"
                                       Appearance="Secondary"
                                       FontSize="12" />
                     </StackPanel>
                 </ui:CardControl.Header>
                 <StackPanel Orientation="Horizontal">
-                    <RadioButton Content="系统主题背景"
+                    <RadioButton Content="{DynamicResource Loc.Layout.IslandBackground.SystemTheme}"
                                  GroupName="DynamicIslandBackground"
                                  IsChecked="{Binding ViewModel.CurrentDynamicIslandBackgroundMode, Converter={StaticResource GenericEnumToBooleanConverter}, ConverterParameter=SystemTheme, Mode=OneWay}"
                                  Command="{Binding ViewModel.SwitchToSystemThemeBackgroundCommand}"
                                  Margin="0,0,12,0" />
-                    <RadioButton Content="透明背景"
+                    <RadioButton Content="{DynamicResource Loc.Layout.IslandBackground.Transparent}"
                                  GroupName="DynamicIslandBackground"
                                  IsChecked="{Binding ViewModel.CurrentDynamicIslandBackgroundMode, Converter={StaticResource GenericEnumToBooleanConverter}, ConverterParameter=Transparent, Mode=OneWay}"
                                  Command="{Binding ViewModel.SwitchToTransparentBackgroundCommand}" />
@@ -114,7 +114,7 @@
             </ui:CardControl>
         </StackPanel>
 
-        <TextBlock Text="尺寸"
+        <TextBlock Text="{DynamicResource Loc.Layout.Group.Size}"
                    FontSize="18"
                    FontWeight="{DynamicResource AppTextStrongFontWeight}"
                    Margin="0,0,0,12" />
@@ -122,9 +122,9 @@
                         Icon="{ui:SymbolIcon ResizeLarge24}">
             <ui:CardControl.Header>
                 <StackPanel>
-                    <ui:TextBlock Text="组件间距缩放"
+                    <ui:TextBlock Text="{DynamicResource Loc.Layout.Row.LengthScale.Title}"
                                   FontWeight="{DynamicResource AppTextStrongFontWeight}" />
-                    <ui:TextBlock Text="调整封面、歌词、标题等组件之间的间距"
+                    <ui:TextBlock Text="{DynamicResource Loc.Layout.Row.LengthScale.Description}"
                                   Appearance="Secondary"
                                   FontSize="12" />
                 </StackPanel>
@@ -151,9 +151,9 @@
                         Icon="{ui:SymbolIcon ResizeSmall24}">
             <ui:CardControl.Header>
                 <StackPanel>
-                    <ui:TextBlock Text="粗细缩放"
+                    <ui:TextBlock Text="{DynamicResource Loc.Layout.Row.ThicknessScale.Title}"
                                   FontWeight="{DynamicResource AppTextStrongFontWeight}" />
-                    <ui:TextBlock Text="按比例缩放所有组件大小，保持组件间距不变"
+                    <ui:TextBlock Text="{DynamicResource Loc.Layout.Row.ThicknessScale.Description}"
                                   Appearance="Secondary"
                                   FontSize="12" />
                 </StackPanel>
@@ -181,9 +181,9 @@
                         Icon="{ui:SymbolIcon ArrowUp24}">
             <ui:CardControl.Header>
                 <StackPanel>
-                    <ui:TextBlock Text="边缘偏移"
+                    <ui:TextBlock Text="{DynamicResource Loc.Layout.Row.EdgeOffset.Title}"
                                   FontWeight="{DynamicResource AppTextStrongFontWeight}" />
-                    <ui:TextBlock Text="水平任务栏上下移动，垂直任务栏左右移动"
+                    <ui:TextBlock Text="{DynamicResource Loc.Layout.Row.EdgeOffset.Description}"
                                   Appearance="Secondary"
                                   FontSize="12" />
                 </StackPanel>
@@ -206,7 +206,7 @@
             </Grid>
         </ui:CardControl>
 
-        <TextBlock Text="位置"
+        <TextBlock Text="{DynamicResource Loc.Layout.Group.Position}"
                    FontSize="18"
                    FontWeight="{DynamicResource AppTextStrongFontWeight}"
                    Margin="0,0,0,12" />
@@ -214,9 +214,9 @@
                         Icon="{ui:SymbolIcon DesktopArrowRight24}">
             <ui:CardControl.Header>
                 <StackPanel>
-                    <ui:TextBlock Text="避开任务栏图标"
+                    <ui:TextBlock Text="{DynamicResource Loc.Layout.Row.AvoidIcons.Title}"
                                   FontWeight="{DynamicResource AppTextStrongFontWeight}" />
-                    <ui:TextBlock Text="自动限制长度和位置，避免遮挡任务栏图标"
+                    <ui:TextBlock Text="{DynamicResource Loc.Layout.Row.AvoidIcons.Description}"
                                   Appearance="Secondary"
                                   FontSize="12" />
                 </StackPanel>
@@ -228,9 +228,9 @@
                         Icon="{ui:SymbolIcon LockClosed24}">
             <ui:CardControl.Header>
                 <StackPanel>
-                    <ui:TextBlock Text="锁定位置"
+                    <ui:TextBlock Text="{DynamicResource Loc.Layout.Row.LockPosition.Title}"
                                   FontWeight="{DynamicResource AppTextStrongFontWeight}" />
-                    <ui:TextBlock Text="固定媒体栏当前位置"
+                    <ui:TextBlock Text="{DynamicResource Loc.Layout.Row.LockPosition.Description}"
                                   Appearance="Secondary"
                                   FontSize="12" />
                 </StackPanel>
@@ -241,25 +241,25 @@
         <ui:CardControl Icon="{ui:SymbolIcon ArrowReset24}">
             <ui:CardControl.Header>
                 <StackPanel>
-                    <ui:TextBlock Text="重置位置"
+                    <ui:TextBlock Text="{DynamicResource Loc.Common.ResetPosition}"
                                   FontWeight="{DynamicResource AppTextStrongFontWeight}" />
-                    <ui:TextBlock Text="恢复默认位置"
+                    <ui:TextBlock Text="{DynamicResource Loc.Layout.Row.ResetPosition.Description}"
                                   Appearance="Secondary"
                                   FontSize="12" />
                 </StackPanel>
             </ui:CardControl.Header>
-            <ui:Button Content="重置位置"
+            <ui:Button Content="{DynamicResource Loc.Common.ResetPosition}"
                        Icon="{ui:SymbolIcon ArrowReset24}"
                        Command="{Binding ViewModel.ResetTaskbarPositionCommand}" />
         </ui:CardControl>
         <ui:CardControl Margin="0,8,0,0" Icon="{ui:SymbolIcon ArrowReset24}">
             <ui:CardControl.Header>
                 <StackPanel>
-                    <ui:TextBlock Text="恢复本页默认设置" FontWeight="{DynamicResource AppTextStrongFontWeight}" />
-                    <ui:TextBlock Text="恢复窗口、方向、缩放、任务栏和灵动岛设置" Appearance="Secondary" FontSize="12" />
+                    <ui:TextBlock Text="{DynamicResource Loc.Common.ResetPageDefaults}" FontWeight="{DynamicResource AppTextStrongFontWeight}" />
+                    <ui:TextBlock Text="{DynamicResource Loc.Layout.Row.ResetPage.Description}" Appearance="Secondary" FontSize="12" />
                 </StackPanel>
             </ui:CardControl.Header>
-            <ui:Button Content="恢复默认" Icon="{ui:SymbolIcon ArrowReset24}" Click="ResetButton_Click" />
+            <ui:Button Content="{DynamicResource Loc.Layout.Reset.Button}" Icon="{ui:SymbolIcon ArrowReset24}" Click="ResetButton_Click" />
         </ui:CardControl>
         </StackPanel>
     </StackPanel>

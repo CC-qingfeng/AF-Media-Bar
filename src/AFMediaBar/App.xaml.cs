@@ -15,6 +15,7 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using AFMediaBar.Classes.Models;
 using AFMediaBar.Classes.Services.Audio;
+using AFMediaBar.Classes.Services.Localization;
 using AFMediaBar.Classes.Services.Updates;
 using AFMediaBar.Classes.Settings;
 using Wpf.Ui;
@@ -108,6 +109,11 @@ namespace AFMediaBar
                 services.AddSingleton<SettingsPersistenceService>();
                 services.AddSingleton<StartupRegistrationService>();
 
+                // 界面语言：把设置里的选项解析成生效语言，并重发 XAML 引用的文案资源。
+                // Interface language: resolves the settings option into the language in effect and republishes the text
+                // resources XAML references.
+                services.AddSingleton<LocalizationService>();
+
                 // 安装协调互斥体：只让安装程序能识别"程序正在运行"，不改变单实例行为。
                 // Install-coordination mutex: lets the installer notice a running instance without changing single-instance behaviour.
                 services.AddSingleton<InstallCoordinatorMutex>();
@@ -197,6 +203,14 @@ namespace AFMediaBar
             // The user-defaults snapshot has to be loaded before the host starts: a "restore defaults" click must land on the
             // user's own defaults immediately, not only after the next start.
             SettingsManager.SetUserDefaults(settingsPersistenceService.LoadUserDefaults());
+
+            // 界面语言必须在宿主启动之前应用：托盘图标、任务栏媒体栏与设置页的文案都是在构造时取出来的，
+            // 先建后刷会让第一帧短暂停在另一种语言上。这里排在设置加载之后，因此读到的是用户文件里的选项。
+            // The interface language has to be applied before the host starts: the tray icon, the taskbar media bar, and
+            // the settings pages take their text while they are constructed, and building first and refreshing afterwards
+            // would leave the first frame in another language. It runs after the settings are loaded, so the option comes
+            // from the user's own file.
+            Services.GetRequiredService<LocalizationService>().Start();
 
             // 开机自动启动：设置是意图，注册表 Run 项是它的执行结果，因此启动时按设置核对一次。
             // 只写 HKCU，不提权；写失败只记录原因，不影响启动链。

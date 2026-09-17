@@ -3,6 +3,7 @@ using System.Windows.Media;
 using AFMediaBar.Classes.Models;
 using AFMediaBar.Classes.Services.Lyrics;
 using AFMediaBar.Classes.Utils;
+using AFMediaBar.Resources;
 using Windows.Media.Control;
 using WindowsMediaController;
 using static WindowsMediaController.MediaManager;
@@ -15,7 +16,12 @@ namespace AFMediaBar.Classes.Services;
 /// </summary>
 public sealed class MediaSnapshotBuilder
 {
-    private const string UnknownSourceName = "未知来源";
+    /// <summary>
+    /// 无法识别来源时的回退名称，按快照构建时的语言取值：它不能是常量，否则切换语言后来源名会停在启动时的语言上。
+    /// Fallback name for an unrecognized source, read while the snapshot is built: it cannot be a constant, because a
+    /// language switch would otherwise leave the source name in the language the application started in.
+    /// </summary>
+    private static string UnknownSourceName => Translations.Get("Service.MediaSource.Unknown");
     private readonly LyricsService _lyricsService;
     private readonly Dictionary<string, LyricsResult?> _lyricsCache = new(StringComparer.Ordinal);
     private readonly HashSet<string> _pendingLyrics = new(StringComparer.Ordinal);

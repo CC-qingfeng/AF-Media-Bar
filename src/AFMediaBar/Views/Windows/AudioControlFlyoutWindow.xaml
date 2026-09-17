@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         xmlns:converters="clr-namespace:AFMediaBar.Classes.Converters"
-        Title="音频控制"
+        Title="{DynamicResource Loc.Common.AudioControl}"
         Width="320"
         MinWidth="0"
         MinHeight="0"
@@ -51,17 +51,17 @@
                     <ColumnDefinition />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <TextBlock Text="音频控制" FontSize="16" FontWeight="{DynamicResource AppTextStrongFontWeight}" VerticalAlignment="Center" />
+                <TextBlock Text="{DynamicResource Loc.Common.AudioControl}" FontSize="16" FontWeight="{DynamicResource AppTextStrongFontWeight}" VerticalAlignment="Center" />
                 <ui:Button Grid.Column="1"
                            Width="26" Height="26"
                            Padding="0"
                            Command="{Binding RefreshCommand}"
-                           ToolTip="刷新音频状态">
+                           ToolTip="{DynamicResource Loc.Panel.AudioFlyout.Refresh}">
                     <ui:SymbolIcon Symbol="ArrowSync24" />
                 </ui:Button>
             </Grid>
 
-            <TextBlock Grid.Row="1" Text="输出设备" FontSize="13"
+            <TextBlock Grid.Row="1" Text="{DynamicResource Loc.Common.OutputDevice}" FontSize="13"
                        Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,0,0,6" />
             <ComboBox x:Name="OutputDeviceComboBox"
                       Grid.Row="2"
@@ -87,7 +87,7 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <StackPanel>
-                        <TextBlock Text="空间音效" FontWeight="{DynamicResource AppTextStrongFontWeight}" FontSize="13" />
+                        <TextBlock Text="{DynamicResource Loc.Panel.AudioFlyout.SpatialAudio}" FontWeight="{DynamicResource AppTextStrongFontWeight}" FontSize="13" />
                         <TextBlock Text="{Binding SpatialAudioText}" FontSize="12"
                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                     </StackPanel>
@@ -100,7 +100,7 @@
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
-                <TextBlock Text="应用音量" FontSize="13"
+                <TextBlock Text="{DynamicResource Loc.Panel.AudioFlyout.AppVolume}" FontSize="13"
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="0,0,0,6" />
                 <ScrollViewer Grid.Row="1"
                               MaxHeight="114"

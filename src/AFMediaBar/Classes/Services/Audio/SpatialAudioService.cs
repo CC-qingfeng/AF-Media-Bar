@@ -1,12 +1,18 @@
 using System.Diagnostics;
 using AFMediaBar.Classes.Models;
+using AFMediaBar.Resources;
 using Windows.Media.Audio;
 
 namespace AFMediaBar.Classes.Services.Audio;
 
 /// <summary>
 /// 读取当前设备的空间音效状态，并通过系统设置提供受支持的配置入口。
+///
+/// 状态名按当前界面语言取值；格式名（Windows Sonic、Dolby Atmos 等）是系统与品牌给出的名字，原样显示。
 /// Reads spatial-audio state and delegates configuration to the supported Windows settings surface.
+///
+/// State names follow the active interface language; format names (Windows Sonic, Dolby Atmos, and so on) are the names the
+/// system and the brands give them and are shown as they are.
 /// </summary>
 public sealed class SpatialAudioService
 {
@@ -32,7 +38,7 @@ public sealed class SpatialAudioService
             var configuration = SpatialAudioDeviceConfiguration.GetForDeviceId(deviceId);
             if (!configuration.IsSpatialAudioSupported)
             {
-                return new SpatialAudioSnapshot(false, "此设备不支持", null);
+                return new SpatialAudioSnapshot(false, Translations.Get("Audio.Spatial.Unsupported"), null);
             }
 
             var active = configuration.ActiveSpatialAudioFormat;
@@ -40,14 +46,16 @@ public sealed class SpatialAudioService
                 ? configuration.DefaultSpatialAudioFormat
                 : active;
             var name = string.IsNullOrWhiteSpace(selected)
-                ? "关闭"
-                : TryGetKnownFormatName(selected, out var known) ? known : "已启用";
+                ? Translations.Get("Audio.Spatial.Off")
+                : TryGetKnownFormatName(selected, out var known)
+                    ? known
+                    : Translations.Get("Audio.Spatial.Enabled");
             return new SpatialAudioSnapshot(true, name, selected);
         }
         catch (Exception exception)
         {
             Debug.WriteLine($"[SpatialAudioService] Read failed: {exception.Message}");
-            return new SpatialAudioSnapshot(false, "状态不可用", null);
+            return new SpatialAudioSnapshot(false, Translations.Get("Audio.Spatial.Unavailable"), null);
         }
     }
 

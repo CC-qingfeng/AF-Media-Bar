@@ -1,10 +1,16 @@
 using AFMediaBar.Classes.Models;
+using AFMediaBar.Resources;
 
 namespace AFMediaBar.Classes.Services.Audio;
 
 /// <summary>
 /// 为任务栏、完整面板和托盘提供同一组设备与应用音量操作。
+///
+/// 返回的文本是用户可见的提示（滚轮结果），因此按当前界面语言取值；设备名与应用名来自系统，原样保留。
 /// Provides one device/application-volume action boundary for taskbar, full panel, and tray surfaces.
+///
+/// The returned text is a user-visible tooltip (a wheel result) and therefore follows the active interface language; device
+/// and application names come from the system and are kept as they are.
 /// </summary>
 public sealed class AudioInteractionService
 {
@@ -46,18 +52,18 @@ public sealed class AudioInteractionService
     public async Task<string> AdjustCurrentMediaVolumeAsync(int signedSteps)
     {
         if (signedSteps == 0)
-            return "当前媒体音量：未改变";
+            return Translations.Get("Audio.Volume.Unchanged");
 
         await _volumeGate.WaitAsync();
         try
         {
             var current = await Task.Run(GetCurrentMediaVolume);
             if (current is null)
-                return "当前媒体音量：不可用";
+                return Translations.Get("Audio.Volume.Unavailable");
 
             var next = Math.Clamp(current.VolumePercent + signedSteps * VolumeStepPercent, 0, 100);
             await Task.Run(() => SetApplicationVolume(current.ProcessName, next));
-            return $"{current.DisplayName}：{next}%";
+            return Translations.Format("Audio.Volume.Value", current.DisplayName, next);
         }
         finally
         {
@@ -77,11 +83,11 @@ public sealed class AudioInteractionService
     public async Task<string> CycleOutputDeviceAsync(int signedSteps, bool deferApply)
     {
         if (signedSteps == 0)
-            return "输出设备：未改变";
+            return Translations.Get("Audio.OutputDevice.Unchanged");
 
         var devices = await GetOutputDevicesAsync();
         if (devices.Count == 0)
-            return "输出设备：不可用";
+            return Translations.Get("Audio.OutputDevice.Unavailable");
 
         AudioDeviceOption target;
         int version;
@@ -102,7 +108,7 @@ public sealed class AudioInteractionService
         lock (_deviceGate)
         {
             if (version != _deviceApplyVersion)
-                return $"输出设备：{target.DisplayName}";
+                return Translations.Format("Audio.OutputDevice.Value", target.DisplayName);
         }
 
         await SetOutputDeviceAsync(target);
@@ -111,6 +117,6 @@ public sealed class AudioInteractionService
             if (version == _deviceApplyVersion)
                 _previewDeviceId = null;
         }
-        return $"输出设备：{target.DisplayName}";
+        return Translations.Format("Audio.OutputDevice.Value", target.DisplayName);
     }
 }

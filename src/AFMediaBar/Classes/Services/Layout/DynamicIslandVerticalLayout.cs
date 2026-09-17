@@ -1,5 +1,7 @@
 using AFMediaBar.Classes.Models.Layout;
 
+using AFMediaBar.Resources;
+
 namespace AFMediaBar.Classes.Services.Layout;
 
 /// <summary>
@@ -32,7 +34,7 @@ public static class DynamicIslandVerticalLayout
     public static LayoutSchema Create() => new()
     {
         Orientation = LayoutOrientation.Vertical,
-        Description = "灵动岛主题（竖向）：可拖动并支持桌面边缘收起",
+        Description = Translations.Get("Layout.Preset.DynamicIslandVertical"),
         Canvas = new CanvasConfig
         {
             Width = 88,

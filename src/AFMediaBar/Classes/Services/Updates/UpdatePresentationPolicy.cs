@@ -1,4 +1,5 @@
 using AFMediaBar.Classes.Models.Updates;
+using AFMediaBar.Resources;
 
 namespace AFMediaBar.Classes.Services.Updates;
 
@@ -83,23 +84,29 @@ public static class UpdatePresentationPolicy
         var version = state.AvailableVersion;
         return state.Phase switch
         {
-            UpdatePhase.Idle => "尚未检查更新" + suffix,
-            UpdatePhase.Checking => "正在检查更新…",
-            UpdatePhase.UpToDate => $"已是最新版本（v{state.CurrentVersion}）{suffix}",
+            UpdatePhase.Idle => Translations.Get("Update.Status.Idle") + suffix,
+            UpdatePhase.Checking => Translations.Get("Update.Status.Checking"),
+            UpdatePhase.UpToDate => Translations.Format("Update.Status.UpToDate", state.CurrentVersion) + suffix,
             UpdatePhase.Available =>
-                $"发现新版本 v{version}（当前 v{state.CurrentVersion}）{MandatorySuffix(state)}{suffix}",
+                Translations.Format("Update.Status.Available", version, state.CurrentVersion)
+                + MandatorySuffix(state)
+                + suffix,
             // 下载阶段同时流式计算 SHA-256，因此这里说"下载并校验"：安装前不会再有第二遍读取。
             // The download phase computes the SHA-256 while streaming, hence "download and verify": there is no
             // second pass before installing.
             UpdatePhase.Downloading =>
-                $"正在下载并校验安装包 {FormatPercent(state.ProgressPercent)}%{ChannelSuffix(state)}",
-            UpdatePhase.Verifying => $"正在校验安装包 {FormatPercent(state.ProgressPercent)}%",
+                Translations.Format("Update.Status.Downloading", FormatPercent(state.ProgressPercent))
+                + ChannelSuffix(state),
+            UpdatePhase.Verifying => Translations.Format("Update.Status.Verifying", FormatPercent(state.ProgressPercent)),
             UpdatePhase.Ready => ResolveReadyText(state),
-            UpdatePhase.Skipped =>
-                $"已跳过 v{version}（当前 v{state.CurrentVersion}）· 手动检查仍会显示该版本",
+            UpdatePhase.Skipped => Translations.Format("Update.Status.Skipped", version, state.CurrentVersion),
             UpdatePhase.ManualOnly =>
-                $"发现新版本 v{version}，但清单未提供可自动安装的安装包{MandatorySuffix(state)}",
-            UpdatePhase.Failed => $"更新失败：{state.FailureReason ?? "未知原因"}{suffix}",
+                Translations.Format("Update.Status.ManualOnly", version) + MandatorySuffix(state),
+            UpdatePhase.Failed =>
+                Translations.Format(
+                    "Update.Status.Failed",
+                    state.FailureReason ?? Translations.Get("Update.Reason.Unknown"))
+                + suffix,
             _ => string.Empty
         };
     }
@@ -114,15 +121,15 @@ public static class UpdatePresentationPolicy
         var version = state.AvailableVersion;
         return state.Phase switch
         {
-            UpdatePhase.Idle or UpdatePhase.UpToDate => "检查更新",
-            UpdatePhase.Checking => "正在检查更新…",
-            UpdatePhase.Downloading => $"正在下载更新 {FormatPercent(state.ProgressPercent)}%",
-            UpdatePhase.Verifying => $"正在校验安装包 {FormatPercent(state.ProgressPercent)}%",
-            UpdatePhase.Available => $"发现新版本 v{version}（点击查看）",
-            UpdatePhase.Ready => $"更新已就绪（v{version}），点击重启安装",
-            UpdatePhase.Skipped or UpdatePhase.ManualOnly => $"发现新版本 v{version}（点击查看）",
-            UpdatePhase.Failed => "更新失败，点击重试",
-            _ => "检查更新"
+            UpdatePhase.Idle or UpdatePhase.UpToDate => Translations.Get("Update.Tray.Check"),
+            UpdatePhase.Checking => Translations.Get("Update.Tray.Checking"),
+            UpdatePhase.Downloading => Translations.Format("Update.Tray.Downloading", FormatPercent(state.ProgressPercent)),
+            UpdatePhase.Verifying => Translations.Format("Update.Tray.Verifying", FormatPercent(state.ProgressPercent)),
+            UpdatePhase.Available => Translations.Format("Update.Tray.Available", version),
+            UpdatePhase.Ready => Translations.Format("Update.Tray.Ready", version),
+            UpdatePhase.Skipped or UpdatePhase.ManualOnly => Translations.Format("Update.Tray.Available", version),
+            UpdatePhase.Failed => Translations.Get("Update.Tray.Failed"),
+            _ => Translations.Get("Update.Tray.Check")
         };
     }
 
@@ -176,10 +183,10 @@ public static class UpdatePresentationPolicy
         var version = state.AvailableVersion;
         return state.Phase switch
         {
-            UpdatePhase.Available or UpdatePhase.Skipped or UpdatePhase.ManualOnly => $"发现新版本 v{version}",
-            UpdatePhase.Downloading => $"正在下载更新 {FormatPercent(state.ProgressPercent)}%",
-            UpdatePhase.Verifying => "正在校验更新",
-            UpdatePhase.Ready => $"更新已就绪（v{version}）",
+            UpdatePhase.Available or UpdatePhase.Skipped or UpdatePhase.ManualOnly => Translations.Format("Update.Navigation.Available", version),
+            UpdatePhase.Downloading => Translations.Format("Update.Navigation.Downloading", FormatPercent(state.ProgressPercent)),
+            UpdatePhase.Verifying => Translations.Get("Update.Navigation.Verifying"),
+            UpdatePhase.Ready => Translations.Format("Update.Navigation.Ready", version),
             _ => string.Empty
         };
     }
@@ -225,18 +232,18 @@ public static class UpdatePresentationPolicy
     public static string ResolveChannelText(UpdateDownloadSource? source) => source is null
         ? string.Empty
         : source.IsAccelerated
-            ? $"加速站点 {source.HostName}"
-            : "GitHub 直连";
+            ? Translations.Format("Update.Channel.Accelerated", source.HostName)
+            : Translations.Get("Update.Channel.Direct");
 
     private static string ResolveReadyText(UpdateState state)
     {
         var version = state.AvailableVersion;
         if (state.IsInstallBlocked)
         {
-            return $"已下载 v{version}，但{state.InstallBlockedReason}；可从下载页手动更新";
+            return Translations.Format("Update.Status.ReadyBlocked", version, state.InstallBlockedReason);
         }
 
-        return $"更新已就绪（v{version}）· 下次启动程序时自动安装，或立即重启并安装";
+        return Translations.Format("Update.Status.Ready", version);
     }
 
     private static string ResolveCheckSuffix(UpdatePhase phase, DateTimeOffset? lastCheckUtc, DateTimeOffset now)
@@ -246,13 +253,16 @@ public static class UpdatePresentationPolicy
             return string.Empty;
         }
 
-        return $" · 上次检查 {RelativeTime(now - lastCheck)}";
+        return Translations.Format("Update.Suffix.LastCheck", RelativeTime(now - lastCheck));
     }
 
-    private static string MandatorySuffix(UpdateState state) => state.IsMandatory ? " · 该版本必须更新" : string.Empty;
+    private static string MandatorySuffix(UpdateState state) =>
+        state.IsMandatory ? Translations.Get("Update.Suffix.Mandatory") : string.Empty;
 
     private static string ChannelSuffix(UpdateState state) =>
-        state.ActiveSource is { } source ? $" · {ResolveChannelText(source)}" : string.Empty;
+        state.ActiveSource is { } source
+            ? Translations.Format("Update.Suffix.Channel", ResolveChannelText(source))
+            : string.Empty;
 
     private static int FormatPercent(double percent) =>
         (int)Math.Clamp(Math.Round(percent, MidpointRounding.AwayFromZero), 0d, 100d);
@@ -266,19 +276,19 @@ public static class UpdatePresentationPolicy
 
         if (elapsed < TimeSpan.FromMinutes(1))
         {
-            return "刚刚";
+            return Translations.Get("Update.Relative.JustNow");
         }
 
         if (elapsed < TimeSpan.FromHours(1))
         {
-            return $"{(int)elapsed.TotalMinutes} 分钟前";
+            return Translations.Format("Update.Relative.Minutes", (int)elapsed.TotalMinutes);
         }
 
         if (elapsed < TimeSpan.FromDays(1))
         {
-            return $"{(int)elapsed.TotalHours} 小时前";
+            return Translations.Format("Update.Relative.Hours", (int)elapsed.TotalHours);
         }
 
-        return $"{(int)elapsed.TotalDays} 天前";
+        return Translations.Format("Update.Relative.Days", (int)elapsed.TotalDays);
     }
 }

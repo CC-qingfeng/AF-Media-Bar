@@ -3,6 +3,7 @@ using AFMediaBar.Classes.Models.Layout;
 using AFMediaBar.Classes.Services;
 using AFMediaBar.Classes.Settings;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using AFMediaBar.Classes.Services.Localization;
 using AFMediaBar.ViewModels.Pages;
 using System.Windows;
 
@@ -95,7 +96,10 @@ public sealed class SettingsPersistenceServiceTests
                 AutoCheckEnabled: false,
                 SkippedVersion: "1.2.0",
                 LastCheckUtc: new DateTimeOffset(2026, 9, 16, 8, 30, 0, TimeSpan.Zero),
-                LastCheckSucceeded: false)
+                LastCheckSucceeded: false),
+            // 刻意取一个非默认的选项：默认值（跟随系统）即使序列化失败也会"看起来正确"。
+            // A deliberately non-default option: the default (follow the system) would look correct even if serialization failed.
+            InterfaceLanguage = InterfaceLanguage.TraditionalChinese
         };
         using (var writer = new SettingsPersistenceService(_directory)) { writer.Initialize(); SettingsManager.Replace(settings); writer.Flush(); }
         SettingsManager.ResetAll();
@@ -145,9 +149,15 @@ public sealed class SettingsPersistenceServiceTests
             new DateTimeOffset(2026, 9, 16, 8, 30, 0, TimeSpan.Zero),
             SettingsManager.Current.Update.LastCheckUtc);
         Assert.IsFalse(SettingsManager.Current.Update.LastCheckSucceeded);
+        Assert.AreEqual(InterfaceLanguage.TraditionalChinese, SettingsManager.Current.InterfaceLanguage);
         var persisted = File.ReadAllText(reader.SettingsPath);
-        StringAssert.Contains(persisted, "\"schemaVersion\": 12");
+        // 断言取当前 schema 常量而不是写死的数字：版本号每升一级都要改七处断言，而这里要证明的是
+        // "文件被按当前 schema 重写过"，不是某一个具体数字。
+        // The assertion reads the current schema constant instead of a hardcoded number: a version bump would otherwise mean
+        // editing seven assertions, while what this proves is "the file was rewritten at the current schema", not one number.
+        StringAssert.Contains(persisted, $"\"schemaVersion\": {SettingsPersistenceService.CurrentSchemaVersion}");
         StringAssert.Contains(persisted, "\"Disabled\"");
+        StringAssert.Contains(persisted, "\"TraditionalChinese\"");
     }
 
     [TestMethod]
@@ -195,7 +205,7 @@ public sealed class SettingsPersistenceServiceTests
 
         Assert.IsTrue(SettingsManager.Current.LyricsEnabled);
         Assert.IsTrue(Directory.GetFiles(_directory, "settings.json.unsupported-*").Length == 1);
-        StringAssert.Contains(File.ReadAllText(main), "\"schemaVersion\": 12");
+        StringAssert.Contains(File.ReadAllText(main), $"\"schemaVersion\": {SettingsPersistenceService.CurrentSchemaVersion}");
     }
 
     [TestMethod]
@@ -263,7 +273,7 @@ public sealed class SettingsPersistenceServiceTests
         Assert.AreEqual("DISPLAY2", SettingsManager.Current.TrackChangeNotification.FixedMonitorDeviceId);
         Assert.AreEqual(TaskbarLengthMode.FollowContent, SettingsManager.Current.TaskbarExperience.LengthMode);
         Assert.AreEqual(TaskbarExperienceSettings.Default.FixedLengthDip, SettingsManager.Current.TaskbarExperience.FixedLengthDip);
-        StringAssert.Contains(File.ReadAllText(service.SettingsPath), "\"schemaVersion\": 12");
+        StringAssert.Contains(File.ReadAllText(service.SettingsPath), $"\"schemaVersion\": {SettingsPersistenceService.CurrentSchemaVersion}");
     }
 
     [TestMethod]
@@ -343,7 +353,7 @@ public sealed class SettingsPersistenceServiceTests
         Assert.AreEqual(TaskbarInformationDensity.Information, SettingsManager.Current.TaskbarExperience.Density);
         Assert.AreEqual(TaskbarLengthMode.Fixed, SettingsManager.Current.TaskbarExperience.LengthMode);
         Assert.AreEqual(420, SettingsManager.Current.TaskbarExperience.FixedLengthDip);
-        StringAssert.Contains(File.ReadAllText(service.SettingsPath), "\"schemaVersion\": 12");
+        StringAssert.Contains(File.ReadAllText(service.SettingsPath), $"\"schemaVersion\": {SettingsPersistenceService.CurrentSchemaVersion}");
     }
 
     [TestMethod]
@@ -368,7 +378,7 @@ public sealed class SettingsPersistenceServiceTests
             SettingsManager.Current.Update,
             "schema 8 的文件没有更新设置，必须取默认值，而不是被推断成关闭。");
         Assert.IsTrue(SettingsManager.Current.Update.AutoCheckEnabled);
-        StringAssert.Contains(File.ReadAllText(service.SettingsPath), "\"schemaVersion\": 12");
+        StringAssert.Contains(File.ReadAllText(service.SettingsPath), $"\"schemaVersion\": {SettingsPersistenceService.CurrentSchemaVersion}");
     }
 
     /// <summary>
@@ -402,7 +412,7 @@ public sealed class SettingsPersistenceServiceTests
         Assert.IsTrue(
             SettingsManager.Current.PerformanceComponent.OpenTaskManagerOnClick,
             "该开关在旧版本里从未生效，旧的 false 不代表用户意图，必须取新的默认值。");
-        StringAssert.Contains(File.ReadAllText(service.SettingsPath), "\"schemaVersion\": 12");
+        StringAssert.Contains(File.ReadAllText(service.SettingsPath), $"\"schemaVersion\": {SettingsPersistenceService.CurrentSchemaVersion}");
     }
 
     /// <summary>
@@ -431,7 +441,7 @@ public sealed class SettingsPersistenceServiceTests
         Assert.AreEqual(400, SettingsManager.Current.Appearance.FontWeight, "350 必须吸附到最近的真实字重 400。");
         Assert.AreEqual(10, SettingsManager.Current.SpectrumComponent.SensitivityPercent, "7 必须抬到步进下限 10。");
         Assert.AreEqual(12, SettingsManager.Current.SpectrumComponent.BandCount);
-        StringAssert.Contains(File.ReadAllText(service.SettingsPath), "\"schemaVersion\": 12");
+        StringAssert.Contains(File.ReadAllText(service.SettingsPath), $"\"schemaVersion\": {SettingsPersistenceService.CurrentSchemaVersion}");
     }
 
     /// <summary>
@@ -482,11 +492,43 @@ public sealed class SettingsPersistenceServiceTests
             "清除快照之后重置必须回到程序内置默认值。");
     }
 
+    /// <summary>
+    /// schema 12 的文件没有界面语言字段：迁移必须显式写成「跟随系统」，而不是依赖"缺字段恰好等于枚举值 0"
+    /// 这种巧合，也不能因为默认值恰好相同就把用户固定在某一种具体语言上。同一条测试顺带确认迁移链的第二半：
+    /// schema 12 已经写入的字段（这里是关掉的开机自启）必须原样保留，不能被更早的迁移规则改写。
+    /// A schema 12 file has no interface-language field: the migration writes "follow the system" explicitly instead of resting
+    /// on the coincidence that a missing field reads as enum value zero, and it must not pin the user to a concrete language just
+    /// because that default happens to match. The same test covers the other half of the chain: a field a schema 12 file already
+    /// carries — here run-at-startup turned off — has to survive untouched by the earlier migration rules.
+    /// </summary>
+    [TestMethod]
+    public void Schema12MigrationEnablesFollowTheSystemWithoutPinningALanguage()
+    {
+        Directory.CreateDirectory(_directory);
+        File.WriteAllText(
+            Path.Combine(_directory, "settings.json"),
+            """
+            {"schemaVersion":12,"settings":{"launchAtStartup":false}}
+            """);
+
+        using var service = new SettingsPersistenceService(_directory);
+        service.Initialize();
+
+        Assert.AreEqual(
+            InterfaceLanguage.System,
+            SettingsManager.Current.InterfaceLanguage,
+            "旧文件里没有界面语言字段，迁移后必须是「跟随系统」。");
+        Assert.IsFalse(
+            SettingsManager.Current.LaunchAtStartup,
+            "schema 12 已经写入的开机自启取值必须保留，不能被 schema 11 之前的迁移规则改写。");
+        StringAssert.Contains(File.ReadAllText(service.SettingsPath), $"\"schemaVersion\": {SettingsPersistenceService.CurrentSchemaVersion}");
+    }
+
     [TestMethod]
     public void UnimplementedDisplayModeSelectionDoesNotChangeRuntimeModeOrTaskbarSettings()
     {
         SettingsManager.Replace(new AppSettings());
-        var viewModel = new DisplayModesViewModel(new FakeDisplayMonitorService(), new TaskbarLengthConstraintsService());
+        var viewModel = new DisplayModesViewModel(new FakeDisplayMonitorService(), new TaskbarLengthConstraintsService(), new LocalizationService());
         var original = SettingsManager.Current.TaskbarExperience;
 
         viewModel.SwitchToFloatingBallModeCommand.Execute(null);
@@ -508,7 +550,7 @@ public sealed class SettingsPersistenceServiceTests
                 FullPanel = new TaskbarFullPanelSettings(true, false, false, false)
             }
         });
-        var viewModel = new DisplayModesViewModel(new FakeDisplayMonitorService(), new TaskbarLengthConstraintsService());
+        var viewModel = new DisplayModesViewModel(new FakeDisplayMonitorService(), new TaskbarLengthConstraintsService(), new LocalizationService());
 
         viewModel.FullPanelMediaInfoVisible = false;
         Assert.IsTrue(viewModel.FullPanelMediaInfoVisible);
@@ -535,7 +577,7 @@ public sealed class SettingsPersistenceServiceTests
     public void DisplayModesUpdatesIndependentNotificationAndTaskbarTargets()
     {
         SettingsManager.Replace(new AppSettings());
-        var viewModel = new DisplayModesViewModel(new FakeDisplayMonitorService(), new TaskbarLengthConstraintsService());
+        var viewModel = new DisplayModesViewModel(new FakeDisplayMonitorService(), new TaskbarLengthConstraintsService(), new LocalizationService());
 
         viewModel.TrackChangeNotificationEnabled = true;
         viewModel.ShowTrackChangeNotificationWhenFullscreen = true;
@@ -559,7 +601,7 @@ public sealed class SettingsPersistenceServiceTests
         SettingsManager.Replace(new AppSettings());
         var constraints = new TaskbarLengthConstraintsService();
         constraints.Update(280, 520);
-        var viewModel = new DisplayModesViewModel(new FakeDisplayMonitorService(), constraints);
+        var viewModel = new DisplayModesViewModel(new FakeDisplayMonitorService(), constraints, new LocalizationService());
 
         viewModel.FollowMediaTextLength = false;
         viewModel.FixedTaskbarLengthDip = 900;
