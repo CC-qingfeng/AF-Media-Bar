@@ -83,12 +83,29 @@ namespace AFMediaBar.Components
                 _hoverCloseTimer.Stop();
                 HideTaskbarHoverLayer();
             };
+            // 滚轮提示的按键轮询：只在指针位于媒体栏上时运行，指针一离开就在下一个 tick 自停。
+            // The wheel tooltip's key poll: it only runs while the pointer is over the bar and stops itself on the first tick after
+            // the pointer leaves.
+            _wheelTooltipTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(120) };
+            _wheelTooltipTimer.Tick += (_, _) => AdvanceWheelTooltip();
+            // 跑马灯按帧推进：滚动是否真的发生、滚了多远都由这里的代码决定，而不是交给动画时钟。
+            // The marquee advances frame by frame: whether it moves and how far is decided by this code rather than by an animation
+            // clock.
+            _marqueeTimer = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(16) };
+            _marqueeTimer.Tick += (_, _) => AdvanceMarqueeScroll();
+            // 提示用同一个实例承载，内容随手势与结果实时改写。
+            // One tooltip instance carries the text, which is rewritten live as the gesture and its result change.
+            _wheelTooltip = new ToolTip { Placement = System.Windows.Controls.Primitives.PlacementMode.Top };
+            InteractionSurface.ToolTip = _wheelTooltip;
             Loaded += (_, _) => _progressTimer.Start();
             Unloaded += (_, _) =>
             {
                 _progressTimer.Stop();
                 _hoverOpenTimer.Stop();
                 _hoverCloseTimer.Stop();
+                _wheelTooltipTimer.Stop();
+                _marqueeTimer.Stop();
+                _marqueeEntries.Clear();
                 StopMarqueeAnimations();
             };
 
@@ -114,11 +131,19 @@ namespace AFMediaBar.Components
         private string _secondaryLyric = string.Empty;
         private string _lastSizeFingerprint = string.Empty;
         private string _lastMarqueeFingerprint = string.Empty;
-        private int _marqueeUpdateVersion;
+        /// <summary>正在滚动的文字元素；为空时跑马灯计时器必须停止。/ Currently scrolling text elements; the marquee timer must be stopped while it is empty.</summary>
+        private readonly List<MarqueeEntry> _marqueeEntries = [];
+        private readonly DispatcherTimer _marqueeTimer;
+        private long _marqueeStartedAt;
         private double _minimumPrimaryLength = 120;
         private readonly DispatcherTimer _progressTimer;
         private readonly DispatcherTimer _hoverOpenTimer;
         private readonly DispatcherTimer _hoverCloseTimer;
+        private readonly DispatcherTimer _wheelTooltipTimer;
+        private readonly ToolTip _wheelTooltip;
+        private WheelGestureSlot? _appliedWheelSlot;
+        private bool _wheelResultShown;
+        private string _songInfoTooltip = string.Empty;
         private MediaSnapshot _snapshot = MediaSnapshot.Disconnected;
         private bool _isTaskbarHoverVisible;
         private PlayerForegroundDecision? _adaptiveForegroundDecision;
@@ -134,6 +159,15 @@ namespace AFMediaBar.Components
         public event EventHandler? SkipNextRequested;
         public event EventHandler? ActivateSourceRequested;
         public event EventHandler? OpenFullPanelRequested;
+
+        /// <summary>
+        /// 宿主提供的"这次点击应当被吞掉"查询。组合滚轮（按住鼠标左键或右键再滚动）松键时会合成一次点击，
+        /// 用户按下组合键的意图只是滚轮，因此该点击必须被抑制；判定由全局鼠标钩子完成，控件只负责在点击入口询问。
+        /// Host-supplied query for "this click has to be swallowed". Releasing the button after a chord wheel synthesizes a click
+        /// while the user only meant to scroll, so it has to be suppressed; the global mouse hook makes that call and the control
+        /// merely asks at its click entries.
+        /// </summary>
+        public Func<bool>? SuppressedClickSource { get; set; }
         public event EventHandler? OutputDeviceMenuRequested;
         public event EventHandler<PlayerSurfaceWheelEventArgs>? OutputDeviceWheelRequested;
         public event EventHandler? VolumeMenuRequested;
@@ -218,6 +252,143 @@ namespace AFMediaBar.Components
 
         /// <summary>更新音符的快速启动预览提示。 / Updates the note tooltip with the quick-launch preview.</summary>
         public void SetQuickLaunchPreview(QuickLaunchEntry entry) => SongImageBorder.ToolTip = $"快速启动：{entry.DisplayName}";
+
+        /// <summary>
+        /// 刷新整条媒体栏的滚轮提示。悬停时说明当前绑定的滚轮动作，按住组合键后换成组合滚轮的动作，
+        /// 滚动之后由 <see cref="SetWheelResult"/> 换成刚刚发生的结果。
+        /// Refreshes the whole bar's wheel tooltip. While hovering it states the bound wheel action, switches to the chord wheel's
+        /// action once the modifier is held, and after a scroll <see cref="SetWheelResult"/> replaces it with the result.
+        /// </summary>
+        public void RefreshWheelTooltip()
+        {
+            var slot = ChordWheelHeld ? WheelGestureSlot.Chord : WheelGestureSlot.Primary;
+            // 刚滚过的结果要留在屏幕上：只有按键状态真正变了（用户准备用另一个槽位）或指针重新进入时才换回提示。
+            // The result of the last scroll stays on screen: the hint only returns once the modifier state actually changed (the user
+            // is preparing the other slot) or the pointer re-enters the bar.
+            if (_wheelResultShown && slot == _appliedWheelSlot)
+                return;
+
+            _appliedWheelSlot = slot;
+            _wheelResultShown = false;
+            var settings = SettingsManager.Current.Interaction.Normalize();
+            SetWheelTooltipText(WheelTooltipPolicy.BuildHint(
+                slot,
+                settings.Modifier,
+                WheelTooltipPolicy.BuildActionName(
+                    slot == WheelGestureSlot.Chord ? settings.ChordWheelAction : settings.PrimaryWheelAction)));
+        }
+
+        /// <summary>把最近一次滚轮动作的结果写入提示。/ Writes the result of the most recent wheel action into the tooltip.</summary>
+        /// <param name="result">滚轮手势结果。/ Wheel gesture result.</param>
+        public void SetWheelResult(WheelTooltipResult result)
+        {
+            _appliedWheelSlot = ChordWheelHeld ? WheelGestureSlot.Chord : WheelGestureSlot.Primary;
+            _wheelResultShown = true;
+            SetWheelTooltipText(WheelTooltipPolicy.BuildResult(result.ActionName, result.Detail));
+        }
+
+        /// <summary>
+        /// 当前是否按住了共用组合键。组合键可能是 Shift，也可能是鼠标左键或右键；任务栏窗口永远不激活、收不到键盘事件，
+        /// 因此三种情况都读取 WPF 的实时输入状态，判定规则本身与托盘共用一处。
+        /// Whether the shared chord key is currently held. It can be Shift, the left button, or the right button; the taskbar window
+        /// never activates and therefore receives no key events, so all three read WPF's live input state while the rule itself is
+        /// shared with the tray.
+        /// </summary>
+        private bool ChordWheelHeld => GlobalWheelGesturePolicy.IsChordHeld(
+            SettingsManager.Current.Interaction,
+            Keyboard.Modifiers.HasFlag(ModifierKeys.Shift),
+            Mouse.LeftButton == MouseButtonState.Pressed,
+            Mouse.RightButton == MouseButtonState.Pressed);
+
+        private void SetWheelTooltipText(string text)
+        {
+            // 媒体信息作为第二段跟在滚轮提示后面：截断的标题与"滚轮会做什么"是悬停同一处时想知道的全部。
+            // The media info follows the wheel line as a second paragraph: a truncated title and "what the wheel does" are everything the
+            // user wants while hovering that one spot.
+            var content = string.IsNullOrWhiteSpace(_songInfoTooltip) ? text : $"{text}\n\n{_songInfoTooltip}";
+            if (_wheelTooltip.Content as string != content)
+            {
+                // 只改同一个 ToolTip 实例的内容：更改 ToolTip 属性本身会先关掉已打开的气泡，而这里恰恰要求
+                // "滚一下就看到结果"——内容变化会立刻反映在已经显示出来的气泡上。
+                // Only the content of one ToolTip instance changes: reassigning the ToolTip property would first close the open bubble,
+                // while what is wanted here is exactly "scroll once and see the result" — a content change shows up in the bubble that is
+                // already on screen.
+                _wheelTooltip.Content = content;
+            }
+
+            ReassertChordWheelTooltip();
+        }
+
+        /// <summary>
+        /// 组合键是鼠标左键或右键时，按下那一刻会先关掉已经打开的气泡（点击等于"用户要操作了"），
+        /// 于是"按住组合键后提示立刻消失、按住滚动也不再出现"。这里在组合键按住期间重新打开气泡，
+        /// 并在每次内容变化与每次轮询时重申一次，直到指针离开。
+        /// When the chord key is a mouse button, pressing it closes the bubble that was already open (a click means the user is about
+        /// to act), which is why the hint vanished the moment the key was held and never came back while scrolling with it. This
+        /// reopens the bubble while the chord is held and re-asserts it on every content change and every poll tick, until the pointer
+        /// leaves.
+        /// </summary>
+        private void ReassertChordWheelTooltip()
+        {
+            if (!ChordWheelHeld || !InteractionSurface.IsMouseOver)
+                return;
+
+            _wheelTooltip.PlacementTarget = InteractionSurface;
+            if (!_wheelTooltip.IsOpen)
+                _wheelTooltip.IsOpen = true;
+        }
+
+        /// <summary>记录当前曲目的完整信息，并把它并入媒体栏提示。/ Records the current track's full info and folds it into the bar tooltip.</summary>
+        private void UpdateSongInfoTooltip(string? title, string? artist)
+        {
+            var parts = new List<string>(2);
+            if (!string.IsNullOrWhiteSpace(title))
+                parts.Add(title.Trim());
+            if (!string.IsNullOrWhiteSpace(artist))
+                parts.Add(artist.Trim());
+            var info = parts.Count == 0 ? string.Empty : string.Join("\n", parts);
+            if (info == _songInfoTooltip)
+                return;
+
+            _songInfoTooltip = info;
+            RefreshWheelTooltip();
+        }
+
+        /// <summary>
+        /// 指针进入媒体栏时启动滚轮提示的轮询。轮询只做一件事：按键状态变了就把提示换到那个槽位，
+        /// 因为"按住 Shift 不动鼠标"不会产生任何鼠标事件。指针离开后第一个 tick 就会自停。
+        /// Starts the wheel tooltip's poll when the pointer enters the bar. The poll does one thing: switch the hint to the slot whose
+        /// modifier just changed, because "hold Shift without moving the mouse" produces no mouse event at all. It stops itself on
+        /// the first tick after the pointer leaves.
+        /// </summary>
+        private void InteractionSurface_MouseMove(object sender, MouseEventArgs e)
+        {
+            if (!_wheelTooltipTimer.IsEnabled)
+            {
+                // 重新进入时先忘掉上一次的结果，否则会带着旧结果显示给用户。
+                // Forget the previous result on re-entry, otherwise the user is shown a stale one.
+                _appliedWheelSlot = null;
+                _wheelResultShown = false;
+                RefreshWheelTooltip();
+                _wheelTooltipTimer.Start();
+            }
+        }
+
+        private void AdvanceWheelTooltip()
+        {
+            if (!InteractionSurface.IsMouseOver)
+            {
+                _wheelTooltipTimer.Stop();
+                _wheelTooltip.IsOpen = false;
+                return;
+            }
+
+            RefreshWheelTooltip();
+            // 组合键按住期间每一次轮询都重申气泡：指针不动时不会有鼠标事件，而按下鼠标键本身会把气泡关掉。
+            // Every poll tick re-asserts the bubble while the chord is held: a stationary pointer produces no mouse events, and pressing
+            // a mouse button itself closes the bubble.
+            ReassertChordWheelTooltip();
+        }
 
         /// <summary>
         /// 刷新输出设备按钮提示；文本与托盘图标提示来自同一策略，指针悬停与滚轮预览都经过这里。
@@ -561,7 +732,16 @@ namespace AFMediaBar.Components
         private void ApplyTaskbarSectionGeometry(double primaryLength)
         {
             if (_currentMode != WindowMode.Taskbar || _isVertical || !double.IsFinite(primaryLength))
+            {
+                // 几何拿不到有效长度时仍然按现有文字宽度重跑一次跑马灯：一次无效的长度不该让正在滚动的文字退回被裁状态，
+                // 而宽度与裁剪方式只由这里和几何写入，跳过就等于把上一次的结果留在屏幕上。
+                // Even without a usable length the marquee is re-applied from the text width currently in place: one invalid length
+                // must not drop a scrolling text back to a cut-off state, because this method and the geometry are the only writers of
+                // that width, and skipping it leaves the previous result on screen.
+                if (_currentMode == WindowMode.Taskbar && !_isVertical)
+                    ApplyMarqueeLayout(Math.Max(0, SongInfoStackPanel.Width));
                 return;
+            }
 
             var metrics = TaskbarDensityMetrics.From(SettingsManager.Current.TaskbarExperience.Density);
             var artworkRight = GetTaskbarArtworkRight();
@@ -625,7 +805,7 @@ namespace AFMediaBar.Components
                 HoverRevealClip.Rect = new Rect(0, 0, textWidth, HoverRevealHost.Height);
             }
 
-            QueueMarqueeUpdate(textWidth);
+            ApplyMarqueeLayout(textWidth);
         }
 
         private double GetTaskbarArtworkRight()
@@ -813,7 +993,7 @@ namespace AFMediaBar.Components
                     SongArtist.Text = _actualArtist;
                     SongInfoStackPanel.Visibility = Visibility.Collapsed;
                     SongInfoStackPanel.IsHitTestVisible = false;
-                    SongInfoStackPanel.ToolTip = string.Empty;
+                    UpdateSongInfoTooltip(null, null);
                     SongImagePlaceholder.Symbol = SymbolRegular.MusicNote220;
                     SongImagePlaceholder.Visibility = Visibility.Visible;
                     SongImage.ImageSource = null;
@@ -872,11 +1052,17 @@ namespace AFMediaBar.Components
                 // Show current lyric line in title slot when lyrics are available (advances with snapshot position)
                 UpdateLyricLine(snapshot);
 
-                // 更新工具提示显示完整歌曲信息
-                // Update tooltip with full song info
-                SongInfoStackPanel.ToolTip = string.Empty;
-                SongInfoStackPanel.ToolTip += !string.IsNullOrEmpty(snapshot.Title) ? snapshot.Title : string.Empty;
-                SongInfoStackPanel.ToolTip += !string.IsNullOrEmpty(snapshot.Artist) ? "\n\n" + snapshot.Artist : string.Empty;
+                // 文字内容一确定就重跑一次跑马灯：更长的标题该不该滚动，只由这一段文字与当前可用宽度决定，
+                // 不该等下一次几何或鼠标事件才被判断。
+                // The marquee is re-applied as soon as the text is settled: whether a longer title has to scroll depends only on this
+                // text and the width currently available, and must not wait for the next geometry or mouse event.
+                ApplyMarqueeLayout(Math.Max(0, SongInfoStackPanel.Width));
+
+                // 完整歌曲信息并入整条媒体栏共用的那个提示：媒体文字区不再自持一个提示，
+                // 否则悬停文字时会盖住滚轮提示，而两者恰恰是同一处需要的两条信息。
+                // The full song info joins the single tooltip shared by the whole bar: the text area no longer carries one of its own,
+                // because that would cover the wheel hint while both are exactly the two things needed in that one place.
+                UpdateSongInfoTooltip(snapshot.Title, snapshot.Artist);
 
                 // 根据主色调改变图标颜色（从封面提取）；没有封面主色时回退到应用统一强调色，再退回系统高亮色。
                 // 旧实现回退到 MicaWPF 的强调色键，而该键在本项目中不解析，会得到一个空画刷。
@@ -1074,8 +1260,7 @@ namespace AFMediaBar.Components
 
         private void SongImageBorder_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
         {
-            if (e.ChangedButton != MouseButton.Left ||
-                DateTime.UtcNow < _suppressSurfaceClickUntilUtc)
+            if (e.ChangedButton != MouseButton.Left || ShouldSuppressSurfaceClick())
                 return;
 
             if (!_isConnected)
@@ -1232,7 +1417,7 @@ namespace AFMediaBar.Components
 
         private void SongTitleContainer_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
         {
-            if (!_isConnected || e.ChangedButton != MouseButton.Left || DateTime.UtcNow < _suppressSurfaceClickUntilUtc)
+            if (!_isConnected || e.ChangedButton != MouseButton.Left || ShouldSuppressSurfaceClick())
                 return;
 
             var action = _currentMode == WindowMode.Taskbar
@@ -1240,6 +1425,18 @@ namespace AFMediaBar.Components
                 : PlayerClickAction.ActivateSource;
             ExecutePlayerClickAction(action);
             e.Handled = true;
+        }
+
+        /// <summary>
+        /// 本次点击是否应当被吞掉：组合滚轮结束后的合成点击，或宿主设定的一次性抑制窗口。
+        /// 查询一律执行，因为抑制标记是一次性的——不取走它，之后真正的点击会被误吞。
+        /// Whether this click has to be swallowed: the synthesized one after a chord wheel, or a one-shot window set by the host.
+        /// The query always runs, because the suppression flag is one-shot: leaving it in place would eat a later, real click.
+        /// </summary>
+        private bool ShouldSuppressSurfaceClick()
+        {
+            var chordWheelClick = SuppressedClickSource?.Invoke() ?? false;
+            return chordWheelClick || DateTime.UtcNow < _suppressSurfaceClickUntilUtc;
         }
     }
 }

@@ -737,7 +737,8 @@ namespace AFMediaBar.Views.Windows
                 _audioMonitorService,
                 _sourceActivationService,
                 _systemMetricsMonitor,
-                _screenBackgroundSampler);
+                _screenBackgroundSampler,
+                _mouseInputMonitor);
             window.OpenFullPanelRequested += TaskbarWindow_OpenFullPanelRequested;
             return window;
         }

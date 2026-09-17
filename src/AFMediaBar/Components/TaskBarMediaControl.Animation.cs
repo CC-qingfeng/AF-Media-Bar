@@ -25,90 +25,150 @@ public partial class TaskBarMediaControl
 
     private static PowerEase CreateEaseInOut() => new() { Power = 3, EasingMode = EasingMode.EaseInOut };
 
-    private void QueueMarqueeUpdate(double textWidth)
-    {
-        var version = ++_marqueeUpdateVersion;
-        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
-        {
-            if (version != _marqueeUpdateVersion)
-                return;
-            UpdateMarqueeAnimations(textWidth);
-        }));
-    }
+    /// <summary>
+    /// 立即应用跑马灯与文字宽度。这里 MUST 同步执行而不是投递到 Loaded 优先级：
+    /// 宿主几何刚写完容器宽度，紧接着就是"文字宽度应该是多少"的答案，中间只要插入任何一次几何更新，
+    /// 写回的文字宽度就会被重新按可用宽度覆盖，滚动动画于是在一段被裁短的文字上跑。
+    /// Applies the marquee and the text widths immediately. This must run synchronously instead of being posted at Loaded priority:
+    /// the host geometry has just written the container widths, and the answer to "how wide should the text be" follows right
+    /// after — letting any geometry update slip in between overwrites the width back to the available one, leaving the scroll
+    /// animation running over text that has already been cut short.
+    /// </summary>
+    /// <param name="availableWidth">文字区的可用宽度（DIP）。/ Available width of the text region in DIP.</param>
+    internal void ApplyMarqueeLayout(double availableWidth) => UpdateMarqueeAnimations(availableWidth);
 
-    private void UpdateMarqueeAnimations(double textWidth)
+    /// <summary>
+    /// 应用跑马灯与文字宽度。宿主几何算出的可用宽度直接传进来，不再依赖 <c>ActualWidth</c>：那个值在宽度刚写入时可能还是上一轮的，
+    /// 用它判断"是否溢出"会把超出文字误判成放得下，于是既不滚动、也没有省略号，看起来就是被硬裁。
+    /// Applies the marquee and the text widths. The available width the host geometry computed is passed in directly instead of being
+    /// read from <c>ActualWidth</c>: that value can still belong to the previous pass right after a width is written, and judging
+    /// "does it overflow" from it misclassifies an overflowing text as fitting, which neither scrolls nor shows an ellipsis and
+    /// simply looks hard-cut.
+    /// </summary>
+    /// <param name="availableWidth">文字区的可用宽度（DIP），由几何唯一计算。/ Available width of the text region in DIP, computed by the geometry alone.</param>
+    private void UpdateMarqueeAnimations(double availableWidth)
     {
-        var experience = SettingsManager.Current.TaskbarExperience.Normalize();
+        // 跑马灯的判据是"文字真的超出了可用宽度"，而不是长度模式：跟随内容模式下媒体栏被任务栏安全上限夹住时，
+        // 文字同样会超出，此时也必须能滚动看全，否则用户只能看到被截断的标题。
+        // The marquee keys off the text actually overflowing its available width rather than off the length mode: in
+        // follow-content mode the bar is clamped by the taskbar's safe maximum, the text overflows there too, and it has to be
+        // scrollable as well, otherwise the user is left with a truncated title.
         var enabled = _currentMode == WindowMode.Taskbar &&
                       !_isVertical &&
                       _isConnected &&
-                      experience.LengthMode == TaskbarLengthMode.Fixed &&
                       CurrentMotion.UseContinuousMotion;
-        var fingerprint = $"{enabled}|{textWidth:0.##}|{SongTitle.Text}|{SongArtist.Text}|{SongLyrics.Text}|{SongLyricsSecondary.Text}|{SongMetadataPanel.Visibility}|{SongLyricsPanel.Visibility}|{SongLyricsSecondaryContainer.Visibility}";
-        if (fingerprint == _lastMarqueeFingerprint)
-            return;
-
+        var fingerprint = $"{enabled}|{availableWidth:0.##}|{SongTitle.Text}|{SongArtist.Text}|{SongLyrics.Text}|{SongLyricsSecondary.Text}|{SongMetadataPanel.Visibility}|{SongLyricsPanel.Visibility}|{SongLyricsSecondaryContainer.Visibility}";
+        // 只有"要不要重开滚动"由指纹决定；文字宽度与裁剪方式每次都要写回。宿主几何按可用宽度重置过 TextBlock 宽度，
+        // 若这里因为指纹相同而整段跳过，滚动仍在继续，但文字已被硬裁到可用宽度——这正是"滚动时看不到超出部分"的根因。
+        // Only "should the scroll restart" is decided by the fingerprint; the text width and trimming are written back every
+        // time. The host's geometry resets the TextBlock width to the available width, and skipping this whole method on an
+        // unchanged fingerprint left the scroll continuing over text that had already been hard-cut to that width — the actual
+        // reason the overflow never came into view.
+        var restartAnimation = fingerprint != _lastMarqueeFingerprint;
         _lastMarqueeFingerprint = fingerprint;
-        ConfigureMarquee(SongTitle, SongTitleContainer, enabled);
-        ConfigureMarquee(SongArtist, SongArtistContainer, enabled);
-        ConfigureMarquee(SongLyrics, SongLyricsContainer, enabled);
-        ConfigureMarquee(SongLyricsSecondary, SongLyricsSecondaryContainer, enabled);
+        _marqueeEntries.Clear();
+        AddMarqueeEntry(SongTitle, SongTitleContainer, enabled, availableWidth);
+        AddMarqueeEntry(SongArtist, SongArtistContainer, enabled, availableWidth);
+        AddMarqueeEntry(SongLyrics, SongLyricsContainer, enabled, availableWidth);
+        AddMarqueeEntry(SongLyricsSecondary, SongLyricsSecondaryContainer, enabled, availableWidth);
+        if (_marqueeEntries.Count == 0)
+        {
+            _marqueeTimer.Stop();
+            return;
+        }
+
+        if (restartAnimation)
+            StartMarqueeScroll();
     }
 
-    private static void ConfigureMarquee(TextBlock text, FrameworkElement container, bool enabled)
+    private void AddMarqueeEntry(
+        TextBlock text,
+        FrameworkElement container,
+        bool enabled,
+        double availableWidth)
+    {
+        if (ConfigureMarquee(text, container, enabled, availableWidth) is { } entry)
+            _marqueeEntries.Add(entry);
+    }
+
+    private static MarqueeEntry? ConfigureMarquee(
+        TextBlock text,
+        FrameworkElement container,
+        bool enabled,
+        double availableWidth)
     {
         if (text.RenderTransform is not TranslateTransform transform)
         {
             transform = new TranslateTransform();
             text.RenderTransform = transform;
         }
-        transform.BeginAnimation(TranslateTransform.XProperty, null);
-        transform.X = 0;
 
-        var available = double.IsFinite(container.ActualWidth) && container.ActualWidth > 0
-            ? container.ActualWidth
-            : double.IsFinite(container.Width) ? Math.Max(0, container.Width) : 0;
+        var available = double.IsFinite(availableWidth) ? Math.Max(0, availableWidth) : 0;
         var measured = MeasureTextWidth(text.Text, text);
-        if (!enabled || container.Visibility != Visibility.Visible || available <= 0 || measured <= available + 1)
+        var overflow = enabled &&
+                       container.Visibility == Visibility.Visible &&
+                       available > 0
+            ? TaskbarExperiencePolicy.CalculateMarqueeOverflow(measured, available)
+            : 0;
+        if (overflow <= 1)
         {
+            transform.X = 0;
             text.Width = Math.Max(0, available);
             text.TextTrimming = TextTrimming.CharacterEllipsis;
+            return null;
+        }
+
+        // 宽度必须给足整段文字：只有比容器宽，位移才能把后面那截带进裁剪区。
+        // The full text width has to be granted: only a text wider than its container lets the translation bring the tail into
+        // the clipped area.
+        text.Width = measured;
+        text.TextTrimming = TextTrimming.None;
+        return new MarqueeEntry(text, transform, overflow);
+    }
+
+    /// <summary>
+    /// 跑马灯的滚动由本控件按帧推进，而不是交给 Storyboard：速度、停留与折返都在 <see cref="MarqueeScrollPolicy"/> 里，
+    /// 因此"文字到底有没有移动、移了多远"是可以直接读出来的量，也不再依赖动画时钟是否被渲染目标驱动。
+    /// The marquee is advanced by this control frame by frame instead of by a storyboard: speed, pauses, and the turn-around all live
+    /// in <see cref="MarqueeScrollPolicy"/>, so "did the text move, and how far" is directly readable and no longer depends on an
+    /// animation clock being driven by a rendering target.
+    /// </summary>
+    private void AdvanceMarqueeScroll()
+    {
+        if (_marqueeEntries.Count == 0)
+        {
+            _marqueeTimer.Stop();
             return;
         }
 
-        text.Width = measured;
-        text.TextTrimming = TextTrimming.None;
-        var overflow = TaskbarExperiencePolicy.CalculateMarqueeOverflow(
-            measured,
-            available,
-            TaskbarLengthMode.Fixed);
-        var travelSeconds = Math.Max(1, overflow / 30d);
-        var animation = new DoubleAnimationUsingKeyFrames
-        {
-            Duration = TimeSpan.FromSeconds(2 + travelSeconds * 2),
-            RepeatBehavior = RepeatBehavior.Forever
-        };
-        animation.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromTimeSpan(TimeSpan.Zero)));
-        animation.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromTimeSpan(TimeSpan.FromSeconds(1))));
-        animation.KeyFrames.Add(new LinearDoubleKeyFrame(-overflow, KeyTime.FromTimeSpan(TimeSpan.FromSeconds(1 + travelSeconds))));
-        animation.KeyFrames.Add(new LinearDoubleKeyFrame(-overflow, KeyTime.FromTimeSpan(TimeSpan.FromSeconds(2 + travelSeconds))));
-        animation.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromTimeSpan(TimeSpan.FromSeconds(2 + travelSeconds * 2))));
-        transform.BeginAnimation(TranslateTransform.XProperty, animation, HandoffBehavior.SnapshotAndReplace);
+        var elapsed = Stopwatch.GetElapsedTime(_marqueeStartedAt);
+        foreach (var entry in _marqueeEntries)
+            entry.Transform.X = MarqueeScrollPolicy.CalculateOffset(entry.Overflow, elapsed);
+    }
+
+    private void StartMarqueeScroll()
+    {
+        _marqueeStartedAt = Stopwatch.GetTimestamp();
+        foreach (var entry in _marqueeEntries)
+            entry.Transform.X = 0;
+        if (!_marqueeTimer.IsEnabled)
+            _marqueeTimer.Start();
     }
 
     private void StopMarqueeAnimations()
     {
-        _marqueeUpdateVersion++;
         _lastMarqueeFingerprint = string.Empty;
+        _marqueeEntries.Clear();
+        _marqueeTimer.Stop();
         foreach (var text in new[] { SongTitle, SongArtist, SongLyrics, SongLyricsSecondary })
         {
             if (text.RenderTransform is TranslateTransform transform)
-            {
-                transform.BeginAnimation(TranslateTransform.XProperty, null);
                 transform.X = 0;
-            }
         }
     }
+
+    /// <summary>一个正在滚动的文字元素：它的位移与需要移动的距离。 / One scrolling text element: its transform and the distance it has to travel.</summary>
+    private readonly record struct MarqueeEntry(TextBlock Text, TranslateTransform Transform, double Overflow);
 
     private static double MeasureTextWidth(string text, TextBlock source)
     {
@@ -394,7 +454,7 @@ public partial class TaskBarMediaControl
     private void SongInfoStackPanel_MouseLeave(object sender, MouseEventArgs e)
     {
         _hoverOpenTimer.Stop();
-        QueueMarqueeUpdate(Math.Max(0, SongInfoStackPanel.Width));
+        ApplyMarqueeLayout(Math.Max(0, SongInfoStackPanel.Width));
         if (!_isTaskbarHoverVisible)
         {
             if (!TaskbarDirectFullPanelHandle.IsMouseOver)

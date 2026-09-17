@@ -104,18 +104,19 @@ public static class TaskbarExperiencePolicy
         return Math.Clamp(requested, minimum, maximum);
     }
 
-    /// <summary>仅在固定长度模式下返回超出文字容器的滚动距离。 / Returns text overflow distance only in fixed-length mode.</summary>
-    public static double CalculateMarqueeOverflow(
-        double measuredTextLength,
-        double availableTextLength,
-        TaskbarLengthMode mode)
+    /// <summary>
+    /// 返回文字超出容器的滚动距离。判据只有"量出来的文字比可用宽度长"，与长度模式无关：
+    /// 跟随内容模式下媒体栏被任务栏安全上限夹住时文字同样会超出，那时也必须能滚动看全。
+    /// Returns the distance the text overflows its container. The only condition is that the measured text is wider than the
+    /// available width, independent of the length mode: in follow-content mode the bar is clamped by the taskbar's safe maximum
+    /// and the text overflows there too, and it has to stay scrollable.
+    /// </summary>
+    /// <param name="measuredTextLength">量出的文字宽度。/ Measured text width.</param>
+    /// <param name="availableTextLength">容器可用的文字宽度。/ Text width available inside the container.</param>
+    public static double CalculateMarqueeOverflow(double measuredTextLength, double availableTextLength)
     {
-        if (mode != TaskbarLengthMode.Fixed ||
-            !double.IsFinite(measuredTextLength) ||
-            !double.IsFinite(availableTextLength))
-        {
+        if (!double.IsFinite(measuredTextLength) || !double.IsFinite(availableTextLength))
             return 0;
-        }
 
         return Math.Max(0, measuredTextLength - Math.Max(0, availableTextLength));
     }

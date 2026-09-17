@@ -85,8 +85,20 @@
 
     <Border Name="MainBorder" CornerRadius="6"
             ClipToBounds="True">
+        <!--
+            整条媒体栏挂滚轮提示：悬停立刻显示（InitialShowDelay=0），内容说明当前绑定的普通/组合滚轮动作，
+            滚动后换成刚刚发生的结果；提示向上弹出，因为媒体栏位于任务栏、下方没有空间。
+            The whole bar carries the wheel tooltip: it opens immediately (InitialShowDelay=0), states the currently bound plain and
+            chord wheel actions, and switches to the result that just happened after a scroll. It pops upwards because the bar sits
+            in the taskbar with no room below.
+        -->
         <Grid Name="InteractionSurface" Background="#01000000"
-              PreviewMouseWheel="InteractionSurface_PreviewMouseWheel">
+              PreviewMouseWheel="InteractionSurface_PreviewMouseWheel"
+              MouseMove="InteractionSurface_MouseMove"
+              ToolTipService.BetweenShowDelay="0"
+              ToolTipService.InitialShowDelay="0"
+              ToolTipService.Placement="Top"
+              ToolTipService.ShowDuration="20000">
             <Image x:Name="BackgroundImage" Stretch="UniformToFill" HorizontalAlignment="Center"
                    VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5" Opacity="0.4">
                 <Image.Effect>

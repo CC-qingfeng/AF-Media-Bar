@@ -16,7 +16,7 @@ public sealed class GlobalInteractionRouter
         _audioInteractionService = audioInteractionService;
     }
 
-    public async Task<string?> ExecuteWheelAsync(
+    public async Task<WheelTooltipResult?> ExecuteWheelAsync(
         int delta,
         bool isShiftDown,
         bool isLeftButtonDown,
@@ -42,19 +42,56 @@ public sealed class GlobalInteractionRouter
                     else
                         await _mediaSessionService.SkipNextAsync();
                 }
-                return delta > 0 ? "上一首" : "下一首";
+
+                // 结果里带上切歌之后的曲名：提示要回答的是"刚才发生了什么"，只写"下一首"等于把用户已经知道的事说了一遍。
+                // The result carries the title after the skip: the tooltip answers "what just happened", and saying only "next" would
+                // restate what the user already knows.
+                return new WheelTooltipResult(
+                    WheelTooltipPolicy.BuildSkipActionName(delta),
+                    ResolveCurrentTitle());
+
             case WheelAction.SwitchMediaSource:
                 return CycleMediaSource(delta > 0 ? -steps : steps);
+
             case WheelAction.CurrentApplicationVolume:
-                return await _audioInteractionService.AdjustCurrentMediaVolumeAsync(delta > 0 ? steps : -steps);
+            {
+                var detail = await _audioInteractionService.AdjustCurrentMediaVolumeAsync(delta > 0 ? steps : -steps);
+                return new WheelTooltipResult("当前媒体音量", detail);
+            }
+
             case WheelAction.OutputDevice:
-                return await _audioInteractionService.CycleOutputDeviceAsync(delta > 0 ? -steps : steps, deferApply: true);
+            {
+                var detail = await _audioInteractionService.CycleOutputDeviceAsync(delta > 0 ? -steps : steps, deferApply: true);
+                return new WheelTooltipResult("输出设备", StripLabel(detail));
+            }
+
             default:
                 return null;
         }
     }
 
-    private string? CycleMediaSource(int signedSteps)
+    /// <summary>取当前媒体的曲名，用于切歌结果。/ Reads the current media title for the skip result.</summary>
+    private string? ResolveCurrentTitle() => _mediaSessionService.CurrentSnapshot?.Title;
+
+    /// <summary>
+    /// 去掉音频服务返回文本里已经带上的标签。音频服务把"输出设备：X"整句交给托盘提示用，
+    /// 而这里的提示自己拼"动作名：结果"，两层标签会变成"输出设备：输出设备：X"。
+    /// Strips the label the audio service already embedded. That service hands the tray tooltip a whole sentence such as
+    /// "output device: X", while this tooltip composes its own "action: result", and two labels would read
+    /// "output device: output device: X".
+    /// </summary>
+    private static string? StripLabel(string? detail)
+    {
+        if (string.IsNullOrWhiteSpace(detail))
+            return null;
+
+        var separator = detail.IndexOf('：');
+        return separator >= 0 && separator < detail.Length - 1
+            ? detail[(separator + 1)..].Trim()
+            : detail.Trim();
+    }
+
+    private WheelTooltipResult? CycleMediaSource(int signedSteps)
     {
         var sessions = _mediaSessionService.CurrentSessionOptions;
         if (sessions.Count == 0 || signedSteps == 0)
@@ -65,9 +102,14 @@ public sealed class GlobalInteractionRouter
             current = 0;
         var target = sessions[WheelInput.MoveCircular(current, signedSteps, sessions.Count)];
         _mediaSessionService.SelectSession(target.Key);
-        return $"媒体源：{target.DisplayName}";
+        return new WheelTooltipResult("播放源", target.DisplayName);
     }
 }
+
+/// <summary>一次滚轮手势的结果：动作名与结果细节，供提示文案拼装。/ Result of one wheel gesture: the action name and its detail, for the tooltip to compose.</summary>
+/// <param name="ActionName">动作的显示名（例如「下一首」）。/ Display name of the action, such as "next".</param>
+/// <param name="Detail">结果细节（曲名、媒体名、设备名或音量）；读不到时为 null。/ Result detail (title, media name, device name, or volume), or null when unreadable.</param>
+public readonly record struct WheelTooltipResult(string ActionName, string? Detail);
 
 /// <summary>无 UI 依赖的全局滚轮映射。 / UI-independent global wheel mapping.</summary>
 public static class GlobalWheelGesturePolicy
@@ -79,14 +121,35 @@ public static class GlobalWheelGesturePolicy
         bool isRightButtonDown)
     {
         settings = settings.Normalize();
-        var chordPressed = settings.Modifier switch
+        return IsChordHeld(settings, isShiftDown, isLeftButtonDown, isRightButtonDown)
+            ? settings.ChordWheelAction
+            : settings.PrimaryWheelAction;
+    }
+
+    /// <summary>
+    /// 当前是否按住了共用的组合键。判定只有一处，媒体栏读取 WPF 的输入状态、托盘读取全局钩子的状态，
+    /// 两者必须得到同一个结论，否则同一个手势在两处会落到不同的槽位。
+    /// Whether the shared chord key is currently held. The rule lives in exactly one place: the media bar reads WPF input state and
+    /// the tray reads the global hook's state, and both must reach the same conclusion or one gesture would land in different slots.
+    /// </summary>
+    /// <param name="settings">交互设置（内部会归一化）。/ Interaction settings, normalized internally.</param>
+    /// <param name="isShiftDown">Shift 是否按住。/ Whether Shift is held.</param>
+    /// <param name="isLeftButtonDown">鼠标左键是否按住。/ Whether the left button is held.</param>
+    /// <param name="isRightButtonDown">鼠标右键是否按住。/ Whether the right button is held.</param>
+    public static bool IsChordHeld(
+        GlobalInteractionSettings settings,
+        bool isShiftDown,
+        bool isLeftButtonDown,
+        bool isRightButtonDown)
+    {
+        settings = settings.Normalize();
+        return settings.Modifier switch
         {
             InteractionModifier.Shift => isShiftDown,
             InteractionModifier.LeftMouseButton => isLeftButtonDown,
             InteractionModifier.RightMouseButton => isRightButtonDown,
             _ => false
         };
-        return chordPressed ? settings.ChordWheelAction : settings.PrimaryWheelAction;
     }
 
     /// <summary>解析同一修饰键下的托盘滚轮绑定。 / Resolves tray-wheel binding using the shared modifier.</summary>
@@ -97,14 +160,9 @@ public static class GlobalWheelGesturePolicy
         bool isRightButtonDown)
     {
         settings = settings.Normalize();
-        var chordPressed = settings.Modifier switch
-        {
-            InteractionModifier.Shift => isShiftDown,
-            InteractionModifier.LeftMouseButton => isLeftButtonDown,
-            InteractionModifier.RightMouseButton => isRightButtonDown,
-            _ => false
-        };
-        return chordPressed ? settings.TrayChordWheelAction : settings.TrayPrimaryWheelAction;
+        return IsChordHeld(settings, isShiftDown, isLeftButtonDown, isRightButtonDown)
+            ? settings.TrayChordWheelAction
+            : settings.TrayPrimaryWheelAction;
     }
 }
 

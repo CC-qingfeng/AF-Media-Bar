@@ -81,6 +81,7 @@ public partial class TaskbarWindow : Window
     private MediaBarSizeRequest? _pendingSizeRequest;
     private MediaBarSizeRequest? _lastDesiredSizeRequest;
     private readonly AudioMonitorService _audioMonitorService;
+    private readonly NativeMouseInputMonitor _mouseInputMonitor;
     private readonly AdaptiveForegroundSamplingSession _foregroundSamplingSession;
     private readonly float[] _spectrumBands = new float[SpectrumComponentSettings.MaximumBandCount];
     private MediaSnapshot _lastSnapshot = MediaSnapshot.Disconnected;
@@ -110,14 +111,20 @@ public partial class TaskbarWindow : Window
         AudioMonitorService audioMonitorService,
         MediaSourceActivationService sourceActivationService,
         SystemMetricsMonitorService metricsMonitor,
-        ScreenBackgroundSampler screenBackgroundSampler)
+        ScreenBackgroundSampler screenBackgroundSampler,
+        NativeMouseInputMonitor mouseInputMonitor)
     {
         WindowHelper.SetNoActivate(this);
         InitializeComponent();
 
+        _mouseInputMonitor = mouseInputMonitor;
         DataContext = viewModel;
         ContextMenuHelper.AttachOutsideClickDismissal(PlayerMenu);
         appearanceService.Attach(PlayerMenu, this);
+        // 组合滚轮结束时的合成点击必须被吞掉：静置层点击与右键菜单都要问同一个判定，它们分别属于控件与宿主。
+        // The click synthesized when a chord wheel ends has to be swallowed: the rest-layer click and the context menu both ask the
+        // same authority, and they live in the control and the host respectively.
+        MediaControl.SuppressedClickSource = _mouseInputMonitor.ConsumeSuppressedClick;
         _compactFlyout = new TaskbarCompactFlyoutWindow(appearanceService);
         _compactFlyout.QuickLaunchSelected += MediaControl_QuickLaunchRequested;
         _compactFlyout.OutputDeviceSelected += MediaControl_OutputDeviceSelected;
@@ -864,7 +871,12 @@ public partial class TaskbarWindow : Window
             _suppressContextMenuUntilUtc = DateTime.UtcNow.AddMilliseconds(450);
             PlayerMenu.IsOpen = false;
         }
-        await _interactionRouter.ExecuteWheelAsync(e.Delta, e.IsShiftDown, e.IsLeftButtonDown, e.IsRightButtonDown);
+        // 滚轮提示要回答"刚才发生了什么"：动作执行完立刻把结果写给媒体栏，用户不需要去别处确认。
+        // The wheel tooltip answers "what just happened": the result is handed to the bar as soon as the action completes, so the
+        // user needs no second place to check.
+        var result = await _interactionRouter.ExecuteWheelAsync(e.Delta, e.IsShiftDown, e.IsLeftButtonDown, e.IsRightButtonDown);
+        if (!_isClosing && result is { } wheelResult)
+            MediaControl.SetWheelResult(wheelResult);
     }
 
     private async void MediaControl_OutputDeviceMenuRequested(object? sender, EventArgs e)
@@ -1400,7 +1412,11 @@ public partial class TaskbarWindow : Window
 
     private void Window_ContextMenuOpening(object sender, ContextMenuEventArgs e)
     {
-        if (DateTime.UtcNow < _suppressContextMenuUntilUtc)
+        // 组合滚轮结束时的松键同样会合成右键菜单：判定一次取走标记，避免"按住右键滚动再松开"弹出菜单。
+        // Releasing the button after a chord wheel also synthesizes the context menu, so the flag is taken once here to stop a
+        // "hold the right button, scroll, release" gesture from opening the menu.
+        var chordWheelClick = _mouseInputMonitor.ConsumeSuppressedClick();
+        if (chordWheelClick || DateTime.UtcNow < _suppressContextMenuUntilUtc)
         {
             e.Handled = true;
             PlayerMenu.IsOpen = false;

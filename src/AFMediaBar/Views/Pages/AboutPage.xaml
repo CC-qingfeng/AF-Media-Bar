@@ -245,12 +245,39 @@
                         </components:SettingsRow>
 
                         <components:SettingsRow
-                            Badge="预留"
-                            Description="登录 Windows 后自动运行 AF Media Bar"
+                            Description="登录 Windows 后自动运行 AF Media Bar（只写入当前用户的启动项）"
                             Icon="{ui:SymbolIcon ShareScreenStart24}"
                             Title="开机自动启动">
-                            <ui:ToggleSwitch IsEnabled="False" />
+                            <ui:ToggleSwitch IsChecked="{Binding ViewModel.LaunchAtStartup, Mode=TwoWay}" />
                         </components:SettingsRow>
+
+                        <components:SettingsRow
+                            Description="{Binding ViewModel.UserDefaultsStatusText}"
+                            Icon="{ui:SymbolIcon Bookmark24}"
+                            Title="保存当前设置为默认">
+                            <ui:Button
+                                Command="{Binding ViewModel.SaveUserDefaultsCommand}"
+                                Content="保存"
+                                Icon="{ui:SymbolIcon Save24}"
+                                Style="{StaticResource AfSettingsButtonStyle}" />
+                        </components:SettingsRow>
+
+                        <components:SettingsRow
+                            Description="删除已保存的默认设置，重置入口回到程序内置默认值"
+                            Icon="{ui:SymbolIcon Delete24}"
+                            IsEnabled="{Binding ViewModel.HasUserDefaults}"
+                            Title="清除我的默认设置">
+                            <ui:Button
+                                Command="{Binding ViewModel.ClearUserDefaultsCommand}"
+                                Content="清除"
+                                Icon="{ui:SymbolIcon Delete24}"
+                                Style="{StaticResource AfSettingsButtonStyle}" />
+                        </components:SettingsRow>
+
+                        <TextBlock
+                            Margin="16,4,0,0"
+                            Style="{StaticResource AfSettingsHintTextStyle}"
+                            Text="{Binding ViewModel.StartupStatusText}" />
                     </StackPanel>
                 </components:SettingsGroup>
 

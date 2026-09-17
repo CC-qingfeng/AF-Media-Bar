@@ -51,6 +51,7 @@ public sealed class AppSettings : INotifyPropertyChanged
     private SpectrumComponentSettings _spectrumComponent = SpectrumComponentSettings.Default;
     private PerformanceComponentSettings _performanceComponent = PerformanceComponentSettings.Default;
     private UpdateSettings _update = UpdateSettings.Default;
+    private bool _launchAtStartup = true;
 
     public AppearanceSettings Appearance { get => _appearance; set => Set(ref _appearance, value.Normalize()); }
     public TrayWheelBehavior TrayWheelBehavior { get => _trayWheelBehavior; set => Set(ref _trayWheelBehavior, value); }
@@ -95,6 +96,14 @@ public sealed class AppSettings : INotifyPropertyChanged
 
     /// <summary>更新下载器设置：自动检查、自动下载安装、已跳过版本与上次检查结果。/ Update-downloader settings: automatic checking, automatic download and install, skipped version, and the last check result.</summary>
     public UpdateSettings Update { get => _update; set => Set(ref _update, value.Normalize()); }
+
+    /// <summary>
+    /// 是否随 Windows 登录自动启动。默认开启：设置里存的是用户意图，注册表里的 Run 项是它的执行结果，
+    /// 因此启动时会按该值核对一次登记状态。
+    /// Whether the application starts with the Windows session. On by default: the settings file stores the intent while the
+    /// registry Run entry is its effect, so startup reconciles the registration against this value once.
+    /// </summary>
+    public bool LaunchAtStartup { get => _launchAtStartup; set => Set(ref _launchAtStartup, value); }
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -169,7 +178,8 @@ public sealed class AppSettings : INotifyPropertyChanged
         QuickLaunch = QuickLaunch,
         SpectrumComponent = SpectrumComponent,
         PerformanceComponent = PerformanceComponent,
-        Update = Update
+        Update = Update,
+        LaunchAtStartup = LaunchAtStartup
     };
 
     private void Set<T>(ref T field, T value, [CallerMemberName] string? name = null)
@@ -194,6 +204,24 @@ public sealed class SettingsChangedEventArgs(SettingsResetScope? resetScope = nu
 public static class SettingsManager
 {
     private static AppSettings _current = new();
+    private static AppSettings? _userDefaults;
+
+    /// <summary>
+    /// 用户自己保存的默认设置。存在时所有"恢复默认设置"入口都以它为准，而不是程序内置默认值；
+    /// 组合根在启动阶段读入快照后调用 <see cref="SetUserDefaults"/>，因此本类本身不做任何文件 I/O。
+    /// The defaults the user saved themselves. When present, every "restore defaults" entry uses it instead of the built-in
+    /// defaults; the composition root loads the snapshot at startup and calls <see cref="SetUserDefaults"/>, so this class itself
+    /// performs no file I/O.
+    /// </summary>
+    public static AppSettings? UserDefaults => _userDefaults;
+
+    /// <summary>当前生效的默认设置：用户快照优先，其次是内置默认。/ Effective defaults: the user snapshot first, the built-in defaults otherwise.</summary>
+    private static AppSettings Defaults => _userDefaults ?? new AppSettings();
+
+    /// <summary>设置或清除用户默认设置快照。/ Sets or clears the user-defaults snapshot.</summary>
+    /// <param name="defaults">用户保存的默认设置；传 null 表示回到内置默认。/ Saved defaults, or null to fall back to the built-in ones.</param>
+    public static void SetUserDefaults(AppSettings? defaults) => _userDefaults = defaults?.Normalize();
+
     static SettingsManager() => Subscribe(_current);
     public static AppSettings Current { get => _current; set => Replace(value); }
     public static event EventHandler<SettingsChangedEventArgs>? SettingsChanged;
@@ -242,10 +270,10 @@ public static class SettingsManager
     }
     public static void ResetAppearance()
     {
-        var next = Current.Clone();
-        next.Appearance = AppearanceSettings.Default;
-        next.TaskbarSurface = ModeSurfaceSettings.Default;
-        next.DynamicIslandSurface = ModeSurfaceSettings.Default;
+        var next = Current.Clone(); var defaults = Defaults;
+        next.Appearance = defaults.Appearance;
+        next.TaskbarSurface = defaults.TaskbarSurface;
+        next.DynamicIslandSurface = defaults.DynamicIslandSurface;
         // 媒体文字大小的界面位于外观页的「媒体栏文字」分组，因此它也属于这一页的重置作用域。
         // 显示模式页的重置仍然重置同一份任务栏体验设置，两个入口重置同一组值不会互相矛盾——与灵动岛外观的处理相同。
         // The media text size is presented in the appearance page's media-bar-text group, so it belongs to this page's reset scope
@@ -253,13 +281,13 @@ public static class SettingsManager
         // keeps "restore this page" honest — the same arrangement the island appearance already uses.
         next.TaskbarExperience = next.TaskbarExperience with
         {
-            MediaFontSizePercent = TaskbarExperienceSettings.Default.MediaFontSizePercent
+            MediaFontSizePercent = defaults.TaskbarExperience.MediaFontSizePercent
         };
         Replace(next, SettingsResetScope.Appearance);
     }
     public static void ResetDisplayModes()
     {
-        var next = Current.Clone(); var defaults = new AppSettings();
+        var next = Current.Clone(); var defaults = Defaults;
         next.TaskbarExperience = defaults.TaskbarExperience;
         next.WindowMode = defaults.WindowMode; next.LayoutOrientationMode = defaults.LayoutOrientationMode;
         next.TaskbarBarEnabled = defaults.TaskbarBarEnabled;
@@ -276,30 +304,30 @@ public static class SettingsManager
     }
     public static void ResetExtraFeatures()
     {
-        var next = Current.Clone();
-        next.TrackChangeNotification = TrackChangeNotificationSettings.Default;
-        next.SmtcSourceFilter = SmtcSourceFilterSettings.Default;
+        var next = Current.Clone(); var defaults = Defaults;
+        next.TrackChangeNotification = defaults.TrackChangeNotification;
+        next.SmtcSourceFilter = defaults.SmtcSourceFilter;
         next.QuickLaunch = QuickLaunchSettings.Default;
-        next.SpectrumComponent = SpectrumComponentSettings.Default;
-        next.PerformanceComponent = PerformanceComponentSettings.Default;
+        next.SpectrumComponent = defaults.SpectrumComponent;
+        next.PerformanceComponent = defaults.PerformanceComponent;
         Replace(next, SettingsResetScope.ExtraFeatures);
     }
     public static void ResetInteraction()
     {
         var next = Current.Clone();
-        next.Interaction = GlobalInteractionSettings.Default;
+        next.Interaction = Defaults.Interaction;
         Replace(next, SettingsResetScope.Interaction);
     }
     public static void ResetLyrics()
     {
-        var next = Current.Clone(); var defaults = new AppSettings();
+        var next = Current.Clone(); var defaults = Defaults;
         next.LyricsEnabled = defaults.LyricsEnabled; next.TwoLineLyricsEnabled = defaults.TwoLineLyricsEnabled;
         next.LyricsSecondaryLineMode = defaults.LyricsSecondaryLineMode; next.LyricsTextAlignment = defaults.LyricsTextAlignment;
         Replace(next, SettingsResetScope.Lyrics);
     }
     public static void ResetLayout()
     {
-        var next = Current.Clone(); var defaults = new AppSettings();
+        var next = Current.Clone(); var defaults = Defaults;
         next.TaskbarBarEnabled = defaults.TaskbarBarEnabled;
         next.TaskbarTargetMonitorDeviceId = defaults.TaskbarTargetMonitorDeviceId;
         next.Position = defaults.Position; next.TaskbarBarBackgroundBlur = defaults.TaskbarBarBackgroundBlur; next.TaskbarBarManualPadding = defaults.TaskbarBarManualPadding;
@@ -310,7 +338,11 @@ public static class SettingsManager
         next.DynamicIslandEdge = defaults.DynamicIslandEdge; next.DynamicIslandEdgeDocked = defaults.DynamicIslandEdgeDocked;
         Replace(next, SettingsResetScope.Layout);
     }
-    public static void ResetAll() => Replace(new AppSettings(), SettingsResetScope.All);
+    /// <summary>
+    /// 全部恢复默认：以用户保存的默认设置为准，没有快照时回到程序内置默认。
+    /// Restores everything: the user's saved defaults when they exist, the built-in defaults otherwise.
+    /// </summary>
+    public static void ResetAll() => Replace(Defaults.Clone(), SettingsResetScope.All);
 
     private static void Subscribe(AppSettings settings) => settings.PropertyChanged += OnPropertyChanged;
     private static void Unsubscribe(AppSettings settings) => settings.PropertyChanged -= OnPropertyChanged;

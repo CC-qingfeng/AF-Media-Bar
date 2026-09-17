@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Windows.Input;
+using System.Windows.Threading;
 using AFMediaBar.Classes.Models;
 using AFMediaBar.Classes.Services;
 using AFMediaBar.Classes.Services.Audio;
@@ -39,6 +40,9 @@ public partial class AudioControlViewModel : ObservableObject, IDisposable
     private string? _tooltipSourceName;
     private DateTime _suppressTrayLeftClickUntilUtc;
     private DateTime _suppressTrayContextMenuUntilUtc;
+    private readonly DispatcherTimer _trayTooltipTimer;
+    private WheelGestureSlot? _appliedTrayWheelSlot;
+    private bool _trayWheelResultShown;
     private bool _disposed;
 
     public ObservableCollection<AudioDeviceOption> OutputDevices { get; } = [];
@@ -95,6 +99,11 @@ public partial class AudioControlViewModel : ObservableObject, IDisposable
         _mouseInputMonitor.WheelChanged += OnTrayWheelChanged;
         _mediaSessionService.SnapshotChanged += OnMediaSnapshotChanged;
         SettingsManager.InteractionSettingsChanged += OnInteractionSettingsChanged;
+        // 气泡打开后按需轮询按键状态：托盘图标不提供按键事件，而"按住组合键"必须立刻反映到提示上。
+        // Poll the modifier state while the bubble is open: the shell tray icon offers no key events, and "hold the chord key" has to
+        // show up in the tooltip immediately.
+        _trayTooltipTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(120) };
+        _trayTooltipTimer.Tick += (_, _) => AdvanceTrayTooltipPoll();
         _mouseInputMonitor.Start();
         QueueTrayTooltipRefresh();
     }
@@ -436,7 +445,12 @@ public partial class AudioControlViewModel : ObservableObject, IDisposable
 
     private void OnTrayLeftClicked(object? sender, EventArgs e)
     {
-        if (DateTime.UtcNow < _suppressTrayLeftClickUntilUtc)
+        // 组合滚轮（按住鼠标键再滚动）结束时的松键会合成一次单击：用户只打算滚动，因此这次单击必须被吞掉。
+        // 判定来自全局鼠标钩子，且标记是一次性的，所以无论结果如何都要取走。
+        // Releasing the button after a chord wheel (scrolling while a mouse button is held) synthesizes a click, and the user only
+        // meant to scroll, so it has to be swallowed. The hook makes that call and the flag is one-shot, so it is taken either way.
+        var chordWheelClick = _mouseInputMonitor.ConsumeSuppressedClick();
+        if (chordWheelClick || DateTime.UtcNow < _suppressTrayLeftClickUntilUtc)
             return;
 
         switch (SettingsManager.Current.Interaction.TrayClickAction)
@@ -460,7 +474,10 @@ public partial class AudioControlViewModel : ObservableObject, IDisposable
     }
     private void OnTrayContextMenuRequested(object? sender, EventArgs e)
     {
-        if (DateTime.UtcNow >= _suppressTrayContextMenuUntilUtc)
+        // 右键菜单同样可能是组合滚轮松键的合成结果，因此与左键点击走同一个抑制判定。
+        // The context menu can equally be synthesized by releasing after a chord wheel, so it shares the left click's rule.
+        var chordWheelClick = _mouseInputMonitor.ConsumeSuppressedClick();
+        if (!chordWheelClick && DateTime.UtcNow >= _suppressTrayContextMenuUntilUtc)
             TrayContextMenuRequested?.Invoke(GetTrayBounds());
     }
 
@@ -478,7 +495,15 @@ public partial class AudioControlViewModel : ObservableObject, IDisposable
             QueueTrayTooltipRefresh();
     }
 
-    private void OnTrayTooltipOpening(object? sender, EventArgs e) => QueueTrayTooltipRefresh();
+    private void OnTrayTooltipOpening(object? sender, EventArgs e)
+    {
+        // 每次气泡打开都从提示态开始，并启动按键轮询；指针离开图标后轮询自停。
+        // Every bubble starts in the hint state and starts the key poll, which stops itself once the pointer leaves the icon.
+        _appliedTrayWheelSlot = null;
+        _trayWheelResultShown = false;
+        _trayTooltipTimer.Start();
+        QueueTrayTooltipRefresh();
+    }
 
     private void OnInteractionSettingsChanged(object? sender, EventArgs e)
     {
@@ -495,7 +520,16 @@ public partial class AudioControlViewModel : ObservableObject, IDisposable
     {
         try
         {
-            var behavior = SettingsManager.Current.Interaction.Normalize().TrayPrimaryWheelAction;
+            var settings = SettingsManager.Current.Interaction.Normalize();
+            var slot = ChordWheelHeld ? WheelGestureSlot.Chord : WheelGestureSlot.Primary;
+            if (_trayWheelResultShown && slot == _appliedTrayWheelSlot)
+                return;
+
+            _appliedTrayWheelSlot = slot;
+            _trayWheelResultShown = false;
+            var behavior = slot == WheelGestureSlot.Chord
+                ? settings.TrayChordWheelAction
+                : settings.TrayPrimaryWheelAction;
             ApplicationVolumeSnapshot? application = null;
             AudioDeviceOption? device = null;
             if (behavior == TrayWheelBehavior.AdjustVolume)
@@ -510,7 +544,17 @@ public partial class AudioControlViewModel : ObservableObject, IDisposable
                 device = devices.FirstOrDefault(candidate => candidate.IsDefault) ?? devices.FirstOrDefault();
             }
 
-            var text = AudioTooltipPolicy.Build(behavior, application, device);
+            // 悬停提示说明"滚轮现在做什么"，并把当前结果附在后面：用户既知道手势会做什么，也知道它此刻的值。
+            // The hover hint states what the wheel does right now and appends the current value, so the user learns both the gesture
+            // and where it currently stands.
+            var hint = WheelTooltipPolicy.BuildHint(
+                slot,
+                settings.Modifier,
+                WheelTooltipPolicy.BuildActionName(behavior));
+            var currentValue = behavior == TrayWheelBehavior.AdjustVolume
+                ? BuildVolumeDetail(application)
+                : device?.DisplayName;
+            var text = WheelTooltipPolicy.BuildHintWithValue(hint, currentValue);
 
             if (!_disposed && version == _tooltipRefreshVersion)
             {
@@ -529,9 +573,46 @@ public partial class AudioControlViewModel : ObservableObject, IDisposable
 
     private void UpdateTooltipFromLoadedState() => QueueTrayTooltipRefresh();
 
+    private static string? BuildVolumeDetail(ApplicationVolumeSnapshot? application) =>
+        application is null ? null : $"{application.DisplayName} {application.VolumePercent}%";
+
+    /// <summary>
+    /// 当前是否按住了共用组合键。托盘的滚轮绑定同样按这个键在普通与组合之间切换；托盘图标是 Shell 图标，
+    /// 不提供按键事件，因此输入状态一律向全局鼠标监听器询问，Win32 调用留在那个服务里。
+    /// Whether the shared chord key is currently held. The tray's wheel binding switches between plain and chord on the same key, and
+    /// because the shell tray icon offers no key events the input state is asked of the global mouse monitor, keeping Win32 calls
+    /// inside that service.
+    /// </summary>
+    private bool ChordWheelHeld => GlobalWheelGesturePolicy.IsChordHeld(
+        SettingsManager.Current.Interaction,
+        _mouseInputMonitor.IsShiftDown,
+        _mouseInputMonitor.IsLeftButtonDown,
+        _mouseInputMonitor.IsRightButtonDown);
+
+    /// <summary>
+    /// 托盘提示的按键轮询：气泡打开时启动，指针离开图标后自停，因此按键状态一变提示就跟着换槽位。
+    /// The tray tooltip's key poll: it starts when the bubble opens and stops once the pointer leaves the icon, so a modifier change
+    /// switches the hint to its own slot immediately.
+    /// </summary>
+    private void AdvanceTrayTooltipPoll()
+    {
+        if (!_mouseInputMonitor.IsPointerOverTray())
+        {
+            _trayTooltipTimer.Stop();
+            return;
+        }
+
+        QueueTrayTooltipRefresh();
+    }
+
     private void SetTrayTooltip(string text)
     {
         _tooltipRefreshVersion++;
+        // 滚轮动作的结果留在气泡上，直到按键状态变化或指针离开；否则轮询会在 120 ms 后把结果换回提示。
+        // The wheel result stays on the bubble until the modifier state changes or the pointer leaves; otherwise the poll would
+        // replace it with the hint 120 ms later.
+        _appliedTrayWheelSlot = ChordWheelHeld ? WheelGestureSlot.Chord : WheelGestureSlot.Primary;
+        _trayWheelResultShown = true;
         _trayIconService.UpdateTooltip(text);
     }
 

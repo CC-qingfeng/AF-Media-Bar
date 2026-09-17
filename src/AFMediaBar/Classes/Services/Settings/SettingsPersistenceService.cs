@@ -11,10 +11,11 @@ namespace AFMediaBar.Classes.Services;
 /// <summary>负责用户设置 JSON 的加载、恢复、原子保存和防抖。 / Owns loading, recovery, atomic saving and debouncing of user settings JSON.</summary>
 public sealed class SettingsPersistenceService : IDisposable
 {
-    public const int CurrentSchemaVersion = 11;
+    public const int CurrentSchemaVersion = 12;
     private readonly string _directoryPath;
     private readonly string _settingsPath;
     private readonly string _backupPath;
+    private readonly string _userDefaultsPath;
     private readonly TimeSpan _debounce;
     private readonly object _gate = new();
     private readonly JsonSerializerOptions _jsonOptions = new()
@@ -40,6 +41,7 @@ public sealed class SettingsPersistenceService : IDisposable
         _directoryPath = directoryPath ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AFMediaBar");
         _settingsPath = Path.Combine(_directoryPath, "settings.json");
         _backupPath = _settingsPath + ".bak";
+        _userDefaultsPath = Path.Combine(_directoryPath, "user-defaults.json");
         _debounce = debounce ?? TimeSpan.FromMilliseconds(300);
         _jsonOptions.Converters.Add(new LenientEnumConverterFactory());
     }
@@ -76,6 +78,75 @@ public sealed class SettingsPersistenceService : IDisposable
         }
         timer?.Dispose();
         SaveCore(SettingsManager.Current);
+    }
+
+    /// <summary>
+    /// 把当前设置保存为「我的默认设置」：写入独立的快照文件，并把内存里生效的默认值换成它。
+    /// 设置本身不变，因此保存默认不会打断用户当前的使用状态。
+    /// Saves the current settings as the user's defaults: the snapshot goes to its own file and the in-memory effective defaults are
+    /// swapped to it. The settings themselves are untouched, so saving defaults never interrupts what the user is doing.
+    /// </summary>
+    /// <returns>写入失败的原因；成功时为 null。/ The failure reason, or null on success.</returns>
+    public string? SaveCurrentAsUserDefaults()
+    {
+        var snapshot = SettingsManager.Current.Clone();
+        try
+        {
+            Directory.CreateDirectory(_directoryPath);
+            var temp = _userDefaultsPath + ".tmp";
+            File.WriteAllText(temp, JsonSerializer.Serialize(new SettingsEnvelope(CurrentSchemaVersion, snapshot), _jsonOptions));
+            File.Move(temp, _userDefaultsPath, overwrite: true);
+        }
+        catch (Exception exception)
+        {
+            Debug.WriteLine($"[Settings] Could not write user defaults: {exception.Message}");
+            return exception.Message;
+        }
+
+        SettingsManager.SetUserDefaults(snapshot);
+        return null;
+    }
+
+    /// <summary>
+    /// 读取「我的默认设置」快照；文件不存在或不可读时返回 null。
+    /// 快照经过与设置文件相同的迁移与归一化，因此旧版本写入的快照在新版本里仍然可用，而不是被静默丢弃。
+    /// Reads the user-defaults snapshot, or null when the file is missing or unreadable. The snapshot goes through the same
+    /// migration and normalization as the settings file, so a snapshot written by an older version stays usable instead of being
+    /// silently discarded.
+    /// </summary>
+    public AppSettings? LoadUserDefaults()
+    {
+        if (!File.Exists(_userDefaultsPath))
+            return null;
+
+        try
+        {
+            return ReadEnvelope(_userDefaultsPath).Normalize();
+        }
+        catch (Exception exception)
+        {
+            Debug.WriteLine($"[Settings] Invalid user defaults: {exception.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>删除「我的默认设置」快照，让所有重置入口回到程序内置默认。/ Deletes the user-defaults snapshot so every reset entry falls back to the built-in defaults.</summary>
+    /// <returns>删除失败的原因；成功或文件本就不存在时为 null。/ The failure reason, or null on success or when no snapshot existed.</returns>
+    public string? ClearUserDefaults()
+    {
+        try
+        {
+            if (File.Exists(_userDefaultsPath))
+                File.Delete(_userDefaultsPath);
+        }
+        catch (Exception exception)
+        {
+            Debug.WriteLine($"[Settings] Could not delete user defaults: {exception.Message}");
+            return exception.Message;
+        }
+
+        SettingsManager.SetUserDefaults(null);
+        return null;
     }
 
     public Task FlushAsync(CancellationToken cancellationToken = default)
@@ -283,6 +354,15 @@ public sealed class SettingsPersistenceService : IDisposable
                 FullPanelEntryVisible = true,
                 RestProgressVisible = true
             };
+        }
+        if (envelope.SchemaVersion <= 11)
+        {
+            // Schema 12 新增「随 Windows 登录自动启动」设置段。旧文件里没有这一段，反序列化会保留声明处的默认值，
+            // 这里仍然显式赋值：默认开启是产品决定，必须写在迁移里而不是依赖"缺字段恰好等于默认值"。
+            // Schema 12 adds the run-at-startup setting. Older files have no such field and deserialization would keep the declared
+            // default; the assignment is explicit anyway, because "on by default" is a product decision that belongs in the
+            // migration instead of resting on the coincidence that a missing field equals a default.
+            result.LaunchAtStartup = true;
         }
         return result.Normalize();
     }

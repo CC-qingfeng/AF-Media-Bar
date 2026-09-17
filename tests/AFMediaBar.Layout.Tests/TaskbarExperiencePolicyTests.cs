@@ -204,12 +204,22 @@ public sealed class TaskbarExperiencePolicyTests
             (TaskbarExperienceSettings.Default with { MediaFontSizePercent = 115 }).Normalize().MediaFontSizePercent);
     }
 
+    /// <summary>
+    /// 跑马灯的判据是"文字比可用宽度长"，与长度模式无关：跟随内容模式下媒体栏被任务栏上限夹住时文字同样溢出，
+    /// 必须能滚动看全，否则用户只看到被截断的标题。
+    /// The marquee keys off the text being wider than the available width, independent of the length mode: in follow-content mode
+    /// the bar is clamped by the taskbar maximum and the text overflows there too, so it must stay scrollable instead of leaving a
+    /// truncated title.
+    /// </summary>
     [TestMethod]
-    public void MarqueeRunsOnlyForOverflowInFixedMode()
+    public void MarqueeOverflowFollowsTheMeasuredTextRegardlessOfLengthMode()
     {
-        Assert.AreEqual(80, TaskbarExperiencePolicy.CalculateMarqueeOverflow(280, 200, TaskbarLengthMode.Fixed), 0.001);
-        Assert.AreEqual(0, TaskbarExperiencePolicy.CalculateMarqueeOverflow(180, 200, TaskbarLengthMode.Fixed), 0.001);
-        Assert.AreEqual(0, TaskbarExperiencePolicy.CalculateMarqueeOverflow(280, 200, TaskbarLengthMode.FollowContent), 0.001);
+        Assert.AreEqual(80, TaskbarExperiencePolicy.CalculateMarqueeOverflow(280, 200), 0.001);
+        Assert.AreEqual(0, TaskbarExperiencePolicy.CalculateMarqueeOverflow(180, 200), 0.001);
+        Assert.AreEqual(0, TaskbarExperiencePolicy.CalculateMarqueeOverflow(200, 200), 0.001);
+        Assert.AreEqual(0, TaskbarExperiencePolicy.CalculateMarqueeOverflow(double.NaN, 200), 0.001);
+        Assert.AreEqual(0, TaskbarExperiencePolicy.CalculateMarqueeOverflow(280, double.PositiveInfinity), 0.001);
+        Assert.AreEqual(280, TaskbarExperiencePolicy.CalculateMarqueeOverflow(280, 0), 0.001);
     }
 
     [TestMethod]

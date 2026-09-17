@@ -146,7 +146,7 @@ public sealed class SettingsPersistenceServiceTests
             SettingsManager.Current.Update.LastCheckUtc);
         Assert.IsFalse(SettingsManager.Current.Update.LastCheckSucceeded);
         var persisted = File.ReadAllText(reader.SettingsPath);
-        StringAssert.Contains(persisted, "\"schemaVersion\": 11");
+        StringAssert.Contains(persisted, "\"schemaVersion\": 12");
         StringAssert.Contains(persisted, "\"Disabled\"");
     }
 
@@ -195,7 +195,7 @@ public sealed class SettingsPersistenceServiceTests
 
         Assert.IsTrue(SettingsManager.Current.LyricsEnabled);
         Assert.IsTrue(Directory.GetFiles(_directory, "settings.json.unsupported-*").Length == 1);
-        StringAssert.Contains(File.ReadAllText(main), "\"schemaVersion\": 11");
+        StringAssert.Contains(File.ReadAllText(main), "\"schemaVersion\": 12");
     }
 
     [TestMethod]
@@ -263,7 +263,7 @@ public sealed class SettingsPersistenceServiceTests
         Assert.AreEqual("DISPLAY2", SettingsManager.Current.TrackChangeNotification.FixedMonitorDeviceId);
         Assert.AreEqual(TaskbarLengthMode.FollowContent, SettingsManager.Current.TaskbarExperience.LengthMode);
         Assert.AreEqual(TaskbarExperienceSettings.Default.FixedLengthDip, SettingsManager.Current.TaskbarExperience.FixedLengthDip);
-        StringAssert.Contains(File.ReadAllText(service.SettingsPath), "\"schemaVersion\": 11");
+        StringAssert.Contains(File.ReadAllText(service.SettingsPath), "\"schemaVersion\": 12");
     }
 
     [TestMethod]
@@ -343,7 +343,7 @@ public sealed class SettingsPersistenceServiceTests
         Assert.AreEqual(TaskbarInformationDensity.Information, SettingsManager.Current.TaskbarExperience.Density);
         Assert.AreEqual(TaskbarLengthMode.Fixed, SettingsManager.Current.TaskbarExperience.LengthMode);
         Assert.AreEqual(420, SettingsManager.Current.TaskbarExperience.FixedLengthDip);
-        StringAssert.Contains(File.ReadAllText(service.SettingsPath), "\"schemaVersion\": 11");
+        StringAssert.Contains(File.ReadAllText(service.SettingsPath), "\"schemaVersion\": 12");
     }
 
     [TestMethod]
@@ -368,7 +368,7 @@ public sealed class SettingsPersistenceServiceTests
             SettingsManager.Current.Update,
             "schema 8 的文件没有更新设置，必须取默认值，而不是被推断成关闭。");
         Assert.IsTrue(SettingsManager.Current.Update.AutoCheckEnabled);
-        StringAssert.Contains(File.ReadAllText(service.SettingsPath), "\"schemaVersion\": 11");
+        StringAssert.Contains(File.ReadAllText(service.SettingsPath), "\"schemaVersion\": 12");
     }
 
     /// <summary>
@@ -402,7 +402,7 @@ public sealed class SettingsPersistenceServiceTests
         Assert.IsTrue(
             SettingsManager.Current.PerformanceComponent.OpenTaskManagerOnClick,
             "该开关在旧版本里从未生效，旧的 false 不代表用户意图，必须取新的默认值。");
-        StringAssert.Contains(File.ReadAllText(service.SettingsPath), "\"schemaVersion\": 11");
+        StringAssert.Contains(File.ReadAllText(service.SettingsPath), "\"schemaVersion\": 12");
     }
 
     /// <summary>
@@ -431,7 +431,55 @@ public sealed class SettingsPersistenceServiceTests
         Assert.AreEqual(400, SettingsManager.Current.Appearance.FontWeight, "350 必须吸附到最近的真实字重 400。");
         Assert.AreEqual(10, SettingsManager.Current.SpectrumComponent.SensitivityPercent, "7 必须抬到步进下限 10。");
         Assert.AreEqual(12, SettingsManager.Current.SpectrumComponent.BandCount);
-        StringAssert.Contains(File.ReadAllText(service.SettingsPath), "\"schemaVersion\": 11");
+        StringAssert.Contains(File.ReadAllText(service.SettingsPath), "\"schemaVersion\": 12");
+    }
+
+    /// <summary>
+    /// schema 11 的文件没有「开机自动启动」字段：默认开启是产品决定，迁移必须显式写回 true，
+    /// 而不是依赖"缺字段恰好等于声明处的默认值"。同时确认「我的默认设置」快照能保存、读回与清除。
+    /// A schema 11 file has no run-at-startup field: "on by default" is a product decision, so the migration writes true explicitly
+    /// instead of resting on a missing field equalling the declared default. The same test covers saving, reading back, and clearing
+    /// the user-defaults snapshot.
+    /// </summary>
+    [TestMethod]
+    public void Schema11MigrationEnablesRunAtStartupAndUserDefaultsSurviveARoundTrip()
+    {
+        Directory.CreateDirectory(_directory);
+        File.WriteAllText(
+            Path.Combine(_directory, "settings.json"),
+            """
+            {"schemaVersion":11,"settings":{"launchAtStartup":false,"spectrumComponent":{"bandCount":12,"refreshRateHz":20,"sensitivityPercent":150}}}
+            """);
+
+        using var service = new SettingsPersistenceService(_directory);
+        service.Initialize();
+
+        Assert.IsTrue(
+            SettingsManager.Current.LaunchAtStartup,
+            "旧文件里没有开机自启字段，迁移后必须取新的默认值（开启）。");
+
+        // 保存当前设置作为默认值：快照写入独立文件，并从磁盘读回时仍然可用。
+        // Saving the current settings as the defaults writes its own file, and reading it back from disk still works.
+        SettingsManager.Current.TaskbarExperience = SettingsManager.Current.TaskbarExperience with { SpectrumVisible = false };
+        Assert.IsNull(service.SaveCurrentAsUserDefaults());
+        Assert.IsNotNull(SettingsManager.UserDefaults);
+        var snapshot = service.LoadUserDefaults();
+        Assert.IsNotNull(snapshot);
+        Assert.IsFalse(snapshot!.TaskbarExperience.SpectrumVisible);
+
+        // 重置现在回到用户快照而不是内置默认值。
+        // A reset now lands on the user snapshot rather than the built-in defaults.
+        SettingsManager.ResetDisplayModes();
+        Assert.IsFalse(
+            SettingsManager.Current.TaskbarExperience.SpectrumVisible,
+            "重置必须回到用户保存的默认设置。");
+
+        Assert.IsNull(service.ClearUserDefaults());
+        Assert.IsNull(SettingsManager.UserDefaults);
+        SettingsManager.ResetDisplayModes();
+        Assert.IsTrue(
+            SettingsManager.Current.TaskbarExperience.SpectrumVisible,
+            "清除快照之后重置必须回到程序内置默认值。");
     }
 
     [TestMethod]

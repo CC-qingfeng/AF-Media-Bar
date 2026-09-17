@@ -154,6 +154,10 @@ After launching, right-click the player or tray icon and use Display Modes, Medi
 
 Clicking a slider in the settings selects it (its row lights up), after which the arrow keys or the wheel adjust it: one press moves one step, and holding an arrow grows the distance over time. An unselected slider never swallows the wheel, so the page still scrolls.
 
+Pointing at the media bar or the tray icon shows a tooltip immediately: it first states what the plain wheel does, switches to the chord wheel's action while the shared modifier is held, and becomes the result that just happened after a scroll (for example "next: track name" or "source: media name"). Holding a mouse button while scrolling no longer triggers the artwork or text click, the context menu, or a tray click on release.
+
+App &amp; About offers run-at-startup (on by default) and "save the current settings as my defaults", after which every "restore defaults" entry returns to that snapshot.
+
 AF Media Bar is not commercially code-signed, so Windows SmartScreen may show an unknown publisher warning when you run the installer or launch the app for the first time.
 
 ## Basic Usage

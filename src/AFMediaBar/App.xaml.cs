@@ -106,6 +106,7 @@ namespace AFMediaBar
                 services.AddSingleton<WindowAppearanceService>();
                 services.AddSingleton<ScreenBackgroundSampler>();
                 services.AddSingleton<SettingsPersistenceService>();
+                services.AddSingleton<StartupRegistrationService>();
 
                 // 安装协调互斥体：只让安装程序能识别"程序正在运行"，不改变单实例行为。
                 // Install-coordination mutex: lets the installer notice a running instance without changing single-instance behaviour.
@@ -190,6 +191,21 @@ namespace AFMediaBar
         {
             var settingsPersistenceService = Services.GetRequiredService<SettingsPersistenceService>();
             settingsPersistenceService.Initialize();
+
+            // 「我的默认设置」快照必须在宿主启动前装载：设置页上的「恢复默认设置」在用户点下去的那一刻就要
+            // 回到用户自己的默认值，而不是等下一次启动才生效。
+            // The user-defaults snapshot has to be loaded before the host starts: a "restore defaults" click must land on the
+            // user's own defaults immediately, not only after the next start.
+            SettingsManager.SetUserDefaults(settingsPersistenceService.LoadUserDefaults());
+
+            // 开机自动启动：设置是意图，注册表 Run 项是它的执行结果，因此启动时按设置核对一次。
+            // 只写 HKCU，不提权；写失败只记录原因，不影响启动链。
+            // Run-at-startup: the setting is the intent and the registry Run entry is its effect, so startup reconciles them once.
+            // Only HKCU is written and no elevation is requested; a failure is only logged and never disturbs startup.
+            var startupRegistration = Services.GetRequiredService<StartupRegistrationService>();
+            var startupFailure = startupRegistration.Apply(SettingsManager.Current.LaunchAtStartup);
+            if (startupFailure is not null)
+                Debug.WriteLine($"[App] Run-at-startup registration failed: {startupFailure}");
             var displayMonitorService = Services.GetRequiredService<IDisplayMonitorService>();
             EventHandler? legacyMigrationHandler = null;
             if (settingsPersistenceService.LegacyTaskbarMonitorIndex is { } legacyMonitorIndex)

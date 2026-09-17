@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using AFMediaBar.Classes.Models.Updates;
+using AFMediaBar.Classes.Services;
 using AFMediaBar.Classes.Services.Updates;
 using AFMediaBar.Classes.Settings;
 
@@ -19,6 +20,12 @@ namespace AFMediaBar.ViewModels.Pages
     public partial class AboutViewModel : ObservableObject
     {
         private readonly UpdateService _updateService;
+        private readonly SettingsPersistenceService _settingsPersistence;
+        private readonly StartupRegistrationService _startupRegistration;
+
+        /// <summary>设置启动自动启动之后的状态说明；失败原因必须可见，而不是让开关静默弹回。/ Status text after applying run-at-startup; a failure reason has to be visible instead of the switch silently bouncing back.</summary>
+        [ObservableProperty]
+        private string _startupStatusText = string.Empty;
 
         [ObservableProperty]
         private string _currentVersion = string.Empty;
@@ -92,9 +99,16 @@ namespace AFMediaBar.ViewModels.Pages
         /// lives as long as the process.
         /// </summary>
         /// <param name="updateService">更新下载器协调器。/ Update downloader coordinator.</param>
-        public AboutViewModel(UpdateService updateService)
+        /// <param name="settingsPersistence">设置文件与「我的默认设置」快照的所有者。/ Owner of the settings file and the user-defaults snapshot.</param>
+        /// <param name="startupRegistration">开机自动启动的注册表登记。/ Registry registration for run-at-startup.</param>
+        public AboutViewModel(
+            UpdateService updateService,
+            SettingsPersistenceService settingsPersistence,
+            StartupRegistrationService startupRegistration)
         {
             _updateService = updateService;
+            _settingsPersistence = settingsPersistence;
+            _startupRegistration = startupRegistration;
             CurrentVersion = updateService.CurrentVersion;
             _updateService.UpdateStateChanged += ApplyState;
             ApplyState(_updateService.CurrentState);
@@ -150,6 +164,63 @@ namespace AFMediaBar.ViewModels.Pages
             SettingsManager.Current.Update = SettingsManager.Current.Update with { SkippedVersion = null };
 
         /// <summary>
+        /// 随 Windows 登录自动启动。设置是意图、注册表 Run 项是它的执行结果：写入注册表成功之后才更新设置，
+        /// 失败时保留原值并给出原因，避免"开关看着打开了、实际没登记"。
+        /// Whether the application starts with the Windows session. The setting is the intent and the registry Run entry is its
+        /// effect, so the setting is only updated after the registry write succeeds; a failure keeps the previous value and states
+        /// the reason instead of leaving a switch that looks on while nothing is registered.
+        /// </summary>
+        public bool LaunchAtStartup
+        {
+            get => SettingsManager.Current.LaunchAtStartup;
+            set
+            {
+                if (SettingsManager.Current.LaunchAtStartup == value)
+                    return;
+
+                var failure = _startupRegistration.Apply(value);
+                if (failure is not null)
+                {
+                    StartupStatusText = $"无法修改启动项：{failure}";
+                    OnPropertyChanged();
+                    return;
+                }
+
+                SettingsManager.Current.LaunchAtStartup = value;
+                StartupStatusText = string.Empty;
+                OnPropertyChanged();
+            }
+        }
+
+        /// <summary>当前是否已保存「我的默认设置」快照。/ Whether a user-defaults snapshot is currently saved.</summary>
+        public bool HasUserDefaults => SettingsManager.UserDefaults is not null;
+
+        /// <summary>「我的默认设置」的状态说明。/ Status text for the user-defaults snapshot.</summary>
+        public string UserDefaultsStatusText => HasUserDefaults
+            ? "已保存：各页的「恢复默认设置」都会回到这份快照"
+            : "未保存：各页的「恢复默认设置」回到程序内置默认值";
+
+        /// <summary>把当前设置保存为「我的默认设置」，此后所有重置入口都以它为准。/ Saves the current settings as the user's defaults; every reset entry then uses them.</summary>
+        [RelayCommand]
+        private void SaveUserDefaults()
+        {
+            var failure = _settingsPersistence.SaveCurrentAsUserDefaults();
+            StartupStatusText = failure is null ? string.Empty : $"无法保存默认设置：{failure}";
+            OnPropertyChanged(nameof(HasUserDefaults));
+            OnPropertyChanged(nameof(UserDefaultsStatusText));
+        }
+
+        /// <summary>删除「我的默认设置」快照，让重置入口回到程序内置默认值。/ Deletes the snapshot so resets fall back to the built-in defaults.</summary>
+        [RelayCommand]
+        private void ClearUserDefaults()
+        {
+            var failure = _settingsPersistence.ClearUserDefaults();
+            StartupStatusText = failure is null ? string.Empty : $"无法删除默认设置：{failure}";
+            OnPropertyChanged(nameof(HasUserDefaults));
+            OnPropertyChanged(nameof(UserDefaultsStatusText));
+        }
+
+        /// <summary>
         /// 恢复全部默认值，并刷新本页显示的两个更新开关。
         /// Restores every default and refreshes the two update toggles shown on this page.
         /// </summary>
@@ -163,6 +234,9 @@ namespace AFMediaBar.ViewModels.Pages
         public void RefreshSettings()
         {
             OnPropertyChanged(nameof(AutoCheckEnabled));
+            OnPropertyChanged(nameof(LaunchAtStartup));
+            OnPropertyChanged(nameof(HasUserDefaults));
+            OnPropertyChanged(nameof(UserDefaultsStatusText));
             ApplyState(_updateService.CurrentState);
         }
 
