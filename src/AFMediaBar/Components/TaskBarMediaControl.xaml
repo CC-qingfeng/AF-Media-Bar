@@ -151,21 +151,13 @@
                                     <TextBlock x:Name="SongTitle" Text=""
                                                TextTrimming="CharacterEllipsis"
                                                FontFamily="{DynamicResource AppTextFontFamily}"
-                                               FontWeight="{DynamicResource AppTextFontWeight}">
-                                        <TextBlock.RenderTransform>
-                                            <TranslateTransform />
-                                        </TextBlock.RenderTransform>
-                                    </TextBlock>
+                                               FontWeight="{DynamicResource AppTextFontWeight}" />
                                 </Canvas>
                                 <Canvas x:Name="SongArtistContainer" Margin="0,-1.5,0,0" Height="19" ClipToBounds="True">
                                     <TextBlock x:Name="SongArtist" Text="" Opacity="0.5"
                                                TextTrimming="CharacterEllipsis"
                                                FontFamily="{DynamicResource AppTextFontFamily}"
-                                               FontWeight="{DynamicResource AppTextFontWeight}">
-                                        <TextBlock.RenderTransform>
-                                            <TranslateTransform />
-                                        </TextBlock.RenderTransform>
-                                    </TextBlock>
+                                               FontWeight="{DynamicResource AppTextFontWeight}" />
                                 </Canvas>
                             </StackPanel>
 
@@ -200,11 +192,7 @@
                                                    TextAlignment="Center"
                                                    TextTrimming="CharacterEllipsis"
                                                    FontFamily="{DynamicResource AppTextFontFamily}"
-                                                   FontWeight="{DynamicResource AppTextFontWeight}">
-                                            <TextBlock.RenderTransform>
-                                                <TranslateTransform />
-                                            </TextBlock.RenderTransform>
-                                        </TextBlock>
+                                                   FontWeight="{DynamicResource AppTextFontWeight}" />
                                         <TextBlock x:Name="SongLyricsHighlight"
                                                    Text="{Binding ElementName=SongLyrics, Path=Text}"
                                                    Width="{Binding ElementName=SongLyrics, Path=Width}"
@@ -220,9 +208,6 @@
                                             <TextBlock.Clip>
                                                 <RectangleGeometry x:Name="SongLyricsHighlightClip" Rect="0,0,0,19" />
                                             </TextBlock.Clip>
-                                            <TextBlock.RenderTransform>
-                                                <TranslateTransform />
-                                            </TextBlock.RenderTransform>
                                         </TextBlock>
                                     </Grid>
                                 </Border>
@@ -244,11 +229,7 @@
                                                FontFamily="{DynamicResource AppTextFontFamily}"
                                                FontWeight="{DynamicResource AppTextFontWeight}"
                                                FontSize="{Binding ElementName=SongLyrics, Path=FontSize}"
-                                               Opacity="0.68">
-                                        <TextBlock.RenderTransform>
-                                            <TranslateTransform />
-                                        </TextBlock.RenderTransform>
-                                    </TextBlock>
+                                               Opacity="0.68" />
                                 </Border>
                             </Grid>
                         </Grid>

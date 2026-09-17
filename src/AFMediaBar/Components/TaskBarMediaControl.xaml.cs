@@ -89,11 +89,17 @@ namespace AFMediaBar.Components
             // the pointer leaves.
             _wheelTooltipTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(120) };
             _wheelTooltipTimer.Tick += (_, _) => AdvanceWheelTooltip();
-            // 跑马灯按帧推进：滚动是否真的发生、滚了多远都由这里的代码决定，而不是交给动画时钟。
-            // The marquee advances frame by frame: whether it moves and how far is decided by this code rather than by an animation
-            // clock.
-            _marqueeTimer = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(16) };
-            _marqueeTimer.Tick += (_, _) => AdvanceMarqueeScroll();
+            // 跑马灯按帧推进：位置是连续的小数，窗口字符串只在整数位置跨过时改写，小数部分由渲染变换补上，
+            // 因此滚动是连续的（不是一个字一个字地跳），也不依赖动画时钟是否被渲染目标驱动。
+            // The marquee advances frame by frame: the position is a continuous fraction, the window string is rewritten only when the
+            // integer position crosses, and the fraction is drawn with a render transform. The scroll is therefore continuous instead of
+            // jumping one character at a time, and it no longer depends on an animation clock being driven by a rendering target.
+            AddMarqueeText(SongTitle);
+            AddMarqueeText(SongArtist);
+            AddMarqueeText(SongLyrics, SongLyricsHighlight);
+            AddMarqueeText(SongLyricsSecondary);
+            _marqueeTimer = new DispatcherTimer(DispatcherPriority.Render) { Interval = MarqueeTiming.FrameInterval };
+            _marqueeTimer.Tick += (_, _) => AdvanceMarqueeStep();
             // 逐字擦亮按帧推进：只有"当前行带音节时间轴且正在播放"时才由呈现状态启动，其余状态在下一帧自停并还原外观。
             // Syllable highlighting advances frame by frame: the presentation state starts it only while the active line carries
             // a syllable timeline and playback runs, and it stops itself on the next frame otherwise, restoring the appearance.
@@ -115,7 +121,6 @@ namespace AFMediaBar.Components
                 _wheelTooltipTimer.Stop();
                 _marqueeTimer.Stop();
                 _lyricHighlightTimer.Stop();
-                _marqueeEntries.Clear();
                 StopMarqueeAnimations();
             };
 
@@ -140,11 +145,9 @@ namespace AFMediaBar.Components
         private string _translatedLyric = string.Empty;
         private string _secondaryLyric = string.Empty;
         private string _lastSizeFingerprint = string.Empty;
-        private string _lastMarqueeFingerprint = string.Empty;
-        /// <summary>正在滚动的文字元素；为空时跑马灯计时器必须停止。/ Currently scrolling text elements; the marquee timer must be stopped while it is empty.</summary>
-        private readonly List<MarqueeEntry> _marqueeEntries = [];
+        /// <summary>参与跑马灯的文本元素；没有任何一个在推进时计时器必须停止。/ Text elements taking part in the marquee; the timer must be stopped while none of them is advancing.</summary>
+        private readonly List<MarqueeTextState> _marqueeTexts = [];
         private readonly DispatcherTimer _marqueeTimer;
-        private long _marqueeStartedAt;
         private double _minimumPrimaryLength = 120;
         private readonly DispatcherTimer _progressTimer;
         private readonly DispatcherTimer _hoverOpenTimer;

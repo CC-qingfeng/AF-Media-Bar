@@ -86,6 +86,9 @@ public partial class TaskBarMediaControl
         SongLyrics.Opacity = LyricHighlightBaseOpacity;
         SongLyricsHighlightClip.Rect = new Rect(0, 0, 0, ResolveLyricClipHeight());
         _lyricHighlightTimer.Start();
+        // 擦亮开启意味着这一行改为跟随滚动，因此要重新应用一次跑马灯。
+        // Turning the reveal on means this line starts following the reveal, so the marquee has to be applied again.
+        ReapplyLyricMarquee();
     }
 
     /// <summary>
@@ -94,12 +97,17 @@ public partial class TaskBarMediaControl
     /// </summary>
     private void StopLyricHighlight()
     {
+        var wasActive = _lyricHighlightActive;
         _lyricHighlightTimer.Stop();
         _lyricHighlightActive = false;
         _measuredLyricLine = null;
         SongLyricsHighlightClip.Rect = new Rect(0, 0, 0, ResolveLyricClipHeight());
         SongLyricsHighlight.Visibility = Visibility.Collapsed;
         SongLyrics.Opacity = 1;
+        // 擦亮关闭后这一行回到轮转式，因此只有真的从开启切到关闭时才需要重新应用一次。
+        // Once the reveal is off this line goes back to rotation, so the marquee only has to be re-applied on a real on-to-off transition.
+        if (wasActive)
+            ReapplyLyricMarquee();
     }
 
     /// <summary>
@@ -132,6 +140,30 @@ public partial class TaskBarMediaControl
             return;
         }
 
+        // 跟随式：这一行放不下，窗口正在跟着擦亮边界移动，因此窗口里的已唱段就是它的前缀，
+        // 裁剪宽度直接取"窗口内前若干个字符的精确宽度"（含小数插值），不需要按整行比例折算。
+        // Follow mode: this line does not fit and the window follows the reveal edge, so the sung run is a prefix of the window and the
+        // clip width is simply the exact width of its leading characters, interpolated, instead of a fraction of the whole line.
+        if (TryGetFollowWindow(out var sungWidth, out var windowWidth, out _, out _))
+        {
+            // 亮区最远只到容器右边缘：窗口比容器宽（尾部字更宽）时，按字符数换算出来的宽度可能超过可用宽度，
+            // 那会让高亮画到显示范围之外。
+            // The reveal never goes past the container's right edge: when the window is wider than its container (wider tail characters),
+            // converting from a character count can exceed the available width, which would paint the highlight outside the visible area.
+            var visibleWidth = double.IsFinite(SongLyrics.Width) ? Math.Min(sungWidth, SongLyrics.Width) : sungWidth;
+            if (visibleWidth < LyricHighlightMinimumWidth)
+            {
+                SongLyricsHighlight.Visibility = Visibility.Collapsed;
+                SongLyricsHighlightClip.Rect = new Rect(0, 0, 0, ResolveLyricClipHeight());
+                return;
+            }
+
+            var followLeft = ResolveFollowInset(SongLyrics.TextAlignment, windowWidth);
+            SongLyricsHighlightClip.Rect = new Rect(followLeft, 0, visibleWidth, ResolveLyricClipHeight());
+            SongLyricsHighlight.Visibility = Visibility.Visible;
+            return;
+        }
+
         EnsureLyricTextWidth(line);
         var width = LyricHighlightPolicy.ResolveClipWidth(progress.Value, _activeLyricTextWidth);
         if (width < LyricHighlightMinimumWidth)
@@ -141,9 +173,11 @@ public partial class TaskBarMediaControl
             return;
         }
 
-        // 裁剪矩形在文本自己的坐标系里，而 TextBlock.Clip 早于 RenderTransform 生效，因此跑马灯的位移会带着擦亮边界一起滚动。
-        // The clip rectangle lives in the text's own coordinate space, and TextBlock.Clip applies before RenderTransform, so the
-        // marquee translation carries the highlight edge along with the text.
+        // 裁剪矩形在文本自己的坐标系里，元素之外的位移（例如 SongInfoStackPanel 的入场动画）会带着两层一起走，
+        // 亮区与字形始终对齐；跑马灯不再移动元素，它改写的是文字本身。
+        // The clip rectangle lives in the text's own coordinate space, so a transform outside the element (such as the entrance
+        // animation on SongInfoStackPanel) carries both layers along and the reveal stays aligned with the glyphs. The marquee no
+        // longer moves the element: it rewrites the text itself.
         //
         // 居中或右对齐时字形本身有左内缩，裁剪必须从字形起点开始，否则短句的擦亮会整体偏左。
         // Centred or right-aligned text insets the glyph run, and the clip has to start where the glyphs do; otherwise the reveal
@@ -152,6 +186,28 @@ public partial class TaskBarMediaControl
         SongLyricsHighlightClip.Rect = new Rect(left, 0, width, ResolveLyricClipHeight());
         SongLyricsHighlight.Visibility = Visibility.Visible;
     }
+
+    /// <summary>
+    /// 当前歌词行已经唱到的比例（0–1），供跑马灯判断"擦亮是否贴近右边界"。没有音节时间轴或位置不可解时返回 null。
+    /// Reveal progress of the active lyric line (0–1), which the marquee uses to decide whether the reveal has reached the right margin.
+    /// Returns null without a syllable timeline or when the position cannot be resolved.
+    /// </summary>
+    private double? ResolveCurrentLyricProgress()
+    {
+        if (_currentLyricLine is not { } line)
+            return null;
+
+        var position = TaskbarExperiencePolicy.GetPosition(_snapshot, DateTimeOffset.UtcNow);
+        return LyricHighlightPolicy.ResolveProgress(line, position);
+    }
+
+    /// <summary>
+    /// 让跑马灯按"这一行现在要不要跟随滚动"重新决策。擦亮开启或关闭都会改变这一行的推进方式，
+    /// 因此两个入口都必须重新应用一次，否则会停留在上一种方式上。
+    /// Lets the marquee re-decide whether this line should follow the reveal. Turning the reveal on or off changes how the line advances,
+    /// so both entries have to re-apply it or the row would stay in the previous mode.
+    /// </summary>
+    private void ReapplyLyricMarquee() => ApplyMarqueeLayout(Math.Max(0, SongInfoStackPanel.Width));
 
     private void EnsureLyricTextWidth(LyricLine line)
     {
@@ -179,6 +235,29 @@ public partial class TaskBarMediaControl
     {
         var availableWidth = double.IsFinite(SongLyrics.Width) ? SongLyrics.Width : _activeLyricTextWidth;
         var slack = Math.Max(0, availableWidth - _activeLyricTextWidth);
+        return alignment switch
+        {
+            TextAlignment.Center => slack / 2,
+            TextAlignment.Right => slack,
+            _ => 0
+        };
+    }
+
+    /// <summary>
+    /// 跟随式窗口的内缩：窗口几乎总是比容器宽（起点为 0），只有在整行唱完、窗口滑到末尾而尾巴比容器短时才有留白，
+    /// 因此这里用窗口自己的宽度换算，而不是用整行的宽度。
+    /// Inset of a follow window: the window is almost always wider than its container (which means a zero inset), and only once the
+    /// whole line has been sung and the window has slid to a tail shorter than the container does any slack appear, so this converts
+    /// from the window's own width rather than from the whole line's.
+    /// </summary>
+    /// <param name="alignment">该行的对齐方式。/ Alignment of the line.</param>
+    /// <param name="windowWidth">窗口整体宽度（DIP）。/ Total window width in DIP.</param>
+    private double ResolveFollowInset(TextAlignment alignment, double windowWidth)
+    {
+        if (!double.IsFinite(SongLyrics.Width) || !double.IsFinite(windowWidth))
+            return 0;
+
+        var slack = Math.Max(0, SongLyrics.Width - windowWidth);
         return alignment switch
         {
             TextAlignment.Center => slack / 2,

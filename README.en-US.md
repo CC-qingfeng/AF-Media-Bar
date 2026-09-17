@@ -174,7 +174,7 @@ AF Media Bar is not commercially code-signed, so Windows SmartScreen may show an
 | Right-click the bar and choose “Switch media source” | Switch between available media sessions |
 | Enable Track-change notification under Media &amp; Notifications | Show the current track only after an observable track change begins playing; configure placement, duration, fullscreen policy, and fixed/foreground display targeting |
 | Choose the taskbar target display under Display Modes | Close an open Full panel and rebuild the taskbar host through its safe reload path; a disconnected target temporarily falls back to the primary display without discarding the preference |
-| Disable content-length following under Display Modes | Choose a fixed value between the live Hover minimum and available taskbar length; overflowing title, artist, and lyric text scrolls within its clipped region |
+| Disable content-length following under Display Modes | Choose a fixed value between the live Hover minimum and available taskbar length; title, artist, and lyric text that does not fit rotates inside its own region, and the lyric line being revealed follows the highlight instead |
 | Click the AF Media Bar tray icon | Open the audio control panel by default; Interaction → Tray icon can switch it to the output-device menu, the current application's volume menu, the settings page, or the context menu |
 | Scroll over the audio flyout or Full output-device row | Preview immediately and switch about 1.2 seconds after scrolling stops; Full gives long device names more room and exposes the complete name as a tooltip |
 | Hover over the AF Media Bar tray icon | Show the default wheel action and its current value in the native Windows tooltip |
