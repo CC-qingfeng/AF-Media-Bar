@@ -36,9 +36,9 @@ public static class CreditsSourcePolicy
     /// jsDelivr 镜像地址；它把分支文件缓存最长 12 小时，因此只能作为备用。
     /// The jsDelivr mirror; it caches branch files for up to 12 hours, so it is a fallback only.
     /// </summary>
-    /// <param name="rawUrl">raw.githubusercontent.com 上的地址。/ The raw.githubusercontent.com address.</param>
+    /// <param name="rawUrl">raw.githubusercontent.com 上的地址；为空时返回空字符串。/ The raw.githubusercontent.com address, returning an empty string when it is null or blank.</param>
     /// <returns>镜像地址；输入不是预期的端点时返回空字符串。/ The mirror address, or an empty string when the input is not the expected endpoint.</returns>
-    public static string ToJsDelivrMirror(string rawUrl)
+    public static string ToJsDelivrMirror(string? rawUrl)
     {
         const string prefix = "https://raw.githubusercontent.com/";
         if (string.IsNullOrWhiteSpace(rawUrl) || !rawUrl.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
@@ -78,10 +78,10 @@ public static class CreditsSourcePolicy
     /// 展开一份名单的完整尝试序列：直连 → jsDelivr → 更新清单里的加速站点（如果有）。
     /// Expands the full attempt sequence for one list: direct, then jsDelivr, then the accelerators from the update manifest, if any.
     /// </summary>
-    /// <param name="rawUrl">raw.githubusercontent.com 上的地址。/ The raw.githubusercontent.com address.</param>
+    /// <param name="rawUrl">raw.githubusercontent.com 上的地址；为空时返回空计划。/ The raw.githubusercontent.com address, yielding an empty plan when it is null or blank.</param>
     /// <param name="accelerators">清单提供的加速模板；null 用内置默认，空数组表示不加速。/ Accelerator templates from the manifest: null uses the built-in defaults and an empty array disables acceleration.</param>
     /// <returns>去重后的尝试序列。/ The deduplicated attempt sequence.</returns>
-    public static IReadOnlyList<string> BuildListPlan(string rawUrl, IReadOnlyList<string>? accelerators)
+    public static IReadOnlyList<string> BuildListPlan(string? rawUrl, IReadOnlyList<string>? accelerators)
     {
         var plan = new List<string>();
         if (string.IsNullOrWhiteSpace(rawUrl))

@@ -17,6 +17,25 @@ namespace AFMediaBar.Classes.Services.Credits;
 /// </summary>
 public sealed class CreditsCacheStore
 {
+    /// <summary>
+    /// 缓存文件的结构版本，写在 <c>cacheSchemaVersion</c> 字段里。
+    ///
+    /// 字段名刻意**不叫** <c>schemaVersion</c>：缓存文件里还包含赞助名单，而赞助名单自己的 <c>schemaVersion</c> 有自己的上限
+    /// （见 `CreditsJsonParser.SupportedSponsorsSchemaVersion`）。两处同名时，缓存版本 2 会被赞助名单解析器读成"名单结构太新"
+    /// 而整份缓存作废——写错了字段名，代价是名单再也取不到（这个坑由单元测试当场抓出）。
+    /// 版本 2 的含义是"带 <c>partial</c> 标记"；低版本（含最早那种只有 <c>schemaVersion</c> 的文件）一律当作**没有缓存**，
+    /// 否则升级后会被旧缓存挡住整整 24 小时，用户看到的现象是"换了新版本，赞助者名单还是不出来"。
+    /// The structure version of the cache file, written to the <c>cacheSchemaVersion</c> field.
+    ///
+    /// The field is deliberately **not** called <c>schemaVersion</c>: the cache file also carries the sponsor list, whose own <c>schemaVersion</c> has its own
+    /// ceiling (see `CreditsJsonParser.SupportedSponsorsSchemaVersion`). With both named the same, cache version 2 would be read by the sponsor parser as "the
+    /// list structure is too new" and the whole cache would be discarded — the cost of that naming mistake is that the lists can never be fetched again, a trap
+    /// the unit tests caught on the spot. Version 2 means "carries the <c>partial</c> flag"; older files, including the earliest shape that had only
+    /// <c>schemaVersion</c>, count as **no cache at all**, because otherwise an upgrade would be held back by that cache for a full 24 hours and the user would
+    /// see "I installed the new version and the sponsor list still does not appear".
+    /// </summary>
+    public const int CurrentSchemaVersion = 2;
+
     private readonly string _directoryPath;
     private readonly string _filePath;
 
@@ -56,6 +75,10 @@ public sealed class CreditsCacheStore
             using var document = JsonDocument.Parse(json);
             var root = document.RootElement;
             if (root.ValueKind != JsonValueKind.Object ||
+                !root.TryGetProperty("cacheSchemaVersion", out var schemaElement) ||
+                schemaElement.ValueKind != JsonValueKind.Number ||
+                !schemaElement.TryGetInt32(out var schemaVersion) ||
+                schemaVersion < CurrentSchemaVersion ||
                 !root.TryGetProperty("fetchedUtc", out var fetchedElement) ||
                 fetchedElement.ValueKind != JsonValueKind.String ||
                 !DateTimeOffset.TryParse(fetchedElement.GetString(), out var fetchedUtc))
@@ -111,7 +134,7 @@ public sealed class CreditsCacheStore
             // both the API parser and the snapshot parser.
             var payload = new
             {
-                schemaVersion = 1,
+                cacheSchemaVersion = CurrentSchemaVersion,
                 fetchedUtc = fetchedUtc.ToString("O"),
                 partial = isPartial,
                 contributors = contributors.Select(contributor => new
