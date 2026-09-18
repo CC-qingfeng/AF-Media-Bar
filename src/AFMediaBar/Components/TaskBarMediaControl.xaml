@@ -1,0 +1,443 @@
+<UserControl x:Class="AFMediaBar.Components.TaskBarMediaControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:local="clr-namespace:AFMediaBar.Components"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             mc:Ignorable="d"
+             FontFamily="{DynamicResource AppTextFontFamily}"
+             FontWeight="{DynamicResource AppTextFontWeight}"
+             TextOptions.TextRenderingMode="ClearType" TextOptions.TextFormattingMode="Display">
+
+    <UserControl.Resources>
+        <Style x:Key="TaskbarHoverButton" TargetType="Button">
+            <Setter Property="Width" Value="24" />
+            <Setter Property="Height" Value="24" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="1,0" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Tag" Value="MediaAction" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="RenderTransformOrigin" Value="0.5,0.5" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="ButtonSurface"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="4"
+                                RenderTransformOrigin="0.5,0.5"
+                                SnapsToDevicePixels="True">
+                            <Border.RenderTransform>
+                                <ScaleTransform ScaleX="1" ScaleY="1" />
+                            </Border.RenderTransform>
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              RecognizesAccessKey="True" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ButtonSurface" Property="Background" Value="#20FFFFFF" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="ButtonSurface" Property="Background" Value="#38FFFFFF" />
+                                <Setter TargetName="ButtonSurface" Property="RenderTransform">
+                                    <Setter.Value>
+                                        <ScaleTransform ScaleX="0.97" ScaleY="0.97" />
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="ButtonSurface" Property="Background" Value="Transparent" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Opacity" Value="0.32" />
+                    <Setter Property="Background" Value="Transparent" />
+                    <Setter Property="BorderBrush" Value="Transparent" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+        <!--
+            频谱颜色的默认值。窗口初始化后由 ApplyAppearanceSettings 换成与媒体文字相同的自动前景，
+            因此这里只需要一个与旧观感一致的回退色；四种样式共用同一支画刷，改颜色不会出现某一种样式没跟上。
+            Default spectrum colour. Once the window initializes, ApplyAppearanceSettings replaces it with the same automatic
+            foreground the media text uses, so this only needs to be a fallback matching the previous appearance; the four
+            styles share one brush, so a colour change cannot leave a style behind.
+        -->
+        <SolidColorBrush x:Key="TaskbarSpectrumBrush" Color="#DFFFFFFF" />
+        <Style x:Key="TaskbarSpectrumBar" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource TaskbarSpectrumBrush}" />
+            <Setter Property="CornerRadius" Value="1" />
+        </Style>
+        <Style x:Key="TaskbarSpectrumPixel" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource TaskbarSpectrumBrush}" />
+            <Setter Property="CornerRadius" Value="0.5" />
+        </Style>
+    </UserControl.Resources>
+
+    <Border Name="MainBorder" CornerRadius="6"
+            ClipToBounds="True">
+        <!--
+            整条媒体栏挂滚轮提示：悬停立刻显示（InitialShowDelay=0），内容说明当前绑定的普通/组合滚轮动作，
+            滚动后换成刚刚发生的结果；提示向上弹出，因为媒体栏位于任务栏、下方没有空间。
+            The whole bar carries the wheel tooltip: it opens immediately (InitialShowDelay=0), states the currently bound plain and
+            chord wheel actions, and switches to the result that just happened after a scroll. It pops upwards because the bar sits
+            in the taskbar with no room below.
+        -->
+        <Grid Name="InteractionSurface" Background="#01000000"
+              PreviewMouseWheel="InteractionSurface_PreviewMouseWheel"
+              MouseMove="InteractionSurface_MouseMove"
+              MouseLeave="InteractionSurface_MouseLeave"
+              ToolTipService.BetweenShowDelay="0"
+              ToolTipService.InitialShowDelay="0"
+              ToolTipService.Placement="Top"
+              ToolTipService.ShowDuration="20000">
+            <Image x:Name="BackgroundImage" Stretch="UniformToFill" HorizontalAlignment="Center"
+                   VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5" Opacity="0.4">
+                <Image.Effect>
+                    <BlurEffect Radius="80" />
+                </Image.Effect>
+            </Image>
+            <Border Name="TopBorder" BorderThickness="0,1.25,0,0" CornerRadius="5" Margin="0,0,0,1.25">
+                <!-- 使用 Canvas 支持绝对定位，便于布局系统动态调整组件位置 -->
+                <!-- Use Canvas for absolute positioning, allowing layout system to dynamically adjust component positions -->
+                <Canvas Name="MainCanvas">
+
+                    <!-- 封面组件 Artwork component -->
+                    <Border Name="SongImageBorder" CornerRadius="5" ClipToBounds="True" Width="36" Height="36"
+                            Panel.ZIndex="2" Cursor="Hand" Tag="MediaAction"
+                            MouseEnter="SongImageBorder_MouseEnter"
+                            MouseLeave="SongImageBorder_MouseLeave"
+                            MouseLeftButtonUp="SongImageBorder_MouseLeftButtonUp">
+                        <Grid>
+                            <ui:SymbolIcon Name="SongImagePlaceholder" Symbol="MusicNote220" FontSize="24"
+                                           Filled="True"
+                                           Foreground="{DynamicResource AfAccentBrush}" />
+                            <Border x:Name="SongImageHoverOverlay"
+                                    CornerRadius="5"
+                                    Background="Transparent"
+                                    BorderBrush="Transparent"
+                                    BorderThickness="0,1.25,0,0"
+                                    IsHitTestVisible="False" />
+                        </Grid>
+                        <Border.Background>
+                            <ImageBrush x:Name="SongImage" Stretch="UniformToFill" />
+                        </Border.Background>
+                    </Border>
+
+                    <!-- 歌曲信息组件 Song info component -->
+                    <StackPanel Name="SongInfoStackPanel" Orientation="Vertical"
+                                Width="Auto"
+                                Panel.ZIndex="3"
+                                Background="Transparent"
+                                MouseEnter="SongInfoStackPanel_MouseEnter"
+                                MouseLeave="SongInfoStackPanel_MouseLeave"
+                                ToolTipService.InitialShowDelay="800"
+                                ToolTipService.Placement="RelativePoint"
+                                ToolTipService.VerticalOffset="-16">
+                        <Grid x:Name="SongInfoSurface"
+                              Width="{Binding ElementName=SongInfoStackPanel, Path=Width}"
+                              Height="{Binding ElementName=SongInfoStackPanel, Path=Height}">
+                            <StackPanel x:Name="SongMetadataPanel">
+                                <Canvas x:Name="SongTitleContainer" Height="19" ClipToBounds="True" Cursor="Hand" Tag="MediaAction"
+                                        MouseLeftButtonUp="SongTitleContainer_MouseLeftButtonUp">
+                                    <TextBlock x:Name="SongTitle" Text=""
+                                               TextTrimming="CharacterEllipsis"
+                                               FontFamily="{DynamicResource AppTextFontFamily}"
+                                               FontWeight="{DynamicResource AppTextFontWeight}" />
+                                </Canvas>
+                                <Canvas x:Name="SongArtistContainer" Margin="0,-1.5,0,0" Height="19" ClipToBounds="True">
+                                    <TextBlock x:Name="SongArtist" Text="" Opacity="0.5"
+                                               TextTrimming="CharacterEllipsis"
+                                               FontFamily="{DynamicResource AppTextFontFamily}"
+                                               FontWeight="{DynamicResource AppTextFontWeight}" />
+                                </Canvas>
+                            </StackPanel>
+
+                            <Grid x:Name="SongLyricsPanel" Visibility="Collapsed">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="*" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
+                                <Border x:Name="SongLyricsContainer"
+                                        Grid.Row="0"
+                                        Grid.RowSpan="2"
+                                        Height="19"
+                                        ClipToBounds="True"
+                                        VerticalAlignment="Center"
+                                        Cursor="Hand"
+                                        Tag="MediaAction"
+                                        MouseLeftButtonUp="SongTitleContainer_MouseLeftButtonUp">
+                                    <!--
+                                        两层文本：底色层保持原样（布局引擎与跑马灯仍然只写它），高亮层逐字镜像它的文本与度量，
+                                        由自己的裁剪矩形擦亮。BarBorder 只能有一个子级，因此外面这层 Grid 只是为了容纳两层。
+
+                                        Two text layers: the base layer stays as it was (the layout engine and the marquee only
+                                        write to it), while the highlight layer mirrors its text and metrics and is revealed by
+                                        its own clip rectangle. A Border takes one child only, so the Grid exists just to hold
+                                        both layers.
+                                    -->
+                                    <Grid>
+                                        <TextBlock x:Name="SongLyrics"
+                                                   Text=""
+                                                   HorizontalAlignment="Stretch"
+                                                   VerticalAlignment="Center"
+                                                   TextAlignment="Center"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   FontFamily="{DynamicResource AppTextFontFamily}"
+                                                   FontWeight="{DynamicResource AppTextFontWeight}" />
+                                        <TextBlock x:Name="SongLyricsHighlight"
+                                                   Text="{Binding ElementName=SongLyrics, Path=Text}"
+                                                   Width="{Binding ElementName=SongLyrics, Path=Width}"
+                                                   HorizontalAlignment="Stretch"
+                                                   VerticalAlignment="Center"
+                                                   TextAlignment="{Binding ElementName=SongLyrics, Path=TextAlignment}"
+                                                   TextTrimming="{Binding ElementName=SongLyrics, Path=TextTrimming}"
+                                                   FontSize="{Binding ElementName=SongLyrics, Path=FontSize}"
+                                                   FontFamily="{Binding ElementName=SongLyrics, Path=FontFamily}"
+                                                   FontWeight="{Binding ElementName=SongLyrics, Path=FontWeight}"
+                                                   IsHitTestVisible="False"
+                                                   Visibility="Collapsed">
+                                            <TextBlock.Clip>
+                                                <RectangleGeometry x:Name="SongLyricsHighlightClip" Rect="0,0,0,19" />
+                                            </TextBlock.Clip>
+                                        </TextBlock>
+                                    </Grid>
+                                </Border>
+                                <Border x:Name="SongLyricsSecondaryContainer"
+                                        Grid.Row="1"
+                                        Height="{Binding ElementName=SongLyricsContainer, Path=Height}"
+                                        ClipToBounds="True"
+                                        VerticalAlignment="Center"
+                                        Visibility="Collapsed"
+                                        Cursor="Hand"
+                                        Tag="MediaAction"
+                                        MouseLeftButtonUp="SongTitleContainer_MouseLeftButtonUp">
+                                    <TextBlock x:Name="SongLyricsSecondary"
+                                               Text=""
+                                               HorizontalAlignment="Stretch"
+                                               VerticalAlignment="Center"
+                                               TextAlignment="Center"
+                                               TextTrimming="CharacterEllipsis"
+                                               FontFamily="{DynamicResource AppTextFontFamily}"
+                                               FontWeight="{DynamicResource AppTextFontWeight}"
+                                               FontSize="{Binding ElementName=SongLyrics, Path=FontSize}"
+                                               Opacity="0.68" />
+                                </Border>
+                            </Grid>
+                        </Grid>
+                    </StackPanel>
+
+                    <Border x:Name="SongInfoHoverOverlay"
+                            Panel.ZIndex="2"
+                            CornerRadius="5"
+                            Background="Transparent"
+                            BorderBrush="Transparent"
+                            BorderThickness="0,1.25,0,0"
+                            IsHitTestVisible="False" />
+
+                </Canvas>
+            </Border>
+
+            <!-- 仅用于横向任务栏静置层；原始 Canvas 仍是唯一的封面和文字布局。 -->
+            <!-- Horizontal-taskbar rest adorners; the original Canvas remains the sole artwork/text layout. -->
+            <ProgressBar x:Name="TaskbarRestProgress"
+                         Panel.ZIndex="3"
+                         Height="2"
+                         Margin="52,0,46,1"
+                         VerticalAlignment="Bottom"
+                         Minimum="0"
+                         Maximum="1"
+                         Style="{StaticResource AfAccentProgressBarStyle}"
+                         Visibility="Collapsed" />
+            <Border x:Name="TaskbarSpectrumHoverSurface"
+                    Panel.ZIndex="4"
+                    Width="36"
+                    Height="32"
+                    Margin="0,0,4,0"
+                    Padding="1"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Center"
+                    CornerRadius="5"
+                    Background="Transparent"
+                    BorderBrush="Transparent"
+                    BorderThickness="0,1.25,0,0"
+                    Visibility="Collapsed"
+                    MouseEnter="TaskbarSpectrumHoverSurface_MouseEnter"
+                    MouseLeave="TaskbarSpectrumHoverSurface_MouseLeave">
+                <!-- 频谱的画布尺寸、柱数和样式都由 SpectrumPresentationPolicy 决定，视觉子元素在代码中重建。 -->
+                <!-- The spectrum canvas size, bar count, and style all come from SpectrumPresentationPolicy; its visual children are rebuilt in code. -->
+                <Canvas x:Name="TaskbarSpectrum"
+                        Width="34"
+                        Height="21"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        IsHitTestVisible="False" />
+            </Border>
+            <!--
+                性能组件与频谱一样有一个自己的悬停表面：悬停时给出同一套高亮（背景 + 顶部细线），
+                表面尺寸与文字区的悬停块保持一致（同一条横轴高度），因此三个组件的 hover 看起来是一排。
+                The performance component gets a hover surface of its own, like the spectrum: hovering shows the same highlight
+                (background plus top hairline), and the surface matches the text region's hover block in the cross-axis extent so
+                the three components read as one row.
+            -->
+            <Border x:Name="TaskbarPerformanceHoverSurface"
+                    Panel.ZIndex="4"
+                    Width="76"
+                    Height="32"
+                    Margin="0,0,4,0"
+                    Padding="1"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Center"
+                    CornerRadius="5"
+                    Background="Transparent"
+                    BorderBrush="Transparent"
+                    BorderThickness="0,1.25,0,0"
+                    Visibility="Collapsed"
+                    Cursor="Arrow"
+                    MouseEnter="TaskbarPerformanceHoverSurface_MouseEnter"
+                    MouseLeave="TaskbarPerformanceHoverSurface_MouseLeave">
+                <Border x:Name="TaskbarPerformanceSurface"
+                        Width="74" Height="24"
+                        HorizontalAlignment="Center" VerticalAlignment="Center"
+                        CornerRadius="12" Background="#16000000"
+                        Cursor="Arrow" Visibility="Collapsed">
+                    <TextBlock x:Name="TaskbarPerformanceText" Text="MEM —" FontSize="11"
+                               FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis" IsHitTestVisible="False"/>
+                </Border>
+            </Border>
+
+            <!-- 悬停层只覆盖中间文字区域，不替换或重新排列下方静置层。 -->
+            <!-- The hover layer covers only the middle text region without replacing the rest layer below it. -->
+            <Grid x:Name="HoverRevealHost"
+                  Panel.ZIndex="6"
+                  Width="0"
+                  Height="42"
+                  Margin="52,1,0,1"
+                  HorizontalAlignment="Left"
+                  VerticalAlignment="Center"
+                  ClipToBounds="True"
+                  Visibility="Collapsed"
+                  IsHitTestVisible="False"
+                  MouseEnter="TaskbarHoverLayer_MouseEnter"
+                  MouseLeave="TaskbarHoverLayer_MouseLeave">
+                <Grid.Clip>
+                    <RectangleGeometry x:Name="HoverRevealClip" Rect="0,0,0,42" />
+                </Grid.Clip>
+                <Border x:Name="TaskbarHoverLayer"
+                        Width="276"
+                        Height="40"
+                        HorizontalAlignment="Left"
+                        VerticalAlignment="Center"
+                        CornerRadius="5"
+                        ClipToBounds="True">
+                    <Grid>
+                        <Grid Margin="5,5,6,3">
+                            <StackPanel x:Name="TaskbarHoverActions"
+                                        Orientation="Horizontal"
+                                        HorizontalAlignment="Left"
+                                        VerticalAlignment="Center">
+                                <StackPanel x:Name="TaskbarTransportButtons" Orientation="Horizontal">
+                                    <Button x:Name="TaskbarPreviousButton"
+                                            Style="{StaticResource TaskbarHoverButton}"
+                                            ToolTip="{DynamicResource Loc.Common.PreviousTrack}"
+                                            Click="TaskbarPreviousButton_Click">
+                                        <ui:SymbolIcon Symbol="Previous24" FontSize="14" />
+                                    </Button>
+                                    <Button x:Name="TaskbarPlayPauseButton"
+                                            Style="{StaticResource TaskbarHoverButton}"
+                                            ToolTip="{DynamicResource Loc.Common.PlayPause}"
+                                            Click="TaskbarPlayPauseButton_Click">
+                                        <ui:SymbolIcon x:Name="TaskbarPlayPauseIcon" Symbol="Play24" FontSize="14" />
+                                    </Button>
+                                    <Button x:Name="TaskbarNextButton"
+                                            Style="{StaticResource TaskbarHoverButton}"
+                                            ToolTip="{DynamicResource Loc.Common.NextTrack}"
+                                            Click="TaskbarNextButton_Click">
+                                        <ui:SymbolIcon Symbol="Next24" FontSize="14" />
+                                    </Button>
+                                </StackPanel>
+                                <Button x:Name="TaskbarDeviceButton"
+                                        Style="{StaticResource TaskbarHoverButton}"
+                                        Margin="4,0,1,0"
+                                        ToolTip="{DynamicResource Loc.Common.SwitchOutputDevice}"
+                                        ToolTipService.InitialShowDelay="200"
+                                        Click="TaskbarDeviceButton_Click"
+                                        MouseEnter="TaskbarDeviceButton_MouseEnter"
+                                        PreviewMouseWheel="TaskbarDeviceButton_PreviewMouseWheel">
+                                    <TextBlock Text="&#xE7F5;" FontFamily="{DynamicResource AppIconFontFamily}" FontSize="14" />
+                                </Button>
+                                <Button x:Name="TaskbarVolumeButton"
+                                        Style="{StaticResource TaskbarHoverButton}"
+                                        ToolTip="{DynamicResource Loc.Panel.Volume.Tooltip}"
+                                        ToolTipService.InitialShowDelay="200"
+                                        Click="TaskbarVolumeButton_Click"
+                                        MouseEnter="TaskbarVolumeButton_MouseEnter"
+                                        PreviewMouseWheel="TaskbarVolumeButton_PreviewMouseWheel">
+                                    <TextBlock Text="&#xE767;" FontFamily="{DynamicResource AppIconFontFamily}" FontSize="14" />
+                                </Button>
+                                <!-- 悬停层进度只展示播放位置：没有滑块、不可拖动，只用强调色段表示进度。 -->
+                                <!-- The hover-layer progress only displays playback position: no thumb, no dragging, accent color only. -->
+                                <ProgressBar x:Name="TaskbarHoverProgress"
+                                             Width="96"
+                                             Height="3"
+                                             Margin="10,0,0,0"
+                                             VerticalAlignment="Center"
+                                             Minimum="0"
+                                             Maximum="1"
+                                             Style="{StaticResource AfAccentProgressBarStyle}"
+                                             Visibility="Collapsed" />
+                            </StackPanel>
+                            <Button x:Name="TaskbarFullPanelHandle"
+                                    Width="44"
+                                    Height="8"
+                                    Padding="0"
+                                    Margin="0,-5,0,0"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Top"
+                                    Background="Transparent"
+                                    BorderThickness="0"
+                                    Tag="MediaAction"
+                                    ToolTip="{DynamicResource Loc.Common.OpenFullPanel}"
+                                    Click="TaskbarFullPanelHandle_Click">
+                                <Border Width="28" Height="4" CornerRadius="2" Background="#B8FFFFFF" />
+                            </Button>
+                        </Grid>
+                    </Grid>
+                </Border>
+            </Grid>
+
+            <!-- 关闭悬停层但保留完整层时，在文字区顶部提供同款拉杆入口。 -->
+            <!-- When Hover is disabled but Full remains enabled, expose the same pull handle over the text region. -->
+            <Button x:Name="TaskbarDirectFullPanelHandle"
+                    Panel.ZIndex="7"
+                    Width="0"
+                    Height="8"
+                    Padding="0"
+                    Margin="52,1,0,0"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Top"
+                    Background="Transparent"
+                    BorderThickness="0"
+                    Opacity="0"
+                    Visibility="Collapsed"
+                    Tag="MediaAction"
+                    ToolTip="{DynamicResource Loc.Common.OpenFullPanel}"
+                    MouseEnter="TaskbarDirectFullPanelHandle_MouseEnter"
+                    MouseLeave="TaskbarDirectFullPanelHandle_MouseLeave"
+                    Click="TaskbarFullPanelHandle_Click">
+                <Border Width="28" Height="4" CornerRadius="2" Background="#B8FFFFFF" />
+            </Button>
+
+        </Grid>
+    </Border>
+</UserControl>

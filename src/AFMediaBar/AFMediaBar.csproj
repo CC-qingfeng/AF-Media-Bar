@@ -1,54 +1,89 @@
 <Project Sdk="Microsoft.NET.Sdk">
+
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net10.0-windows10.0.17763.0</TargetFramework>
+    <!--
+      目标框架只决定编译期可用的 API 面与 SupportedOSPlatform 元数据，不决定程序能在哪些系统上启动：
+      运行下限是 Windows 10 1809（17763，由 app.manifest 与安装程序的 MinVersion 声明），本项目用到的每个系统接口
+      在该版本上都已经可用。这里取 19041 是为了拿到较新的 SDK 投影（任务栏与 DWM 相关声明）。
+      另见 README「系统要求」：.NET 10 官方只支持 Windows 10 的长期服务版与企业版（1809 E、21H2 E）。
+      The target framework decides which APIs are available at compile time and what SupportedOSPlatform metadata says; it does not
+      decide where the app can start. The runtime floor is Windows 10 1809 (17763, declared by app.manifest and the installer's
+      MinVersion), where every system interface used here already exists. 19041 is chosen for the newer SDK projections used by the
+      taskbar and DWM declarations. See the README's requirements section: .NET 10 officially supports only the Windows 10 LTSC and
+      Enterprise editions (1809 E, 21H2 E).
+    -->
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>wpfui-icon.ico</ApplicationIcon>
     <UseWPF>true</UseWPF>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <ApplicationManifest>app.manifest</ApplicationManifest>
-    <ApplicationIcon>icon.ico</ApplicationIcon>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+
+    <!--
+      Version 是版本号的唯一来源：运行期从程序集版本读取并显示，安装程序与发布工作流用
+      `dotnet msbuild -getProperty:Version` 读取同一个值，发布标签必须与它一致。
+      Version is the single source of the version number: the running app reads and displays it from
+      the assembly version, while the installer script and the release workflow read the same value
+      through `dotnet msbuild -getProperty:Version`, and the release tag must match it.
+    -->
     <AssemblyName>AFMediaBar</AssemblyName>
-    <AssemblyTitle>AF Media Bar</AssemblyTitle>
     <RootNamespace>AFMediaBar</RootNamespace>
-    <Version>1.1.1</Version>
+    <AssemblyTitle>AF Media Bar</AssemblyTitle>
+    <Product>AF Media Bar</Product>
+    <Description>Media control and minor beautification software for Windows 10/11 desktops.</Description>
+    <Version>1.2.0</Version>
     <Authors>AmorFate</Authors>
     <Copyright>Copyright (c) 2026 AmorFate</Copyright>
     <RepositoryUrl>https://github.com/Fervent-Tempo/AF-Media-Bar</RepositoryUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <Product>AF Media Bar</Product>
-    <Description>Media control and minor beautification software for Windows 10/11 desktops.</Description>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
-    <DebugType>embedded</DebugType>
-    <DebugSymbols>false</DebugSymbols>
-  </PropertyGroup>
-
-  <PropertyGroup Condition="'$(Configuration)' == 'Release' and '$(RuntimeIdentifier)' == 'win-x64'">
-    <PublishSingleFile>true</PublishSingleFile>
-    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
-    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
-  </PropertyGroup>
+<PropertyGroup Condition="'$(Configuration)' == 'Release' and '$(RuntimeIdentifier)' == 'win-x64'">
+  <PublishSingleFile>true</PublishSingleFile>
+  <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+  <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+  <DebugType>None</DebugType>
+  <DebugSymbols>false</DebugSymbols>
+</PropertyGroup>
 
   <ItemGroup>
-    <Resource Include="icon.ico" />
+    <Content Include="wpfui-icon.ico" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\AFMediaBar.Core\AFMediaBar.Core.csproj" />
-    <ProjectReference Include="..\AFMediaBar.Components.Wpf\AFMediaBar.Components.Wpf.csproj" />
-    <ProjectReference Include="..\AFMediaBar.Layout\AFMediaBar.Layout.csproj" />
-    <ProjectReference Include="..\AFMediaBar.LayoutEditor.Wpf\AFMediaBar.LayoutEditor.Wpf.csproj" />
-    <ProjectReference Include="..\AFMediaBar.Platform.Windows\AFMediaBar.Platform.Windows.csproj" />
+    <PackageReference Include="Dubya.WindowsMediaController" Version="2.5.6" />
+    <PackageReference Include="Lyricify.Lyrics.Helper" Version="0.2.0" />
+    <PackageReference Include="MicaWPF" Version="7.1.0" />
+    <PackageReference Include="WPF-UI" Version="4.2.0" />
+    <PackageReference Include="WPF-UI.DependencyInjection" Version="4.2.0" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.1" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0 " />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.11" />
-    <PackageReference Include="unchihugo.WPF-UI" Version="4.4.1" />
+    <None Remove="Assets\wpfui-icon-256.png" />
+    <None Remove="Assets\wpfui-icon-1024.png" />
+    <!--
+      赞助收款码按**通配**打包，而不是逐个文件名列出：这两张图由用户后续放入，文件名也由他自己决定
+      （候选名见 CreditLinks）。逐个列出时，放进去的图不会被编进程序集，界面上的表现就是"图不显示"且没有任何错误
+      ——这个坑已经真实发生过一次。
+      The sponsor payment codes are packed with a **wildcard** instead of being listed one by one: the user adds these two images later and chooses
+      their file names (the candidates live in CreditLinks). When they are listed one by one, an added image is not embedded in the assembly and the
+      interface simply shows nothing, with no error at all — which has already happened once.
+    -->
+    <None Remove="Assets\Sponsor\*.png" />
+    <None Remove="Assets\Sponsor\*.jpg" />
+    <None Remove="Assets\Sponsor\*.jpeg" />
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Services\Players\" />
+    <Resource Include="Assets\wpfui-icon-256.png" />
+    <Resource Include="Assets\wpfui-icon-1024.png" />
+    <Resource Include="Assets\Sponsor\*.png" />
+    <Resource Include="Assets\Sponsor\*.jpg" />
+    <Resource Include="Assets\Sponsor\*.jpeg" />
   </ItemGroup>
+
 </Project>

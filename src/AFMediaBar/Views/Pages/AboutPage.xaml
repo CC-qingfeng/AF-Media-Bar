@@ -1,0 +1,289 @@
+<Page
+    x:Class="AFMediaBar.Views.Pages.AboutPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:components="clr-namespace:AFMediaBar.Components"
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+    Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+    ScrollViewer.CanContentScroll="False">
+
+    <!--
+        关于页 / About page
+
+        每一项都由代码拼出的文案走视图模型（它们在语言切换后必须重取），静态文案走 {DynamicResource Loc.*}。
+
+        Text composed in code goes through the view model, because it has to be re-read after a language switch, while static
+        text uses {DynamicResource Loc.*}.
+    -->
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <components:SettingsGroupStrip
+            Grid.Row="0"
+            Margin="{StaticResource AfSettingsHeaderMargin}"
+            MaxWidth="{StaticResource AfSettingsContentMaxWidth}"
+            PageIcon="{ui:SymbolIcon QuestionCircle24}"
+            Subtitle="{DynamicResource Loc.About.Header.Subtitle}"
+            Target="{Binding ElementName=PageScroll}"
+            Title="{DynamicResource Loc.Common.Page.About}" />
+
+        <ScrollViewer
+            x:Name="PageScroll"
+            Grid.Row="1"
+            Margin="{StaticResource AfSettingsScrollMargin}"
+            HorizontalScrollBarVisibility="Disabled"
+            VerticalScrollBarVisibility="Auto">
+            <StackPanel
+                x:Name="PageRoot"
+                MaxWidth="{StaticResource AfSettingsContentMaxWidth}"
+                Loaded="OnPageLoaded">
+
+                <!--
+                    名单状态：正在取或取失败时才出现。取失败时给一个重试按钮——名单是联网取的，而用户看到"暂时无法获取"
+                    时唯一想做的事就是再试一次，让他去重启程序是说不过去的。
+                    List status: it appears only while a fetch is in flight or after a failure. A failure also offers a retry button, because the lists
+                    come from the network and the only thing a user wants to do after reading "cannot be loaded right now" is try again; asking them to
+                    restart the program would not be reasonable.
+                -->
+                <StackPanel Visibility="{Binding ViewModel.HasCreditsStatus, Converter={StaticResource AfBooleanToVisibilityConverter}}">
+                    <components:SettingsCallout
+                        Margin="0,0,0,8"
+                        IsAccent="False"
+                        Symbol="Info24"
+                        Text="{Binding ViewModel.CreditsStatusText}" />
+                    <ui:Button
+                        Margin="0,0,0,12"
+                        HorizontalAlignment="Left"
+                        Command="{Binding ViewModel.RefreshCreditsCommand}"
+                        Content="{DynamicResource Loc.Credits.Retry}"
+                        Icon="{ui:SymbolIcon ArrowSync24}"
+                        Style="{StaticResource AfSettingsButtonStyle}"
+                        Visibility="{Binding ViewModel.HasCreditsFailure, Converter={StaticResource AfBooleanToVisibilityConverter}}" />
+                </StackPanel>
+
+                <!--
+                    开发人员：每人一行「头像 + 用户名 + 提交次数」。头像是异步补上的，因此先看到占位图标，图到了再换上去。
+                    Developers: one row each with avatar, login, and contribution count. The avatar arrives asynchronously, so the fallback glyph shows
+                    first and the image replaces it when it lands.
+                -->
+                <components:SettingsGroup
+                    Header="{DynamicResource Loc.Common.Group.Developers}"
+                    Icon="{ui:SymbolIcon Code24}"
+                    Visibility="{Binding ViewModel.HasContributors, Converter={StaticResource AfBooleanToVisibilityConverter}}">
+                    <ItemsControl ItemsSource="{Binding ViewModel.Contributors}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel Orientation="Horizontal" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border
+                                    Margin="0,0,10,10"
+                                    Padding="10,8"
+                                    Background="{DynamicResource ControlFillColorSecondaryBrush}"
+                                    BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="8">
+                                    <StackPanel Orientation="Horizontal">
+                                        <!--
+                                            占位图标画在下层、头像画在上层：头像为空时上层隐藏，于是露出图标，
+                                            不需要一个"取反可见性"的转换器，也不会留下空框。
+                                            头像是 Image 而不是 ImageBrush：Image 是普通元素，DataContext 一定继承得到，
+                                            而 Freezable（画刷）在模板里继承 DataContext 有额外条件，静默失败时表现恰好就是"头像不显示"。
+                                            The fallback glyph sits underneath and the avatar on top: while the avatar is null the top layer is hidden, which
+                                            reveals the glyph without needing an inverted-visibility converter and never leaves an empty box.
+                                            The avatar is an Image rather than an ImageBrush, because an Image is an ordinary element whose DataContext is
+                                            always inherited, while a Freezable (a brush) in a template inherits DataContext only under extra conditions and
+                                            fails silently in exactly the way "the avatar never appears".
+                                        -->
+                                        <Grid Width="32" Height="32" VerticalAlignment="Center">
+                                            <ui:SymbolIcon
+                                                HorizontalAlignment="Center"
+                                                VerticalAlignment="Center"
+                                                FontSize="20"
+                                                Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                                Symbol="Person24" />
+                                            <Image
+                                                Width="32"
+                                                Height="32"
+                                                Source="{Binding Avatar}"
+                                                Stretch="UniformToFill"
+                                                Visibility="{Binding HasAvatar, Converter={StaticResource AfBooleanToVisibilityConverter}}">
+                                                <Image.Clip>
+                                                    <EllipseGeometry Center="16,16" RadiusX="16" RadiusY="16" />
+                                                </Image.Clip>
+                                            </Image>
+                                        </Grid>
+                                        <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
+                                            <TextBlock
+                                                FontWeight="{DynamicResource AppTextMediumFontWeight}"
+                                                Text="{Binding Login}" />
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </components:SettingsGroup>
+
+                <!--
+                    赞助者名单：只显示名字，连成一段可换行的文本。赞助者可能有几十位，为每人画一张卡片会长到无法阅读，
+                    因此这里与对照项目的做法一致——名字列表本身就是内容。
+                    Sponsor list: names only, joined into one wrapping paragraph. There can be dozens of sponsors and a card per person would grow past
+                    readability, so this matches the reference project: the list of names is the content.
+                -->
+                <components:SettingsGroup
+                    Header="{DynamicResource Loc.Common.Group.Sponsors}"
+                    Icon="{ui:SymbolIcon Heart24}"
+                    Visibility="{Binding ViewModel.HasSponsors, Converter={StaticResource AfBooleanToVisibilityConverter}}">
+                    <StackPanel>
+                        <!--
+                            没有赞助者时显示一行"暂无"，而不是让整个分组消失：用户因此能区分"确实还没人赞助"与"名单没取到"
+                            （后者由页面上方的状态说明条负责说出来）。
+                            With no sponsors a "none yet" line appears instead of the whole group vanishing, so the user can tell "nobody has sponsored yet" from
+                            "the list could not be loaded"; the latter is stated by the status callout near the top of the page.
+                        -->
+                        <components:SettingsCallout
+                            Margin="0,0,0,4"
+                            IsAccent="True"
+                            Symbol="Heart24"
+                            Text="{Binding ViewModel.SponsorNamesText}"
+                            Visibility="{Binding ViewModel.HasSponsors, Converter={StaticResource AfBooleanToVisibilityConverter}}" />
+                        <components:SettingsCallout
+                            Margin="0,0,0,4"
+                            IsAccent="False"
+                            Symbol="Heart24"
+                            Text="{DynamicResource Loc.Credits.Sponsors.None}"
+                            Visibility="{Binding ViewModel.HasNoSponsorsYet, Converter={StaticResource AfBooleanToVisibilityConverter}}" />
+                        <TextBlock
+                            Margin="16,0,0,0"
+                            Style="{StaticResource AfSettingsHintTextStyle}"
+                            Text="{Binding ViewModel.SponsorCountText}" />
+                    </StackPanel>
+                </components:SettingsGroup>
+
+                <!--
+                    赞助我：两个收款码 + 一个爱发电链接。素材由用户后续放入 Assets/Sponsor/，
+                    缺哪一份就在那一格显示还缺哪个文件，而不是让整页打不开。
+                    Support me: two payment codes and one Afdian link. The user adds the images under Assets/Sponsor/ later, and a
+                    missing one shows which file is still missing in its own cell instead of breaking the page.
+                -->
+                <components:SettingsGroup Header="{DynamicResource Loc.Common.Group.Support}" Icon="{ui:SymbolIcon Heart24}">
+                    <StackPanel>
+                        <ItemsControl ItemsSource="{Binding ViewModel.SupportEntries}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel Orientation="Horizontal" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border
+                                        Margin="0,0,12,12"
+                                        Padding="24"
+                                        Background="{DynamicResource ControlFillColorSecondaryBrush}"
+                                        BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="8">
+                                        <StackPanel Width="300">
+                                            <TextBlock
+                                                HorizontalAlignment="Center"
+                                                FontWeight="{DynamicResource AppTextMediumFontWeight}"
+                                                Text="{Binding Title}" />
+                                            <Image
+                                                Width="280"
+                                                Height="280"
+                                                Margin="0,10,0,0"
+                                                Source="{Binding Image}"
+                                                Stretch="Uniform"
+                                                Visibility="{Binding HasImage, Converter={StaticResource AfBooleanToVisibilityConverter}}" />
+                                            <TextBlock
+                                                Margin="0,10,0,0"
+                                                FontSize="11"
+                                                Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                                Text="{Binding ExpectedAssetPath}"
+                                                TextWrapping="Wrap"
+                                                Visibility="{Binding IsPending, Converter={StaticResource AfBooleanToVisibilityConverter}}" />
+                                            <ui:Button
+                                                Margin="0,8,0,0"
+                                                Command="{Binding DataContext.ViewModel.OpenUrlCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                CommandParameter="{Binding Url}"
+                                                Content="{DynamicResource Loc.About.Support.Open}"
+                                                Icon="{ui:SymbolIcon Open24}"
+                                                Style="{StaticResource AfSettingsButtonStyle}"
+                                                Visibility="{Binding HasUrl, Converter={StaticResource AfBooleanToVisibilityConverter}}" />
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <components:SettingsCallout
+                            Margin="0,0,0,4"
+                            IsAccent="False"
+                            Symbol="Info24"
+                            Text="{DynamicResource Loc.About.Support.Pending}"
+                            Visibility="{Binding ViewModel.HasPendingSupportEntries, Converter={StaticResource AfBooleanToVisibilityConverter}}" />
+                    </StackPanel>
+                </components:SettingsGroup>
+
+                <!--
+                    开源许可：包在前、衍生代码在后。每一条都能点开它自己的项目地址，
+                    因为这一节的意义就是"用户可以自己去核对"。
+                    Open-source licenses: packages first, derived code after. Every row opens its own project address, because the point
+                    of this section is that the user can check it themselves.
+                -->
+                <components:SettingsGroup Header="{DynamicResource Loc.Common.Group.Licenses}" Icon="{ui:SymbolIcon DocumentText24}">
+                    <ItemsControl ItemsSource="{Binding ViewModel.Licenses}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <components:SettingsRow
+                                    Badge="{Binding Version}"
+                                    Description="{Binding Note}"
+                                    Icon="{ui:SymbolIcon DocumentText24}"
+                                    Title="{Binding Name}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock
+                                            Margin="0,0,12,0"
+                                            VerticalAlignment="Center"
+                                            Style="{StaticResource AfSettingsRowValueStyle}"
+                                            Text="{Binding License}" />
+                                        <ui:Button
+                                            Command="{Binding DataContext.ViewModel.OpenUrlCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                            CommandParameter="{Binding Url}"
+                                            Content="{DynamicResource Loc.About.Licenses.Open}"
+                                            Icon="{ui:SymbolIcon Open24}"
+                                            Style="{StaticResource AfSettingsButtonStyle}" />
+                                    </StackPanel>
+                                </components:SettingsRow>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </components:SettingsGroup>
+
+                <components:SettingsGroup Header="{DynamicResource Loc.Common.Group.ProjectInfo}" Icon="{ui:SymbolIcon Info24}">
+                    <components:SettingsRow
+                        Description="{DynamicResource Loc.About.Row.Project.Description}"
+                        Icon="{ui:SymbolIcon Info24}"
+                        Title="AF Media Bar">
+                        <WrapPanel>
+                            <ui:Anchor
+                                Margin="0,0,10,0"
+                                Content="{DynamicResource Loc.About.Row.Project.Star}"
+                                Icon="{ui:SymbolIcon Star24}"
+                                NavigateUri="{Binding ViewModel.RepositoryUrl}" />
+                            <ui:Anchor
+                                Content="{DynamicResource Loc.About.Row.Project.Issues}"
+                                Icon="{ui:SymbolIcon Bug24}"
+                                NavigateUri="{Binding ViewModel.IssuesUrl}" />
+                        </WrapPanel>
+                    </components:SettingsRow>
+                </components:SettingsGroup>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</Page>

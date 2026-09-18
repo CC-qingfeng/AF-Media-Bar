@@ -1,0 +1,180 @@
+<ui:FluentWindow
+    x:Class="AFMediaBar.Views.Windows.SettingsWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:local="clr-namespace:AFMediaBar.Views.Windows"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+
+    xmlns:pages="clr-namespace:AFMediaBar.Views.Pages"
+    Title="{Binding ViewModel.ApplicationTitle, Mode=OneWay}"
+    Width="1100"
+    Height="650"
+    d:DataContext="{d:DesignInstance local:SettingsWindow,
+                                     IsDesignTimeCreatable=True}"
+    d:DesignHeight="450"
+    d:DesignWidth="800"
+    ui:Design.Background="{DynamicResource ApplicationBackgroundBrush}"
+    ui:Design.Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+    ExtendsContentIntoTitleBar="True"
+    FontFamily="{DynamicResource AppTextFontFamily}"
+    FontWeight="{DynamicResource AppTextFontWeight}"
+    Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+    Background="Transparent"
+    WindowCornerPreference="Round"
+    WindowStartupLocation="CenterScreen"
+    mc:Ignorable="d">
+    <ui:FluentWindow.InputBindings>
+        <KeyBinding
+            Key="F"
+            Command="{Binding ElementName=AutoSuggestBox, Path=FocusCommand}"
+            Modifiers="Control" />
+    </ui:FluentWindow.InputBindings>
+    <Grid>
+        <ui:TitleBar
+            x:Name="TitleBar"
+            Title="{Binding ViewModel.ApplicationTitle}"
+            Grid.Row="0"
+            CloseWindowByDoubleClickOnIcon="True">
+            <ui:TitleBar.Icon>
+                <ui:ImageIcon Source="pack://application:,,,/Assets/wpfui-icon-256.png" />
+            </ui:TitleBar.Icon>
+        </ui:TitleBar>
+        <ui:NavigationView
+            x:Name="RootNavigation"
+            Background="Transparent"
+            FrameMargin="0"
+            IsBackButtonVisible="Visible"
+            IsPaneToggleVisible="true"
+            PaneDisplayMode="Left"
+            IsFooterSeparatorVisible="false"
+            OpenPaneLength="240"
+            TransitionDuration="180"
+            TitleBar="{Binding ElementName=TitleBar, Mode=OneWay}">
+            <!--
+                侧栏标识块：以前侧栏只有一串导航项，没有任何应用身份。
+                该块位于汉堡按钮与搜索框之间，不占用任何导航项，也不改变导航行为。
+                Pane identity block: the pane previously held nothing but navigation items. This sits between the
+                hamburger and the search box, consumes no navigation item, and changes no navigation behaviour.
+            -->
+            <ui:NavigationView.PaneHeader>
+                <StackPanel Margin="0,2,0,10">
+                    <StackPanel Orientation="Horizontal">
+                        <ui:ImageIcon
+                            Width="20"
+                            Height="20"
+                            Source="pack://application:,,,/Assets/wpfui-icon-256.png" />
+                        <TextBlock
+                            Margin="10,0,0,0"
+                            VerticalAlignment="Center"
+                            FontWeight="{DynamicResource AppTextStrongFontWeight}"
+                            Text="{Binding ViewModel.ApplicationTitle}" />
+                    </StackPanel>
+                    <TextBlock
+                        Margin="30,3,0,0"
+                        FontSize="11"
+                        Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                        Text="{DynamicResource Loc.Common.Settings}" />
+                </StackPanel>
+            </ui:NavigationView.PaneHeader>
+            <ui:NavigationView.AutoSuggestBox>
+                <!--
+                    搜索框的候选项由设置窗口在 TextChanged 里按 SettingsSearchIndex 填充，
+                    因此可以搜到分组名与常见同义词，而不只是导航项文案。
+                    The suggestion list is filled by the settings window from SettingsSearchIndex on TextChanged, so
+                    group names and common synonyms are searchable, not just navigation labels.
+                -->
+                <ui:AutoSuggestBox
+                    x:Name="AutoSuggestBox"
+                    PlaceholderText="{DynamicResource Loc.Settings.Search.Placeholder}"
+                    SuggestionChosen="OnSearchSuggestionChosen"
+                    TextChanged="OnSearchTextChanged">
+                    <ui:AutoSuggestBox.Icon>
+                        <ui:IconSourceElement>
+                            <ui:SymbolIconSource Symbol="Search24" />
+                        </ui:IconSourceElement>
+                    </ui:AutoSuggestBox.Icon>
+                    <!--
+                        两行候选：主行是「页面 › 分组」，副行说明该分组能改什么。
+                        命中只到分组粒度，因此副行是用户确认“是不是这个”的唯一线索。
+                        Two-line suggestions: the primary line is "page › group" and the secondary line says what
+                        the group can change. A hit resolves to a group, so the secondary line is the only clue that
+                        confirms it is the right one.
+                    -->
+                    <ui:AutoSuggestBox.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Margin="0,-2">
+                                <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+                                <TextBlock
+                                    FontSize="11"
+                                    Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                    Text="{Binding Subtitle}"
+                                    TextTrimming="CharacterEllipsis" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ui:AutoSuggestBox.ItemTemplate>
+                </ui:AutoSuggestBox>
+            </ui:NavigationView.AutoSuggestBox>
+
+            <ui:NavigationView.MenuItems>
+                <!--
+                    导航从七项收敛为六项：原“常规”页只剩三个不可用条目和一个设置文件入口，
+                    已并入页脚的“应用与关于”。“额外功能”改名为“媒体与通知”，“全局外观”改名为“外观”，
+                    因为前者看不出内容、后者页内还包含窗口材质。
+                    Navigation went from seven items to six: the general page had been reduced to three unusable
+                    entries and one settings-file entry and is now part of "application and about" in the footer.
+                    "Extra features" became "media and notifications" and "global appearance" became
+                    "appearance", because the first name said nothing about its contents and the second page also
+                    owns window material.
+                -->
+                <ui:NavigationViewItem Content="{DynamicResource Loc.Common.Page.DisplayModes}" Icon="{ui:SymbolIcon Desktop24}"
+                                       TargetPageType="{x:Type pages:DisplayModesPage}" />
+                <ui:NavigationViewItem Content="{DynamicResource Loc.Common.Page.MediaAndNotifications}" Icon="{ui:SymbolIcon PuzzlePiece24}"
+                                       TargetPageType="{x:Type pages:ExtraFeaturesPage}" />
+                <ui:NavigationViewItem Content="{DynamicResource Loc.Common.Page.Interaction}" Icon="{ui:SymbolIcon HandDraw24}"
+                                       TargetPageType="{x:Type pages:InteractionPage}" />
+                <ui:NavigationViewItem Content="{DynamicResource Loc.Common.Page.Lyrics}" Icon="{ui:SymbolIcon TextQuote24}"
+                                       TargetPageType="{x:Type pages:LyricsPage}" />
+                <ui:NavigationViewItem Content="{DynamicResource Loc.Common.Page.Appearance}"
+                                       Icon="{ui:SymbolIcon PaintBrush24}"
+                                       TargetPageType="{x:Type pages:AppearancePage}" />
+                <!--
+                    「应用」紧跟在「外观」下面：两者都是应用自身的设置（外观改观感，应用改版本、更新、语言、
+                    开机自启、设置文件与诊断日志），把它们排在一起，用户不需要再往页脚找。
+                    "Application" sits right below "appearance": both are the application's own settings — appearance changes
+                    how it looks, while application covers version, updates, language, run-at-startup, the settings file, and
+                    diagnostics — and keeping them together saves a trip to the footer.
+                -->
+                <ui:NavigationViewItem Content="{DynamicResource Loc.Common.Page.Application}"
+                                       Icon="{ui:SymbolIcon Settings24}"
+                                       TargetPageType="{x:Type pages:ApplicationPage}" />
+            </ui:NavigationView.MenuItems>
+
+            <ui:NavigationView.FooterMenuItems>
+                <!--
+                    更新提示：它排在「关于」上方，只在确有可用版本时出现（窗口代码后置按视图模型的纯数据
+                    属性显示或隐藏它）。点击它跳到「应用」，亮点、进度与全部更新操作都在那一页。
+                    Update notice: it sits above "about" and only appears when a newer version really exists; the
+                    window's code-behind shows or hides it from the view model's plain-data property. Clicking it lands
+                    on "application", where the highlights, progress and every update action live.
+                -->
+                <ui:NavigationViewItem
+                    x:Name="UpdateNoticeNavItem"
+                    Click="UpdateNoticeNavItem_Click"
+                    Content="{Binding ViewModel.UpdateNoticeTitle}"
+                    Icon="{ui:SymbolIcon ArrowSync24}"
+                    Visibility="Collapsed" />
+                <ui:NavigationViewItem Content="{DynamicResource Loc.Common.Page.About}" Icon="{ui:SymbolIcon QuestionCircle24}"
+                                       TargetPageType="{x:Type pages:AboutPage}" />
+            </ui:NavigationView.FooterMenuItems>
+
+            <ui:NavigationView.ContentOverlay>
+                <Grid>
+                    <ui:SnackbarPresenter x:Name="SnackbarPresenter" />
+                </Grid>
+            </ui:NavigationView.ContentOverlay>
+        </ui:NavigationView>
+        <ui:ContentDialogHost x:Name="RootContentDialog" Grid.Row="0" />
+    </Grid>
+</ui:FluentWindow>

@@ -1,0 +1,18 @@
+﻿{
+    "generatedUtc":  "2026-09-18T13:17:50Z",
+    "source":  "https://api.github.com/repos/Fervent-Tempo/AF-Media-Bar/contributors?per_page=100\u0026anon=0",
+    "contributors":  [
+                         {
+                             "login":  "Fervent-Tempo",
+                             "contributions":  77,
+                             "html_url":  "https://github.com/Fervent-Tempo",
+                             "avatar_url":  "https://avatars.githubusercontent.com/u/160240486?v=4"
+                         },
+                         {
+                             "login":  "Miaoyww",
+                             "contributions":  4,
+                             "html_url":  "https://github.com/Miaoyww",
+                             "avatar_url":  "https://avatars.githubusercontent.com/u/52089819?v=4"
+                         }
+                     ]
+}

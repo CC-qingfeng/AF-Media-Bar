@@ -2,21 +2,10 @@
 
 <div align="center">
 
-  <a href="https://github.com/Fervent-Tempo/AF-Media-Bar/releases">
-    <img src="https://img.shields.io/github/v/release/Fervent-Tempo/AF-Media-Bar?style=flat-square" alt="Latest release">
-  </a>
-  <a href="https://github.com/Fervent-Tempo/AF-Media-Bar/releases">
-    <img src="https://img.shields.io/github/downloads/Fervent-Tempo/AF-Media-Bar/total?style=flat-square" alt="Downloads">
-  </a>
-  <a href="https://github.com/Fervent-Tempo/AF-Media-Bar/stargazers">
-    <img src="https://img.shields.io/github/stars/Fervent-Tempo/AF-Media-Bar?style=flat-square" alt="Stars">
-  </a>
-  <a href="https://github.com/Fervent-Tempo/AF-Media-Bar/issues">
-    <img src="https://img.shields.io/github/issues/Fervent-Tempo/AF-Media-Bar?style=flat-square" alt="Issues">
-  </a>
-  <a href="LICENSE">
-    <img src="https://img.shields.io/github/license/Fervent-Tempo/AF-Media-Bar?style=flat-square" alt="MIT License">
-  </a>
+  <a href="https://github.com/Fervent-Tempo/AF-Media-Bar/releases"><img src="https://img.shields.io/github/v/release/Fervent-Tempo/AF-Media-Bar?style=flat-square" alt="Latest release"></a>
+  <a href="https://github.com/Fervent-Tempo/AF-Media-Bar/releases"><img src="https://img.shields.io/github/downloads/Fervent-Tempo/AF-Media-Bar/total?style=flat-square" alt="Downloads"></a>
+  <a href="https://github.com/Fervent-Tempo/AF-Media-Bar/stargazers"><img src="https://img.shields.io/github/stars/Fervent-Tempo/AF-Media-Bar?style=flat-square" alt="Stars"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/Fervent-Tempo/AF-Media-Bar?style=flat-square" alt="MIT License"></a>
 
   <br><br>
 
@@ -24,17 +13,13 @@
 
   <h1>AF Media Bar</h1>
 
-  <p>Media controls, audio device switching, and lightweight system metrics on the Windows 10/11 taskbar.</p>
+  <p>Media controls, live lyrics, audio device switching, and lightweight system metrics on the Windows 10/11 taskbar.</p>
 
   <p>
-    <a href="README.md">简体中文</a>
-    ·
-    English
+    <a href="README.md">简体中文</a> · English
     <br>
-    <a href="#installation">Quick start</a>
-    ·
-    <a href="https://github.com/Fervent-Tempo/AF-Media-Bar/issues/new?template=bug_report.yml">Report a bug</a>
-    ·
+    <a href="#installation">Quick start</a> ·
+    <a href="https://github.com/Fervent-Tempo/AF-Media-Bar/issues/new?template=bug_report.yml">Report a bug</a> ·
     <a href="https://github.com/Fervent-Tempo/AF-Media-Bar/issues/new?template=feature_request.yml">Request a feature</a>
   </p>
 
@@ -42,203 +27,134 @@
 
 ## Demo
 
-### In Action
-
 <div align="center">
 
-![AF Media Bar 运行展示](./docs/assets/运行展示.gif)
+![AF Media Bar in action](./docs/assets/运行展示.gif)
 
 </div>
 
-### Introduction Video
-
-- [Watch the AF Media Bar introduction video on Bilibili](https://www.bilibili.com/video/BV1Bjuq6bErr)
-
-## Table of Contents
-<div align="center">
-
-- [Demo](#demo)
-- [Overview](#overview)
-- [Features](#features)
-- [How It Works](#how-it-works)
-- [Installation](#installation)
-- [Basic Usage](#basic-usage)
-- [Updating and Uninstalling](#updating-and-uninstalling)
-- [Troubleshooting](#troubleshooting)
-- [Technical Limitations](#technical-limitations)
-- [Privacy and Security](#privacy-and-security)
-- [Building from Source](#building-from-source)
-- [Project Structure](#project-structure)
-- [TODO](#todo)
-- [Contributing](#contributing)
-- [License](#license)
-
-</div>
+[Watch the AF Media Bar introduction video on Bilibili](https://www.bilibili.com/video/BV1Bjuq6bErr)
 
 ## Overview
 
-AF Media Bar is a portable media controller for Windows 10 and Windows 11. It reads Global System Media Transport Controls (GSMTC) sessions, displays artwork, title, and artist, and provides previous, play/pause, next, and source switching controls.
+AF Media Bar is a portable media controller for Windows 10 and Windows 11. It reads Windows Global System Media Transport Controls (GSMTC) sessions and puts artwork, title, artist, and live lyrics on the taskbar, together with previous, play/pause, next, and source switching; audio devices, per-app volume, spatial audio, and system metrics live in the same interface.
 
-The app runs in its own process. Its WPF player can be hosted as a taskbar child window or used as a freely movable floating window. It does not modify or inject code into `explorer.exe`. Any player that publishes a GSMTC session can be discovered, including NetEase Cloud Music, QQ Music, Spotify, major browsers, VLC, PotPlayer, Windows Media Player, mpv, and foobar2000.
+The app runs in its own process and hosts its WPF bar as a taskbar child window. It does not modify or inject code into `explorer.exe`. Any player that publishes a GSMTC session can be discovered and controlled — NetEase Cloud Music, QQ Music, Spotify, major browsers, and others.
 
 ## Features
 
-<div align="center">
-
 | Category | Capabilities |
 | --- | --- |
-| Media | Artwork, title, artist, previous, play/pause, next, and multiple source selection |
-| Source interaction | Click artwork to return to the media app; click a media-source widget to open source selection; media-text widgets are display-only; switch sessions with the mouse wheel |
-| Taskbar behavior | Automatic horizontal/vertical detection, manual placement and locking, automatic avoidance, auto-hide and fullscreen handling |
-| Window modes | Taskbar and floating hosts share horizontal and vertical layouts; host mode and arrangement are selected separately, with 70%-125% display scaling |
-| Container layout | The settings page uses the schema-5 integer grid for container and widget placement, including click-to-create 1×1, drag-to-draw rectangles, and four-edge resizing; the editor code is modularized, while real-Windows boundary, collapse, and DPI behavior remains subject to acceptance |
-| Information density | Hover states can use a two-line title-and-artist widget; maximum lines only wraps text inside the widget and does not change container size |
-| Auto-hide | Hide when every media session is stopped; collapse containers use an anchor container and shared edge, while four-way collapse still requires real-Windows acceptance |
-| Audio devices | List and switch the default output device, including delayed wheel selection |
-| App volume | Match the selected media process and adjust its Windows mixer volume in 2% steps |
-| Visualizer | Nine-band spectrum from WASAPI loopback capture |
-| Metrics | Optional system memory, CPU, GPU, and AF Media Bar process memory |
-| Low-spec mode | Software rendering with transitions, marquees, and fades disabled |
-
-</div>
+| Media | Previous, play/pause, next, repeat, and click-to-position or draggable progress; unavailable controls stay transparent and dim their icons; Full always keeps explicit buttons |
+| Source interaction | Bind artwork and title/lyric clicks independently to play/pause, activate the media app, or open the full layer; right-click the bar to switch sources; an SMTC allow list can be enabled per app under Media & Notifications |
+| Live lyrics | Lyrics appear in the taskbar rest layer and replace title and artist; they are fetched in order across NetEase Cloud Music, LRCLIB, QQ Music, Kugou Music, and Soda Music (each can be enabled, disabled, and reordered, or all turned off to stop lookups); syllable reveal, unsung-part shading, translation and romanization, a reorderable second line, credit-line filtering, and two-line alignment; the full layer names the lyrics source |
+| Taskbar behavior | Docked as a taskbar child window that avoids icons and system areas; artwork keeps its own aspect ratio (wide and portrait covers are no longer cropped); width can follow content or stay fixed, and a title, artist, or lyric line that does not fit rotates inside its own region (a line being revealed follows its highlight); the target display is selectable, and DPI changes or an Explorer restart recover automatically; optional auto-hide while every session is stopped |
+| Appearance | Global fonts, font size, light/dark theme, window material (Mica Alt included) and material concentration; the accent colour follows the system by default and can also be picked or entered as hex; text colour follows the real taskbar background automatically |
+| Interface language | Simplified Chinese, Traditional Chinese, and English; the default follows the Windows display language, and a change under Application → Interface language applies immediately without restarting |
+| Hover and Full layers | Hover blurs/dims the original text while buttons stay crisp; Full lives outside the taskbar with toggleable sections, components, and two presets; rest density, layout, and alignment are adjustable |
+| Audio | Switch the default output device from a stable ordered list; adjust the current media app in 2% steps; show spatial audio and jump to the Windows sound settings; bind tray click and wheel to the flyout, Settings, or device/volume |
+| Quick launch | With no acceptable media, click the note to open your own list; wheel-preview entries and start the last one about 1.2 s after scrolling stops; sources, EXE, LNK, and Store apps are supported |
+| Spectrum and metrics | WASAPI loopback spectrum in four styles (bars, waveform, pixel bars, mirrored bars) with 9–24 bars, a 14–34 DIP height, 5–30 Hz refresh, and 1–400% sensitivity, coloured to match the media text; the taskbar metrics component rotates memory, CPU, GPU, and this app's own memory in 0.5–5 s intervals and opens Task Manager on click |
+| Track-change notification | Show the current track once it really changes and starts playing, with six placements, 1–10 s duration, fullscreen suppression, and fixed- or foreground-display targeting |
+| Low-performance fallback | Under software rendering or a low-performance path, decorative motion, marquees, spectrum easing, blur, and backdrop effects are disabled automatically |
+| Diagnostics and upkeep | Background memory and suspend pruning (graded reclaim while idle, with the display off, and while suspending, plus one reclaim after startup settles); a single-file application log with unhandled-exception capture; Settings offers compress-memory-now and the log and settings folders |
 
 ## How It Works
-
-<div align="center">
 
 ```mermaid
 flowchart LR
     A[Media apps] -->|GSMTC sessions| B[AF Media Bar]
     C[Windows Core Audio] -->|Devices, volume, loopback| B
     D[Windows 10/11 taskbar] -->|Position and auto-hide state| B
-    B --> E[WPF taskbar child or floating window]
+    B --> E[WPF taskbar child window]
 ```
 
-</div>
-
-The Windows 10/11 media card is an internal Explorer/Shell surface rather than a supported embeddable control. AF Media Bar uses the public GSMTC API behind that card and renders its own interface, avoiding Explorer injection and its stability risks.
+The Windows 10/11 media card is an internal Explorer/Shell surface rather than a supported embeddable control. AF Media Bar uses the public GSMTC API behind it and renders its own interface, avoiding the stability and security risks of injecting into Explorer.
 
 ## Installation
 
 ### Requirements
 
-- Windows 10 version 1809 (build 17763) or later, x64
-- No separate .NET installation is required for the recommended self-contained package
+- Windows 10 version 1809 (build 17763) or later, x64; both the installer and the portable package are self-contained, so no separate .NET installation is needed.
+- Every system interface the app uses is available on 1809, but there is one limit beyond that: **.NET 10 officially supports only the Windows 10 LTSC and Enterprise editions** (1809 E, 21H2 E). Consumer Windows 10 still runs, it is just outside Microsoft support. Windows 11 is unaffected.
 
-### Recommended package
+### Option 1: installer (recommended)
 
-1. Open [Releases](https://github.com/Fervent-Tempo/AF-Media-Bar/releases).
-2. Download `AFMediaBar-vX.Y.Z-win-x64.zip`. Do not download GitHub's automatically generated source archives.
-3. Extract the package to get one self-contained `AFMediaBar.exe`; the archive no longer contains hundreds of .NET runtime files.
-4. Place it in a permanent writable directory, such as `D:\AFMediaBar`, and run it.
-5. Right-click the player or tray icon and choose “Open detailed settings...” to configure startup, visual layout composition, appearance, and interaction.
+1. Download `AFMediaBar-Setup-vX.Y.Z-win-x64.exe` from [Releases](https://github.com/Fervent-Tempo/AF-Media-Bar/releases); do not use GitHub's generated source archives.
+2. The wizard first asks for **Simplified Chinese or English**, then shows the license and lets you **choose the install location** and install for the current user or for all users (default `%LOCALAPPDATA%\Programs\AFMediaBar`, no administrator rights needed).
+3. A desktop shortcut is optional, the Start menu entry is always created, and updates can be checked, downloaded, and installed silently from inside the app.
 
-AF Media Bar is not commercially code-signed, so Windows SmartScreen may show an unknown publisher warning on first launch.
+### Option 2: portable package
+
+1. Download `AFMediaBar-vX.Y.Z-win-x64.zip` from the same Releases page.
+2. Unzip it into a long-lived writable folder such as `D:\AFMediaBar` and run the single self-contained `AFMediaBar.exe`; the portable build writes no registry entries, so upgrades mean replacing the file.
+
+Both packages are published on GitHub Releases only. Where GitHub is unreliable, the same page offers GH-Proxy accelerated links (`https://<accelerator>/https://github.com/...`), and the in-app update check and download switch to the accelerators automatically when the direct connection fails.
+
+AF Media Bar is not commercially code-signed, so Windows SmartScreen may warn about an unknown publisher on first run or install.
 
 ## Basic Usage
-<div align="center">
 
 | Action | Result |
 | --- | --- |
-| Hover over the bar | Expand media controls |
-| Click previous / play / next | Execute the commands supported by the current media session |
-| Click artwork | Return to the selected media app |
-| Click a media-source widget | Open source selection; regular title, artist, and source text do not navigate |
-| Scroll over the media area | Switch between GSMTC sessions |
-| Click the output device button | Open the render device list |
-| Scroll over the device button | Preview a device and apply it after scrolling stops |
-| Click the volume button | Open the selected media app volume slider |
-| Scroll over the volume button | Change application volume in 2% steps |
-| Drag an empty area of the strip | Move the bar; taskbar dragging temporarily exits automatic placement/locks |
-| Switch to floating mode | Place the player anywhere in the desktop work area |
-| Place an edge-collapse container on a desktop edge | Reveal its content when the pointer enters the trigger region; hide the content after leaving |
-| Right-click the bar or tray icon | Open detailed settings, media actions, or the exit menu |
+| Click artwork / title or lyrics | Play/pause by default / activate the current media app; both can be rebound to open the playing app, open the full layer, or do nothing (Interaction page) |
+| Wheel over the media area | The plain wheel and the chorded wheel can be bound separately to previous/next, switch player, output device, current volume, or nothing; the default is plain-wheel track change and Shift + wheel player switching, and the tooltip reports what just happened |
+| Right-click the bar | Switch media source, open Settings, open the full layer, or exit |
+| Click the note or wheel with no media | Open the quick-launch list; wheel-preview entries and start the last one about 1.2 s after scrolling stops |
+| Hover the taskbar bar | Show the control layer (artwork, text, and spectrum each keep their hover), with the text region blurred/dimmed; after collapsing it, the thin bar at the top of the text region opens the full layer |
+| Click / wheel the tray icon | Open the audio flyout / switch output devices by default; Shift + wheel adjusts the current media volume in 2% steps, and both are rebindable under Interaction → Tray icon |
+| Drag an empty part of the bar | Move the bar manually; dragging can be locked |
+| Switch mode cards under Display modes | Taskbar is the only runtime mode; Dynamic Island, Desktop Card, and Floating Orb are unimplemented placeholders that only change the page area and show a notice |
 
-</div>
-
-Some players require “system media controls,” “media keys,” or “SMTC” to be enabled in their own settings.
+A media app only appears once it publishes a GSMTC session; some players need "system media controls", "media keys", or "SMTC" enabled in their own settings. The track-change notification is not a queue or a "next track" preview — Windows SMTC exposes no up-next list, so the notification identifies a change from the source identifier plus the normalized title.
 
 ## Updating and Uninstalling
 
 ### Updating
 
-The app checks its version manifest shortly after startup, at most once per day. Automatic checks can be disabled under **Detailed settings → General → Get updates**. You can also check immediately and open any configured GitHub, Quark, Baidu, or Lanzou download channel there.
+About 20 seconds after launch the app reads the public version manifest (`docs/latest.json`); after a success it does not check again for 24 hours, and after a failure it retries an hour later. You can also check immediately on the Application page. When a newer version exists:
 
-This version only retrieves update information and opens download links. It does not silently replace the running executable. To install an update:
+- The tray icon shows one system notification whose click opens the Application page, and the tray and media-bar context menus gain a state-aware update entry.
+- That page shows the highlights, the download progress, and every update action; **the download starts only when you click it** (verified against SHA-256 while downloading), so the app never spends that traffic on its own.
+- Once verified it reports "update ready", and **the next launch installs it before starting the new version**; "restart and install now" on that page does the same immediately.
+- Downloads try GitHub directly first and then the accelerators listed in the manifest; when none works the reason is shown together with both a GitHub and an accelerated download page. The portable build has no install record, so it only downloads.
 
-1. Exit AF Media Bar from the tray menu.
-2. Download and extract the new version.
-3. Replace the old `AFMediaBar.exe` with the new one, then restart the app.
+The install log is written to `%LOCALAPPDATA%\AFMediaBar\updates\install-<version>.log`, and downloaded installers live in the same folder, cleaned up by version on the next launch.
 
-Window position, host mode, scaling, and startup settings are saved in the current user's registry; layout profiles and component properties are stored in `%LOCALAPPDATA%\AFMediaBar\profiles\layout.json`. Replacing the program file will not remove them. Legacy component registry values are removed after first-run migration.
+Preferences and window state live in `%LOCALAPPDATA%\AFMediaBar\settings.json` (schema-versioned JSON, atomic writes, backup recovery). Replacing the program files never loses settings, and the Application page opens the settings folder.
 
 ### Uninstalling
 
-1. Disable startup from the context menu, then exit the app.
-2. Delete the AF Media Bar program directory.
-3. To remove settings as well, run this in PowerShell:
+- Installed build: uninstall from Settings > Apps > Installed apps or the Start menu entry; it removes the program folder and shortcuts but **not** `%LOCALAPPDATA%\AFMediaBar`.
+- Portable build: delete the program folder.
+
+To remove settings and downloaded installers as well:
 
 ```powershell
-reg.exe delete "HKCU\Software\AFMediaBar" /f
-reg.exe delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v "AF Media Bar" /f
+Remove-Item "$env:LOCALAPPDATA\AFMediaBar" -Recurse -Force
 ```
-
-
-## Troubleshooting
-
-### No media session appears
-
-Make sure the app is actively playing media and has system media controls enabled. Browsers normally create a session only while a tab is playing audio or video. If the session is still missing, the app may not be supported; please report it in an Issue.
-
-### The bar overlaps taskbar icons
-
-Manual placement is the default. Unlock the position, drag the bar to an empty area, and lock it again. Automatic avoidance may be affected by third-party taskbar tools or Windows updates.
-
-### Output device switching fails
-
-Device enumeration uses supported Windows APIs, but changing the default endpoint relies on the undocumented `PolicyConfig` COM interface. Windows updates, managed-device policies, or unusual drivers may block this operation without affecting media controls.
-
-### Application volume is unavailable or targets the wrong process
-
-Volume control matches the GSMTC source to Windows audio sessions. Browser process models, multiple streams in one process, and custom audio engines can make a unique match impossible.
-
-### Resource usage is higher than expected
-
-Disable unused metrics and the audio visualizer, or enable low-spec mode. The visualizer reads WASAPI loopback data every 50 ms while enabled.
-
-## Technical Limitations
-
-- The bar is a WPF window in an independent process. Taskbar mode attaches it to Explorer with `SetParent`, while floating mode uses an independent top-level window. It is not an Explorer plugin and does not inject code.
-- The app must rediscover and reattach to the taskbar after Explorer restarts or third-party taskbar tools change its window structure; heavily customized environments may be incompatible.
-- Output switching uses the undocumented Windows `PolicyConfig` interface and may change in future Windows releases.
-- Automatic placement depends on Windows UI Automation and may not recognize customized taskbars.
-- The current instance follows the primary monitor taskbar only.
-- Browsers decide whether multiple tabs appear as one or multiple GSMTC sessions.
-- Only a `win-x64` package is currently published; ARM64 is not yet available.
-- The schema-5 grid editor has completed its code-level architecture refactor, and its preview surface is now isolated from the runtime surface. Four-way collapse, DPI pointer alignment, outside-window proximity, and old-profile recovery still require real-Windows acceptance.
 
 ## Privacy and Security
 
-- No telemetry, advertisements, accounts, or network analytics are included.
-- Update checks request the public `latest.json` manifest; lyrics and remote artwork may also request configured lyric/image services using current media metadata, but the app does not upload device information or user settings.
-- Media metadata, system metrics, and audio operations stay on the local machine.
-- The app runs as the current user, does not request elevation, and does not inject into Explorer.
-- Report security issues privately according to [SECURITY.md](SECURITY.md).
+- No telemetry, ads, account system, or analytics; media information, system metrics, and volume operations are all handled locally.
+- The update check requests two public manifest endpoints (`docs/latest.json` on `raw.githubusercontent.com` and jsDelivr) and never goes through a third-party proxy; an installer may be fetched through the accelerators configured in the manifest, and its SHA-256 always comes from the manifest read through a non-proxy endpoint.
+- Lyrics are requested from the public endpoints of the five sources above (one request per source, stopping at the first hit) and send only title, artist, album, and duration — no device information and no settings.
+- The app runs with the current user's rights, requests no elevation, and injects nothing into Explorer. Report security issues privately as described in [SECURITY.md](SECURITY.md).
 
 ## Building from Source
 
-Windows 10 version 1809 or later, the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0), and PowerShell are required. The repository pins the supported SDK feature band through `global.json`.
+Windows 10 1809 or later, the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0), and PowerShell are required; the repository pins the supported SDK feature band through `global.json`.
 
 ```powershell
 git clone https://github.com/Fervent-Tempo/AF-Media-Bar.git
 cd AF-Media-Bar
-dotnet restore .\AFMediaBar.slnx
-dotnet build .\AFMediaBar.slnx -c Release --no-restore
-dotnet test .\AFMediaBar.slnx -c Release --no-build
+dotnet restore .\src\AFMediaBar.slnx
+dotnet build .\src\AFMediaBar.slnx -c Release --no-restore
+dotnet test .\src\AFMediaBar.slnx -c Release --no-build
 dotnet run --project .\src\AFMediaBar\AFMediaBar.csproj
 ```
 
-Create a self-contained single executable for end users:
+To produce the self-contained single file users download:
 
 ```powershell
 dotnet publish .\src\AFMediaBar\AFMediaBar.csproj -c Release -r win-x64 --self-contained true -o .\artifacts\AFMediaBar-win-x64
@@ -248,56 +164,35 @@ dotnet publish .\src\AFMediaBar\AFMediaBar.csproj -c Release -r win-x64 --self-c
 
 ```text
 AF-Media-Bar/
-|-- .github/
-|   |-- ISSUE_TEMPLATE/     # Issue forms
-|   `-- workflows/          # Build and release workflows
-|-- src/
-|   |-- AFMediaBar/         # WPF shell, settings, runtime widgets, and publishing
-|   |-- AFMediaBar.Core/    # Media, audio, shared business logic, and cross-layer contracts
-|   |-- AFMediaBar.Layout/  # UI-independent layout model, constraints, commands, and schema 5
-|   |-- AFMediaBar.LayoutEditor.Wpf/ # Standalone WPF grid editor host and pointer state machine
-|   `-- AFMediaBar.Platform.Windows/ # Windows integration, layout storage, and adapters
-|-- tests/
-|   `-- AFMediaBar.Core.Tests/ # Core automated tests
-|-- prototypes/             # WinUI and standalone layout-editor experiments
-|-- docs/                   # Project documentation and assets
-|-- AFMediaBar.slnx         # Solution build and test entry point
-|-- README.md               # Chinese documentation
-`-- README.en-US.md         # English documentation
+├── .github/workflows/        # Build and release workflows
+├── src/AFMediaBar/           # The WPF application
+│   ├── Classes/              # Layered application code
+│   │   ├── Abstractions/     # Cross-module contracts
+│   │   ├── Interop/          # Windows API interop
+│   │   ├── Models/           # Data models, layout schema included
+│   │   ├── Services/         # Ownership-scoped services (Media, Lyrics, Audio, Updates…)
+│   │   ├── Settings/         # Settings model and compatibility facade
+│   │   └── Utils/            # Stateless helpers and bounded caches
+│   ├── Components/           # Reusable WPF controls
+│   ├── Resources/            # Theme, styles, and three-language strings
+│   ├── ViewModels/           # MVVM view models
+│   └── Views/                # Pages and host windows
+├── tests/AFMediaBar.Layout.Tests/   # Pure-logic, policy, and settings tests
+├── tools/                    # Architecture static checks and helper scripts
+├── installer/                # Inno Setup script
+└── docs/                     # Documentation, assets, and the version manifest
 ```
-
-## TODO
-
-- [x] Improve tracking animation smoothness when the Windows taskbar is set to auto-hide.
-- [x] Complete automatic avoidance of taskbar icons.
-- [x] Test Windows 10 compatibility.
-- [x] Add no-media auto-hide and always-on-top window behavior.
-- [x] Automatically follow the system light/dark theme.
-- [x] Provide floating window mode and edge-collapse containers outside the strip.
-- [x] Provide display scaling and horizontal/vertical layouts for taskbar and floating windows.
-- [x] Provide an independent detailed settings page.
-- [x] Font Customization.
-- [x] Improve opening media apps from artwork and add quick access to Task Manager.
-- [x] Provide freely entered custom window sizes and more customization options.
-- [ ] Display scrolling video subtitles/lyrics.
-- [ ] Display media progress bars.
-- [ ] Polish the UI and provide multiple preset themes.
-- [ ] Complete real-Windows acceptance for the fine-grid editor.
-- [ ] Export and share configurations.
-- [ ] Add an onboarding tutorial.
 
 ## Contributing
 
-Read [CONTRIBUTING.md](CONTRIBUTING.md) before submitting an issue or change. Bug reports should include the Windows version, AF Media Bar version, media player, and complete reproduction steps.
-
-See [CHANGELOG.md](CHANGELOG.md) for release history.
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening an issue or a pull request. Bug reports should include the Windows version, the AF Media Bar version, the media player, and exact reproduction steps. Changes are recorded in [CHANGELOG.md](CHANGELOG.en-US.md).
 
 ## License
 
-AF Media Bar is available under the [MIT License](LICENSE).
+AF Media Bar is released under the [MIT License](LICENSE).
 
 <div align="center">
 
-If AF Media Bar is useful to you, consider starring the repository.
+If AF Media Bar helps you, a Star is appreciated ❤️
 
 </div>

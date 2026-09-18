@@ -2,21 +2,10 @@
 
 <div align="center">
 
-  <a href="https://github.com/Fervent-Tempo/AF-Media-Bar/releases">
-    <img src="https://img.shields.io/github/v/release/Fervent-Tempo/AF-Media-Bar?style=flat-square" alt="Latest release">
-  </a>
-  <a href="https://github.com/Fervent-Tempo/AF-Media-Bar/releases">
-    <img src="https://img.shields.io/github/downloads/Fervent-Tempo/AF-Media-Bar/total?style=flat-square" alt="Downloads">
-  </a>
-  <a href="https://github.com/Fervent-Tempo/AF-Media-Bar/stargazers">
-    <img src="https://img.shields.io/github/stars/Fervent-Tempo/AF-Media-Bar?style=flat-square" alt="Stars">
-  </a>
-  <a href="https://github.com/Fervent-Tempo/AF-Media-Bar/issues">
-    <img src="https://img.shields.io/github/issues/Fervent-Tempo/AF-Media-Bar?style=flat-square" alt="Issues">
-  </a>
-  <a href="LICENSE">
-    <img src="https://img.shields.io/github/license/Fervent-Tempo/AF-Media-Bar?style=flat-square" alt="MIT License">
-  </a>
+  <a href="https://github.com/Fervent-Tempo/AF-Media-Bar/releases"><img src="https://img.shields.io/github/v/release/Fervent-Tempo/AF-Media-Bar?style=flat-square" alt="Latest release"></a>
+  <a href="https://github.com/Fervent-Tempo/AF-Media-Bar/releases"><img src="https://img.shields.io/github/downloads/Fervent-Tempo/AF-Media-Bar/total?style=flat-square" alt="Downloads"></a>
+  <a href="https://github.com/Fervent-Tempo/AF-Media-Bar/stargazers"><img src="https://img.shields.io/github/stars/Fervent-Tempo/AF-Media-Bar?style=flat-square" alt="Stars"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/Fervent-Tempo/AF-Media-Bar?style=flat-square" alt="MIT License"></a>
 
   <br><br>
 
@@ -24,17 +13,13 @@
 
   <h1>AF Media Bar</h1>
 
-  <p>Windows 10/11 任务栏上的媒体控制、音频设备切换与轻量系统指标。</p>
+  <p>Windows 10/11 任务栏上的媒体控制、实时歌词、音频设备切换与轻量系统指标。</p>
 
   <p>
-    简体中文
-    ·
-    <a href="README.en-US.md">English</a>
+    简体中文 · <a href="README.en-US.md">English</a>
     <br>
-    <a href="#安装">快速开始</a>
-    ·
-    <a href="https://github.com/Fervent-Tempo/AF-Media-Bar/issues/new?template=bug_report.yml">报告问题</a>
-    ·
+    <a href="#安装">快速开始</a> ·
+    <a href="https://github.com/Fervent-Tempo/AF-Media-Bar/issues/new?template=bug_report.yml">报告问题</a> ·
     <a href="https://github.com/Fervent-Tempo/AF-Media-Bar/issues/new?template=feature_request.yml">功能建议</a>
   </p>
 
@@ -42,204 +27,130 @@
 
 ## 展示
 
-### 运行展示
-
-
 <div align="center">
 
 ![AF Media Bar 运行展示](./docs/assets/运行展示.gif)
 
 </div>
 
-
-### 介绍视频
-
-
-### - [在 Bilibili 观看 AF Media Bar 介绍视频](https://www.bilibili.com/video/BV1Bjuq6bErr)
-
-
-
-
-## 目录
-<div align="center">
-
-- [展示](#展示)
-- [简介](#简介)
-- [功能](#功能)
-- [工作方式](#工作方式)
-- [安装](#安装)
-- [使用](#使用)
-- [更新与卸载](#更新与卸载)
-- [常见问题](#常见问题)
-- [技术限制](#技术限制)
-- [隐私与安全](#隐私与安全)
-- [从源码构建](#从源码构建)
-- [项目结构](#项目结构)
-- [TODO](#todo)
-- [参与贡献](#参与贡献)
-- [License](#license)
-
-</div>
+[在 Bilibili 观看 AF Media Bar 介绍视频](https://www.bilibili.com/video/BV1Bjuq6bErr)
 
 ## 简介
 
-AF Media Bar 是一款便携式 Windows 10/11 媒体控制器。它读取 Windows 全局系统媒体会话（GSMTC），显示当前媒体的封面、标题和作者，并提供上一首、播放/暂停、下一首和来源切换。
+AF Media Bar 是一款便携式 Windows 10/11 媒体控制器。它读取 Windows 全局系统媒体会话（GSMTC），把封面、标题、作者与实时歌词放进任务栏，并提供上一首、播放/暂停、下一首与来源切换；音频设备、应用音量、空间音效与系统指标也都在同一个界面里完成。
 
-程序以独立进程运行，可以将 WPF 播放器窗口挂载为任务栏子窗口，也可以作为可自由拖动的悬浮窗口运行；它不修改、不向 `explorer.exe` 注入代码。网易云音乐、QQ 音乐、Spotify、浏览器等应用只要向 Windows 发布媒体会话，就可以被发现和控制。
+程序以独立进程运行，将 WPF 媒体栏挂载为任务栏子窗口，不修改、不向 `explorer.exe` 注入代码。网易云音乐、QQ 音乐、Spotify、浏览器等应用只要向 Windows 发布媒体会话，就可以被发现和控制。
+
 ## 功能
-<div align="center">
-
 
 | 类别 | 功能 |
 | --- | --- |
-| 媒体控制 | 显示封面、标题与作者；上一首、播放/暂停、下一首；切换多个媒体来源 |
-| 来源交互 | 点击封面切回媒体应用；点击媒体来源组件打开来源选择；媒体文本组件仅显示信息；在播放器区域滚轮切换来源 |
-| 任务栏适配 | 自动识别横向/竖向任务栏；支持手动拖动与锁定、自动避让、任务栏自动隐藏与全屏隐藏 |
-| 窗口模式 | 任务栏与悬浮共享横向、竖向两套布局；宿主模式与排布方向分开选择，支持 70%-125% 显示比例 |
-| 容器布局 | 设置页使用 schema 5 整数逻辑网格进行容器/组件定位，支持单击创建 1×1、拖动创建矩形和四边缩放；编辑器代码已完成模块化，但真实 Windows 下的边界、折叠和 DPI 行为仍待验收 |
-| 信息密度 | 悬停状态可使用歌曲名和歌手两行组件，最多显示行数只控制文本内部换行，不改变容器尺寸 |
-| 自动隐藏 | 可在所有媒体会话均停止播放时隐藏；折叠容器使用锚点容器和公共边展开，四向折叠仍需真实 Windows 验收 |
-| 音频设备 | 查看并切换默认输出设备；悬停滚轮预览并延迟应用 |
-| 应用音量 | 匹配当前媒体进程，在 Windows 音量合成器中按 2% 调节音量 |
-| 音频可视化 | 基于 WASAPI 回环采样的九段频谱，可在收起状态显示 |
-| 系统指标 | 可选显示系统内存、CPU、GPU 与 AF Media Bar 进程内存 |
-| 低配置模式 | 使用 WPF 软件渲染并关闭过渡、滚动文字和指标淡入淡出 |
-
-</div>
-
+| 媒体控制 | 上一首、播放/暂停、下一首、循环、点击或拖动进度条跳转；不可用按钮保持透明；完整层始终保留显式按钮 |
+| 来源交互 | 点击封面、标题与歌词可分别绑定播放暂停、切回媒体应用或打开完整层；右键媒体栏切换来源；“媒体与通知”里可按应用启用 SMTC 允许列表 |
+| 实时歌词 | 歌词显示在任务栏静置层并替换标题与歌手；按网易云音乐、LRCLIB、QQ 音乐、酷狗音乐、汽水音乐依次取词，可在歌词页启停并排序；支持逐字擦亮、未唱部分明暗、译文与音译、第二行内容可排序、署名行过滤、双行对齐；完整层显示歌词来源 |
+| 任务栏适配 | 挂载为任务栏子窗口并自动避让图标与系统区域；封面按自身宽高比显示（宽封面与竖版封面不再裁切）；宽度可跟随内容或固定，放不下的标题、歌手与歌词在各自区域内轮转滚动（正在逐字擦亮的歌词行跟随亮区）；可在设置里指定目标屏幕，DPI 变化与 Explorer 重启后自动恢复；所有会话停止播放时可选自动隐藏 |
+| 外观与主题 | 字体、字号、浅色/深色主题、窗口材质（含云母 Alt）与材质浓度全局统一；主题色默认跟随系统强调色，也可自选或填十六进制值；文字颜色按任务栏实际底色自动切换深浅 |
+| 界面语言 | 简体中文、繁体中文与英文；默认跟随 Windows 显示语言，在「应用 → 界面语言」中切换后立即生效，无需重启 |
+| 悬停层与完整层 | 悬停时直接模糊/淡化原文字区并保持按钮清晰；完整层在任务栏之外，可开关分区与组件、双预设切换；静置层密度、布局与对齐可调 |
+| 音频 | 在稳定排序的设备列表中切换默认输出设备；按 2% 调节当前媒体应用音量；显示空间音效并跳转系统声音设置；托盘图标左键与滚轮可绑定面板、设置或设备/音量 |
+| 快速启动 | 没有可接收的媒体时，点音符打开用户维护的启动列表，滚轮循环预览并在停止约 1.2 秒后启动最后一项；支持来源、EXE、LNK 与 Store 应用 |
+| 频谱与性能 | WASAPI 回环采样的频谱支持柱状图、波形图、像素柱状图与上下对称柱状图，柱数 9–24、高度 14–34 DIP、5–30 Hz 刷新、灵敏度 1–400%，颜色跟随媒体文字；任务栏尾部性能组件轮换内存、CPU、GPU 与本程序内存，间隔 0.5–5 秒，点击可打开任务管理器 |
+| 曲目切换通知 | 曲目真正切换并开始播放时显示当前曲目，可选六个位置、1–10 秒时长、全屏抑制，以及固定显示器或跟随前台窗口 |
+| 低性能降级 | 检测到软件渲染或低性能路径时自动关闭装饰性动效、滚动文字、频谱缓动、模糊与窗口背景效果 |
+| 诊断与维护 | 后台内存与休眠剪枝（空闲、关屏、睡眠分档回收，启动安定后回收一次）；单文件程序日志与未处理异常捕获；设置页可一键压缩内存占用、打开日志与设置目录 |
 
 ## 工作方式
-<div align="center">
 
 ```mermaid
 flowchart LR
     A[媒体应用] -->|GSMTC 会话| B[AF Media Bar]
     C[Windows Core Audio] -->|设备、音量、回环采样| B
     D[Windows 10/11 任务栏] -->|位置与自动隐藏状态| B
-    B --> E[WPF 任务栏子窗口或悬浮窗口]
+    B --> E[WPF 任务栏子窗口]
 ```
 
-</div>
-
-Windows 10/11 控制中心里的媒体卡片是 Explorer/Shell 的内部界面，不是公开可嵌入的控件。AF Media Bar 复用其背后的公开 GSMTC 接口，并自行渲染界面，从而避免注入 Explorer 带来的稳定性和安全风险。
+Windows 10/11 控制中心里的媒体卡片是 Explorer/Shell 的内部界面，不是公开可嵌入的控件。AF Media Bar 复用其背后的公开 GSMTC 接口并自行渲染界面，从而避免注入 Explorer 带来的稳定性与安全风险。
 
 ## 安装
 
 ### 系统要求
 
-- Windows 10 版本 1809（内部版本 17763）或更高版本，x64
-- 使用推荐的自包含版本时，无需另行安装 .NET
+- Windows 10 版本 1809（内部版本 17763）或更高版本，x64；安装程序与便携版都自带 .NET 运行时，无需另行安装。
+- 程序自身用到的系统接口在 1809 上就可用，但这些系统接口之外还有一层限制：**.NET 10 官方只支持 Windows 10 的长期服务版与企业版**（1809 E、21H2 E），消费版 Windows 10 能运行但不受 Microsoft 支持；Windows 11 不受影响。
 
-### 推荐方式
+### 方式一：安装程序（推荐）
 
-1. 打开 [Releases](https://github.com/Fervent-Tempo/AF-Media-Bar/releases)。
-2. 下载最新的 `AFMediaBar-vX.Y.Z-win-x64.zip`，不要下载 GitHub 自动生成的 Source code 压缩包。
-3. 解压后会得到单个自包含的 `AFMediaBar.exe`，不再附带数百个 .NET 运行时文件。
-4. 将它放到一个长期保留且可写的目录，例如 `D:\AFMediaBar`，然后运行。
-5. 右键播放器或托盘图标，选择“打开详细设置...”集中配置开机启动、布局拼贴、外观和交互。
+1. 在 [Releases](https://github.com/Fervent-Tempo/AF-Media-Bar/releases) 下载 `AFMediaBar-Setup-vX.Y.Z-win-x64.exe`，不要下载 GitHub 自动生成的 Source code 压缩包。
+2. 运行向导：先选**简体中文或英文**，再查看许可协议、**选择安装位置**、决定只为当前用户还是为所有用户安装（默认 `%LOCALAPPDATA%\Programs\AFMediaBar`，不需要管理员权限）。
+3. 桌面快捷方式可选，开始菜单项始终创建。安装后即可启动；安装版支持程序内检查更新、后台下载并静默安装。
 
-AF Media Bar 暂未进行商业代码签名，因此 Windows SmartScreen 可能在首次运行时显示未知发布者提示。
+### 方式二：便携版
+
+1. 在同一个 Releases 页面下载 `AFMediaBar-vX.Y.Z-win-x64.zip`。
+2. 解压得到单个自包含的 `AFMediaBar.exe`，放到长期保留且可写的目录（例如 `D:\AFMediaBar`）即可运行；便携版不写注册表，升级时手动替换文件。
+
+两种方式都只发布在 GitHub Releases。国内访问 GitHub 不稳定时，可在同一页面用 GH-Proxy 加速地址下载（`https://<加速站点>/https://github.com/...`）；程序内的更新检查与自动下载在直连失败时也会自动改用加速地址。
+
+AF Media Bar 暂未进行商业代码签名，Windows SmartScreen 可能在首次运行或安装时提示未知发布者。
 
 ## 使用
-<div align="center">
 
 | 操作 | 结果 |
 | --- | --- |
-| 悬停播放器 | 展开媒体控制区 |
-| 点击上一首 / 播放 / 下一首 | 执行当前媒体会话支持的命令 |
-| 点击封面 | 切回当前媒体应用 |
-| 点击媒体来源组件 | 打开媒体来源选择；普通标题、歌手或来源文本不执行跳转 |
-| 在媒体区域滚轮 | 切换可用媒体来源 |
-| 点击输出设备按钮 | 打开输出设备列表 |
-| 在输出设备按钮上滚轮 | 预览设备，停止滚动后切换 |
-| 点击音量按钮 | 打开当前媒体应用音量滑杆 |
-| 在音量按钮上滚轮 | 以 2% 步进调节应用音量 |
-| 拖动长条空白区域 | 调整手动位置；任务栏模式开始拖动会临时退出自动定位/锁定；可在右键菜单中锁定 |
-| 切换到悬浮窗口模式 | 将播放器放到桌面工作区的任意位置 |
-| 将边缘折叠容器放到桌面边缘 | 鼠标移到触发区域时展开；移开后隐藏组件内容 |
-| 右键播放器或托盘图标 | 打开详细设置、媒体操作与退出菜单 |
+| 点击封面 / 标题与歌词 | 默认播放暂停 / 切回当前媒体应用；两者都可改为打开播放中的程序、打开完整层或不绑定（「交互」页） |
+| 在媒体区域滚轮 | 普通滚轮与「按住键 + 滚轮」可分别绑定上下一首、切换播放器、输出设备、当前音量或不绑定，默认直接滚轮切歌、Shift + 滚轮切换播放器；提示会给出刚刚发生的结果 |
+| 右键媒体栏 | 切换媒体源、打开设置、打开完整层与退出 |
+| 无媒体时点音符或滚轮 | 打开快速启动列表；滚轮循环预览，停止约 1.2 秒后启动最后一项 |
+| 悬停任务栏媒体栏 | 显示控制层（封面、文字、频谱各自的 hover），文字区被模糊/淡化；关闭悬停层后可用文字区顶部细杠打开完整层 |
+| 单击 / 滚轮托盘图标 | 默认打开音频控制面板 / 切换输出设备；Shift + 滚轮按 2% 调节当前媒体音量，也可在「交互 → 托盘图标」改绑 |
+| 拖动长条空白区域 | 调整手动位置，锁定后禁止拖动 |
+| 在「显示模式」中切换模式卡片 | 只有任务栏是当前运行模式，灵动岛、桌面卡片与悬浮球为未实现的占位选项，选中只切换本页显示并给出提示 |
 
-
-</div>
-
-媒体应用必须向 Windows 发布 GSMTC 会话。部分播放器需要在自身设置中启用“系统媒体控制”“媒体键”或“SMTC”。
+媒体应用必须向 Windows 发布 GSMTC 会话；部分播放器需要在自身设置中启用“系统媒体控制”“媒体键”或“SMTC”。曲目切换通知不读取播放队列，也不是“下一首预览”——Windows SMTC 不提供待播列表，它只根据「来源标识 + 标准化标题」识别曲目变化。
 
 ## 更新与卸载
 
 ### 更新
 
-程序启动后会延迟检查版本清单，每天最多自动检查一次；该功能可以在“详细设置 → 常规 → 获取更新”中关闭。也可以在此处立即检查，并从 GitHub、夸克网盘、百度网盘或蓝奏云等已配置渠道打开下载页面。
+程序启动约 20 秒后读取公开版本清单（`docs/latest.json`），成功后 24 小时内不再自动检查，失败 1 小时后重试；也可以在「应用」页立即检查。发现新版本时：
 
-当前版本只负责获取更新信息和打开下载链接，不会在后台静默替换正在运行的程序。安装更新时：
+- 托盘图标弹出一次系统通知，点击直接打开「应用」页；托盘与媒体栏右键菜单里也会出现随状态变化的更新入口。
+- 该页显示版本亮点、下载进度与全部更新操作；**下载由你显式点击开始**（边下边校验 SHA-256），程序不会自行消耗这部分流量。
+- 校验通过后显示“更新已就绪”，**下一次启动时会先完成安装再启动新版本**；也可以在设置页点「立即重启并安装」立刻完成。
+- 下载先直连 GitHub，失败后按清单里的加速地址顺序重试；全部不可用时显示失败原因，并提供「GitHub」与「加速镜像」两个下载页入口。便携版没有安装记录，只下载不安装。
 
-1. 从托盘菜单退出 AF Media Bar。
-2. 下载并解压新版本。
-3. 用新的 `AFMediaBar.exe` 替换旧版本后重新启动。
+安装日志在 `%LOCALAPPDATA%\AFMediaBar\updates\install-<版本>.log`；已下载的安装包放在同一目录，并在下次启动时按版本清理。
 
-窗口位置、宿主模式、缩放和开机启动配置保存在当前用户注册表中；布局档案及组件属性保存在 `%LOCALAPPDATA%\AFMediaBar\profiles\layout.json`。替换程序文件不会丢失设置。旧版本组件注册表选项会在首次启动迁移后清理。
+用户偏好与窗口状态保存在 `%LOCALAPPDATA%\AFMediaBar\settings.json`（带 schema 版本的 JSON、原子写入与备份恢复），替换程序文件不会丢失设置；「应用」页可打开设置文件夹。
 
 ### 卸载
 
-1. 在右键菜单中关闭“开机启动”，然后退出程序。
-2. 删除 AF Media Bar 程序目录。
-3. 如需同时清除设置，可在 PowerShell 中执行：
+- 安装版：在“设置 > 应用 > 已安装的应用”中卸载，或使用开始菜单的卸载项；卸载只删除程序目录与快捷方式，**不**删除 `%LOCALAPPDATA%\AFMediaBar`。
+- 便携版：直接删除程序目录。
+
+如需同时清除设置与已下载的安装包：
 
 ```powershell
-reg.exe delete "HKCU\Software\AFMediaBar" /f
-reg.exe delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v "AF Media Bar" /f
+Remove-Item "$env:LOCALAPPDATA\AFMediaBar" -Recurse -Force
 ```
-
-## 常见问题
-
-### 找不到正在播放的应用
-
-确认应用正在播放媒体，并已启用系统媒体控制。浏览器只有在网页实际播放音视频时才会创建会话。如果依然找不到可能是程序不支持，可以在issue中反馈。
-
-### 播放器遮挡了任务栏图标
-
-默认使用手动定位。解锁位置后拖到任务栏空白区，再勾选“锁定手动位置”。自动避让在定制任务栏或部分 Windows 更新中可能不准确。
-
-### 输出设备切换失败
-
-设备枚举使用 Windows API，但设置默认设备依赖未公开的 `PolicyConfig` COM 接口。Windows 更新、受管设备策略或特殊驱动可能阻止切换；这不会影响媒体控制功能。
-
-### 应用音量匹配错误或不可用
-
-音量控制按媒体会话来源匹配 Windows 音频会话。同一进程播放多个内容、浏览器多进程模型或播放器自定义音频引擎都可能导致无法唯一匹配。
-
-### CPU、GPU 或内存占用偏高
-
-关闭不需要的性能指标和音频可视化，或启用“低配置模式”。音频可视化会每 50 ms 读取一次 WASAPI 回环缓冲区。
-
-## 技术限制
-
-- AF Media Bar 是独立进程中的 WPF 窗口；任务栏模式通过 `SetParent` 挂载到 Explorer，悬浮模式使用独立顶层窗口。它不是 Explorer 内部插件，也不注入代码。
-- Explorer 重启或第三方任务栏工具改变窗口结构时，程序需要重新发现并挂载任务栏窗口；特殊定制环境可能不兼容。
-- 输出设备切换使用未公开的 Windows `PolicyConfig` 接口，未来 Windows 更新可能改变其行为。
-- 自动定位依赖 Windows UI Automation；第三方任务栏工具、定制布局和系统更新可能影响识别。
-- 当前只跟随主显示器任务栏，不会在每个辅助显示器上分别创建控制器。
-- 同一浏览器内多个网页如何呈现为 GSMTC 会话，由浏览器决定。
-- 程序当前仅提供 `win-x64` 发布包，尚未提供 ARM64 构建。
-- schema 5 网格编辑器代码已完成架构重构，编辑器预览表面已与运行时表面隔离；真实 Windows 下的四向折叠、DPI 指针对齐、窗口外接近和旧档案恢复尚未作为稳定能力承诺。
 
 ## 隐私与安全
 
-- 不包含遥测、广告、账号系统或联网分析代码。
-- 更新检查请求公开的 `latest.json` 版本清单；歌词和远程封面功能还会按当前媒体信息请求已配置的歌词/图片服务，不上传设备信息或用户设置。
-- 媒体信息、系统指标和音量操作均在本机处理。
-- 程序以当前用户权限运行，不请求管理员权限，也不向 Explorer 注入代码。
-- 安全问题请按 [SECURITY.md](SECURITY.md) 私下报告，不要在公开 Issue 中披露利用细节。
+- 不包含遥测、广告、账号系统或联网分析代码；媒体信息、系统指标与音量操作全部在本机处理。
+- 更新检查只请求两个公开清单端点（`raw.githubusercontent.com` 与 jsDelivr 上的 `docs/latest.json`），不经第三方代理；安装包可能经清单里配置的加速地址下载，而它的 SHA-256 始终来自非代理端点获取的清单。
+- 歌词按当前媒体信息向上述五个来源的公开接口请求（每个来源只发一次请求，命中即停止）；这些请求只发送曲名、歌手、专辑与时长，不上传设备信息或用户设置。
+- 程序以当前用户权限运行，不请求管理员权限，也不向 Explorer 注入代码。安全问题请按 [SECURITY.md](SECURITY.md) 私下报告。
 
 ## 从源码构建
 
-需要 Windows 10 版本 1809 或更高版本、[.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) 和 PowerShell。仓库通过 `global.json` 固定受支持的 SDK 特性带（feature band）。
+需要 Windows 10 1809 或更高版本、[.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) 和 PowerShell；仓库通过 `global.json` 固定受支持的 SDK 特性带。
 
 ```powershell
 git clone https://github.com/Fervent-Tempo/AF-Media-Bar.git
 cd AF-Media-Bar
-dotnet restore .\AFMediaBar.slnx
-dotnet build .\AFMediaBar.slnx -c Release --no-restore
-dotnet test .\AFMediaBar.slnx -c Release --no-build
+dotnet restore .\src\AFMediaBar.slnx
+dotnet build .\src\AFMediaBar.slnx -c Release --no-restore
+dotnet test .\src\AFMediaBar.slnx -c Release --no-build
 dotnet run --project .\src\AFMediaBar\AFMediaBar.csproj
 ```
 
@@ -251,58 +162,30 @@ dotnet publish .\src\AFMediaBar\AFMediaBar.csproj -c Release -r win-x64 --self-c
 
 ## 项目结构
 
-
 ```text
 AF-Media-Bar/
-|-- .github/
-|   |-- ISSUE_TEMPLATE/     # Issue 表单
-|   `-- workflows/          # 构建与发布工作流
-|-- src/
-|   |-- AFMediaBar/         # WPF 外壳、设置、运行时组件与发布配置
-|   |-- AFMediaBar.Core/    # 媒体、音频、通用业务逻辑与跨层契约
-|   |-- AFMediaBar.Layout/  # UI 无关布局模型、约束、编辑命令与 schema 5
-|   |-- AFMediaBar.LayoutEditor.Wpf/ # 独立 WPF 网格编辑器宿主与交互状态机
-|   `-- AFMediaBar.Platform.Windows/ # Windows 系统访问、布局存储与适配器
-|-- tests/
-|   `-- AFMediaBar.Core.Tests/ # Core 自动化测试
-|-- prototypes/             # WinUI 与布局编辑器独立实验项目
-|-- docs/                   # 项目文档与资源
-|-- AFMediaBar.slnx         # 解决方案构建与测试入口
-`-- README.md               # 中文说明
+├── .github/workflows/        # 构建与发布工作流
+├── src/AFMediaBar/           # WPF 应用主项目
+│   ├── Classes/              # 分层业务代码
+│   │   ├── Abstractions/     # 跨模块契约
+│   │   ├── Interop/          # Windows API 互操作
+│   │   ├── Models/           # 数据模型（含布局 schema）
+│   │   ├── Services/         # 按所有权分目录的服务（Media、Lyrics、Audio、Updates…）
+│   │   ├── Settings/         # 设置模型与兼容门面
+│   │   └── Utils/            # 无状态辅助与有界缓存
+│   ├── Components/           # 可复用 WPF 控件
+│   ├── Resources/            # 主题、样式与三语文案
+│   ├── ViewModels/           # MVVM 视图模型
+│   └── Views/                # 页面与宿主窗口
+├── tests/AFMediaBar.Layout.Tests/   # 纯逻辑、策略与设置测试
+├── tools/                    # 架构静态检查等脚本
+├── installer/                # Inno Setup 安装脚本
+└── docs/                     # 项目文档、资源与版本清单
 ```
-
-
-
-## TODO
-
-
-个人开发较慢、能力有限，不保证全部完成。
-- [x] 提升 Windows 自动隐藏任务栏模式下的跟随动画流畅度。
-- [x] 完善自动避让任务栏图标功能。
-- [x] Windows 10 适配测试。
-- [x] 无媒体播放时自动隐藏、窗口全局置顶。
-- [x] 自动适配系统深浅色主题。
-- [x] 提供悬浮窗口模式与长条外边缘折叠容器。
-- [x] 为任务栏和悬浮窗口提供显示比例与横向/竖向布局。
-- [x] 提供独立详细设置页面。
-- [x] 字体自定义。
-- [x] 优化点击封面快速打开软件功能，增加快速打开任务管理器。
-- [x] 提供自由输入的自定义窗口大小、增加更多自定义设置。
-- [ ] 视频字幕/歌词滚动展示。
-- [ ] 媒体进度条展示。
-- [ ] UI美化、提供多种预制主题。
-- [ ] 完成细网格编辑器的真实 Windows 验收。
-- [ ] 配置导出与分享。
-- [ ] 添加新手教程引导。
-
-
-
 
 ## 参与贡献
 
-提交问题或代码前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。错误报告请附 Windows 版本、AF Media Bar 版本、媒体播放器和完整复现步骤。
-
-版本变化记录见 [CHANGELOG.md](CHANGELOG.md)。
+提交问题或代码前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。错误报告请附 Windows 版本、AF Media Bar 版本、媒体播放器与完整复现步骤。版本变化记录见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## License
 
@@ -310,6 +193,6 @@ AF Media Bar 使用 [MIT License](LICENSE) 开源。
 
 <div align="center">
 
-如果 AF Media Bar 对你有帮助，可以给项目一个 Star。
+如果 AF Media Bar 对你有帮助，可以给项目一个 Star❤️。
 
 </div>
