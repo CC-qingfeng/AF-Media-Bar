@@ -85,7 +85,8 @@ public static class SettingsSearchIndex
         SettingsPageKey.Interaction => "Common.Page.Interaction",
         SettingsPageKey.Lyrics => "Common.Page.Lyrics",
         SettingsPageKey.Appearance => "Common.Page.Appearance",
-        SettingsPageKey.AppAndAbout => "Common.Page.AppAndAbout",
+        SettingsPageKey.Application => "Common.Page.Application",
+        SettingsPageKey.About => "Common.Page.About",
         _ => string.Empty,
     };
 
@@ -328,41 +329,70 @@ public static class SettingsSearchIndex
             language,
             ["文字颜色", "foreground", "文字", "颜色", "自动", "浅色文字", "深色文字", "对比", "可读", "播放器文字", "媒体文字大小", "字号", "文字大小", "font size", "缩放"]),
 
-        // ---- 应用与关于 / Application and about ----
+        // ---- 应用 / Application ----
+        //
+        // 这一页原来是「应用与关于」的前半部分，拆分后只保留"应用自身的设置"：版本与更新、开机自启、界面语言、
+        // 默认设置、设置文件与诊断日志。开发人员、赞助与开源许可移到了页脚的「关于」，因此那里的 key 不再指向本页。
+        // This page is the first half of what used to be "application and about"; after the split it keeps only the application's own
+        // settings: version and updates, run-at-startup, interface language, user defaults, the settings file, and diagnostics.
+        // Developers, sponsors, and open-source licenses moved to "about" in the footer, so their keys no longer point here.
         Create(
-            SettingsPageKey.AppAndAbout,
+            SettingsPageKey.Application,
             0,
             "Common.Group.Application",
-            "Search.AppAndAbout.Application.Description",
+            "Search.Application.Application.Description",
             language,
             ["更新", "update", "升级", "版本", "version", "检查更新", "自动更新", "自动下载", "下载", "安装", "安装程序", "静默安装", "重启", "加速", "镜像", "跳过此版本", "开机", "启动", "startup", "自启", "语言", "language", "中文", "预留"]),
         Create(
-            SettingsPageKey.AppAndAbout,
+            SettingsPageKey.Application,
             1,
             "Common.Group.SettingsFile",
-            "Search.AppAndAbout.SettingsFile.Description",
+            "Search.Application.SettingsFile.Description",
             language,
             ["设置文件", "settings.json", "文件夹", "folder", "打开", "重置", "reset", "恢复默认", "还原"]),
         Create(
-            SettingsPageKey.AppAndAbout,
+            SettingsPageKey.Application,
             2,
             "Common.Group.Diagnostics",
-            "Search.AppAndAbout.Diagnostics.Description",
+            "Search.Application.Diagnostics.Description",
             language,
             ["日志", "log", "logs", "诊断", "diagnostics", "报错", "崩溃", "crash", "上报", "报告", "排查", "打开文件夹", "导出", "内存", "memory", "ram", "占用", "压缩", "释放", "工作集"]),
+
+        // ---- 关于 / About ----
         Create(
-            SettingsPageKey.AppAndAbout,
-            3,
-            "Common.Group.ProjectInfo",
-            "Search.AppAndAbout.ProjectInfo.Description",
+            SettingsPageKey.About,
+            0,
+            "Common.Group.Developers",
+            "Search.About.Developers.Description",
             language,
-            ["版本", "version", "关于", "about", "github", "反馈", "issue", "star"]),
+            ["开发", "developer", "贡献者", "contributor", "名单", "人员", "github", "感谢", "credits"]),
         Create(
-            SettingsPageKey.AppAndAbout,
-            4,
+            SettingsPageKey.About,
+            1,
             "Common.Group.Sponsors",
-            "Search.AppAndAbout.Sponsors.Description",
+            "Search.About.Sponsors.Description",
             language,
-            ["赞助", "sponsor", "支持", "捐赠", "donate"]),
+            ["赞助", "sponsor", "支持", "捐赠", "donate", "名单", "感谢"]),
+        Create(
+            SettingsPageKey.About,
+            2,
+            "Common.Group.Support",
+            "Search.About.Support.Description",
+            language,
+            ["赞助我", "请我喝咖啡", "打赏", "二维码", "微信", "wechat", "支付宝", "alipay", "爱发电", "afdian", "支持"]),
+        Create(
+            SettingsPageKey.About,
+            3,
+            "Common.Group.Licenses",
+            "Search.About.Licenses.Description",
+            language,
+            ["开源", "许可", "license", "licence", "许可证", "第三方", "依赖", "package", "apache", "mit", "gpl"]),
+        Create(
+            SettingsPageKey.About,
+            4,
+            "Common.Group.ProjectInfo",
+            "Search.About.ProjectInfo.Description",
+            language,
+            ["版本", "version", "关于", "about", "github", "反馈", "issue", "star", "仓库", "repository"]),
     ];
 }

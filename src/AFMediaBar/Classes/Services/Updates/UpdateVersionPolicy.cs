@@ -16,8 +16,8 @@ namespace AFMediaBar.Classes.Services.Updates;
 /// </summary>
 public static class UpdateVersionPolicy
 {
-    /// <summary>显示版本号时保留的最少段数（主版本.次版本）。/ Fewest segments kept when formatting a version (major.minor).</summary>
-    public const int MinimumDisplaySegments = 2;
+    /// <summary>显示版本号时保留的最少段数（主版本.次版本.修订版本）。/ Fewest segments kept when formatting a version (major.minor.build).</summary>
+    public const int MinimumDisplaySegments = 3;
 
     /// <summary>
     /// 解析版本号。接受前后空白、前缀 <c>v</c>/<c>V</c>、1–4 段数字，以及 <c>-preview</c> 与 <c>+build</c> 后缀
@@ -91,8 +91,8 @@ public static class UpdateVersionPolicy
     }
 
     /// <summary>
-    /// 格式化为界面版本号：去掉尾部恒为零的段，至少保留主版本与次版本。
-    /// Formats a version for display: trailing all-zero segments are dropped down to major.minor.
+    /// 格式化为界面版本号：去掉尾部恒为零的段，至少保留主版本、次版本与修订版本。
+    /// Formats a version for display: trailing all-zero segments are dropped down to major.minor.build.
     /// </summary>
     /// <param name="version">要格式化的版本；为 null 时返回空字符串。/ Version to format, or an empty string when null.</param>
     /// <returns>形如 <c>1.1.1</c> 的文本。/ Text such as <c>1.1.1</c>.</returns>

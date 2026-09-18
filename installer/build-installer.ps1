@@ -1,4 +1,4 @@
-# AF Media Bar 安装包构建脚本 / AF Media Bar installer build script
+﻿# AF Media Bar 安装包构建脚本 / AF Media Bar installer build script
 #
 # 本地与 CI 共用同一条链路：读取项目版本 -> 单文件自包含发布 -> Inno Setup 编译 -> 校验产物与哈希。
 # The local and CI paths are the same chain: read the project version, publish the self-contained single

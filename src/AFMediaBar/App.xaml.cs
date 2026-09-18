@@ -1,5 +1,6 @@
 using AFMediaBar.Classes.Services;
 using AFMediaBar.Classes.Abstractions;
+using AFMediaBar.Classes.Services.Credits;
 using AFMediaBar.Classes.Services.Lyrics;
 using AFMediaBar.ViewModels.Pages;
 using AFMediaBar.ViewModels.Windows;
@@ -189,6 +190,18 @@ namespace AFMediaBar
 
                 services.AddSingleton<SettingsPage>();
                 services.AddSingleton<SettingsViewModel>();
+
+                // 应用页与关于页由原「应用与关于」拆分而来：设置留在应用页，人与许可移到关于页。
+                // The application and about pages come from splitting the former "application and about": settings stay on the
+                // application page while people and licenses moved to about.
+                services.AddSingleton<ApplicationPage>();
+                services.AddSingleton<ApplicationViewModel>();
+
+                // 关于页的名单服务：贡献者与赞助者名单（缓存 + 仓库快照回退），只被关于页使用。
+                // The credits service behind the about page: contributor and sponsor lists with caching and a repository-snapshot fallback, used only
+                // by that page.
+                services.AddSingleton<CreditsService>();
+                services.AddSingleton<AvatarImageLoader>();
 
                 services.AddSingleton<AboutPage>();
                 services.AddSingleton<AboutViewModel>();

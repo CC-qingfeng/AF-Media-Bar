@@ -20,7 +20,7 @@ internal static class StringsZhHant
     internal static void Register(LanguageTable table)
     {
         // ---- About ----
-        table.Add("About.Header.Subtitle", "應用程式資訊、設定檔與支援入口");
+        table.Add("About.Header.Subtitle", "開發人員、贊助者與開源授權");
         table.Add("About.Language.Description", "介面文字的顯示語言；選「跟隨系統」時依 Windows 顯示語言決定，切換後立即生效");
         table.Add("About.Language.English", "English");
         table.Add("About.Language.FollowSystem", "跟隨系統");
@@ -46,8 +46,8 @@ internal static class StringsZhHant
         table.Add("About.Row.TrimMemory.Button", "立即壓縮");
         table.Add("About.Row.TrimMemory.Description", "把工作集（佔用的實體記憶體）交還給系統：工作管理員裡的讀數會立刻下降，下次用到這部分時程式需要重新讀回，可能有短暫卡頓；認可大小不變");
         table.Add("About.Row.TrimMemory.Title", "壓縮記憶體佔用");
+        table.Add("Common.Group.Developers", "開發人員");
         table.Add("Common.Group.Diagnostics", "診斷與日誌");
-        table.Add("Search.AppAndAbout.Diagnostics.Description", "開啟日誌資料夾（logs\\app.log，出現錯誤時送這個檔案），或把工作集交還給系統");
         table.Add("About.Row.Portable.Badge", "免安裝版");
         table.Add("About.Row.Portable.Description", "目前不是安裝版本，無法自動取代檔案；請從下載頁取得安裝程式或手動取代程式檔案");
         table.Add("About.Row.Portable.Title", "自動更新無法使用");
@@ -63,9 +63,24 @@ internal static class StringsZhHant
         table.Add("About.Row.SaveDefaults.Title", "將目前設定儲存為預設");
         table.Add("About.Row.Skip.Clear", "取消略過");
         table.Add("About.Row.Skip.Description", "略過只影響自動提示，手動檢查仍會顯示該版本");
-        table.Add("About.Row.Sponsors.Description", "贊助名單隨版本發佈，不會連線讀取");
-        table.Add("About.Row.Sponsors.First", "成為第一位支持者");
-        table.Add("About.Row.Sponsors.Title", "尚無贊助者");
+        table.Add("About.Licenses.Open", "查看專案");
+        table.Add("About.Support.Afdian", "愛發電");
+        table.Add("About.Support.Alipay", "支付寶");
+        table.Add("About.Support.Open", "開啟連結");
+        table.Add("About.Support.Pending", "收款碼與贊助連結由作者後續補充；上方的路徑就是檔案應當放入的位置");
+        table.Add("About.Support.WeChat", "微信");
+        table.Add("Credits.Contributions", "提交 {0} 次");
+        table.Add("Credits.Reason.ContributorsEmpty", "貢獻者清單為空");
+        table.Add("Credits.Reason.ContributorsShape", "貢獻者清單結構不正確");
+        table.Add("Credits.Reason.Empty", "名單內容為空");
+        table.Add("Credits.Reason.InvalidJson", "名單內容不是有效的 JSON");
+        table.Add("Credits.Reason.SchemaTooNew", "贊助名單的結構版本（{0}）高於本程式支援的版本（{1}）");
+        table.Add("Credits.Reason.SponsorsShape", "贊助名單結構不正確");
+        table.Add("Credits.Sponsors.Count", "共 {0} 位贊助者");
+        table.Add("Credits.SponsorSeparator", "、");
+        table.Add("Credits.Status.Failed", "暫時無法取得名單：{0}");
+        table.Add("Credits.Status.Loading", "正在取得開發人員與贊助者名單…");
+        table.Add("Credits.Retry", "重試");
         table.Add("About.Row.Startup.Description", "登入 Windows 後自動執行 AF Media Bar（只寫入目前使用者的啟動項目）");
         table.Add("About.Row.Startup.Title", "開機自動啟動");
         table.Add("About.Row.Version.Check", "檢查更新");
@@ -166,6 +181,7 @@ internal static class StringsZhHant
         table.Add("Common.Group.Fonts", "字型");
         table.Add("Common.Group.InAppRestLayer", "程式內（靜置層）");
         table.Add("Common.Group.IslandAppearance", "動態島外觀");
+        table.Add("Common.Group.Licenses", "開源授權");
         table.Add("Common.Group.LyricsAlignment", "對齊");
         table.Add("Common.Group.LyricsDisplay", "顯示");
         table.Add("Common.Group.LyricsSources", "來源");
@@ -177,7 +193,8 @@ internal static class StringsZhHant
         table.Add("Common.Group.ScreenAndPlacement", "螢幕與位置");
         table.Add("Common.Group.SettingsFile", "設定檔");
         table.Add("Common.Group.SharedModifier", "共用的按鍵");
-        table.Add("Common.Group.Sponsors", "贊助支持");
+        table.Add("Common.Group.Sponsors", "贊助者名單");
+        table.Add("Common.Group.Support", "贊助我");
         table.Add("Common.Group.ThemeAndBackdrop", "佈景主題與背景");
         table.Add("Common.Group.TrackChangeNotification", "曲目切換通知");
         table.Add("Common.HoverLayer", "懸停層");
@@ -192,7 +209,8 @@ internal static class StringsZhHant
         table.Add("Common.OpenFolder", "開啟資料夾");
         table.Add("Common.OpenFullPanel", "開啟完整層");
         table.Add("Common.OutputDevice", "輸出裝置");
-        table.Add("Common.Page.AppAndAbout", "應用與關於");
+        table.Add("Common.Page.About", "關於");
+        table.Add("Common.Page.Application", "應用程式");
         table.Add("Common.Page.Appearance", "外觀");
         table.Add("Common.Page.DisplayModes", "顯示模式");
         table.Add("Common.Page.Interaction", "互動");
@@ -555,10 +573,15 @@ internal static class StringsZhHant
         table.Add("Panel.Volume.Unavailable", "無法使用");
 
         // ---- Search ----
-        table.Add("Search.AppAndAbout.Application.Description", "版本資訊、檢查更新、自動更新、開機自動啟動與介面語言");
-        table.Add("Search.AppAndAbout.ProjectInfo.Description", "版本資訊與意見反應入口");
-        table.Add("Search.AppAndAbout.SettingsFile.Description", "開啟設定資料夾與重設全部設定");
-        table.Add("Search.AppAndAbout.Sponsors.Description", "贊助者名單");
+        table.Add("Search.About.Developers.Description", "開發人員名單，取自 GitHub 的貢獻者清單");
+        table.Add("Search.About.Licenses.Description", "本程式使用的開源套件與衍生程式碼及其授權");
+        table.Add("Search.About.ProjectInfo.Description", "倉庫、意見反應入口與使用說明");
+        table.Add("Search.About.Sponsors.Description", "贊助者名單，取自倉庫裡的名單檔案");
+        table.Add("Search.About.Support.Description", "微信與支付寶收款碼、愛發電贊助連結");
+        table.Add("Search.Application.Application.Description", "版本資訊、檢查更新、自動更新、開機自動啟動與介面語言");
+        table.Add("Search.Application.Diagnostics.Description", "開啟日誌資料夾（logs\\app.log，出現錯誤時送這個檔案），或把工作集交還給系統");
+        table.Add("Search.Application.SettingsFile.Description", "開啟設定資料夾與重設全部設定");
+        table.Add("Application.Header.Subtitle", "版本與更新、介面語言、開機自動啟動、設定檔與診斷日誌");
         table.Add("Search.Appearance.Fonts.Description", "英文字型、中文字型與字型粗細");
         table.Add("Search.Appearance.MediaBarText.Description", "媒體列上文字的顏色與大小");
         table.Add("Search.Appearance.ThemeAndBackdrop.Description", "淺色還是深色，以及視窗背景材質");

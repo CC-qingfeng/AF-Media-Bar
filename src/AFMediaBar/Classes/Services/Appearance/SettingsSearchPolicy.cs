@@ -27,8 +27,11 @@ public enum SettingsPageKey
     /// <summary>外观页。/ Appearance page.</summary>
     Appearance,
 
-    /// <summary>应用与关于页。/ Application and about page.</summary>
-    AppAndAbout,
+    /// <summary>应用页：版本、更新、界面语言、开机自启、设置文件与诊断日志。/ Application page: version, updates, interface language, run-at-startup, settings file, and diagnostics.</summary>
+    Application,
+
+    /// <summary>关于页：开发人员、赞助者、赞助入口、开源许可与项目信息。/ About page: developers, sponsors, the support entry, open-source licenses, and project information.</summary>
+    About,
 }
 
 /// <summary>

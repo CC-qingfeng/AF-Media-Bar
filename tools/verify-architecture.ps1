@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$SourceRoot = (Join-Path $PSScriptRoot '..\src\AFMediaBar')
 )
 

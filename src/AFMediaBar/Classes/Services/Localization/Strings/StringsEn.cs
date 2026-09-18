@@ -20,7 +20,7 @@ internal static class StringsEn
     internal static void Register(LanguageTable table)
     {
         // ---- About ----
-        table.Add("About.Header.Subtitle", "Application information, the settings file, and support entries");
+        table.Add("About.Header.Subtitle", "Developers, sponsors, and open-source licenses");
         table.Add("About.Language.Description", "The language of the interface text; \"follow the system\" takes it from the Windows display language, and a change applies immediately");
         table.Add("About.Language.English", "English");
         table.Add("About.Language.FollowSystem", "Follow the system");
@@ -46,8 +46,8 @@ internal static class StringsEn
         table.Add("About.Row.TrimMemory.Button", "Compress now");
         table.Add("About.Row.TrimMemory.Description", "Returns the working set — the physical memory in use — to the system: the figure in Task Manager drops at once, the next use has to read that part back in and may stutter briefly; the commit size does not change");
         table.Add("About.Row.TrimMemory.Title", "Compress memory usage");
+        table.Add("Common.Group.Developers", "Developers");
         table.Add("Common.Group.Diagnostics", "Diagnostics and logs");
-        table.Add("Search.AppAndAbout.Diagnostics.Description", "Open the log folder (logs\\app.log, the file to send when something breaks) or return the working set to the system");
         table.Add("About.Row.Portable.Badge", "Portable");
         table.Add("About.Row.Portable.Description", "This is not an installed build, so files cannot be replaced automatically; get the installer from the download page or replace the program files by hand");
         table.Add("About.Row.Portable.Title", "Automatic updates are unavailable");
@@ -63,9 +63,24 @@ internal static class StringsEn
         table.Add("About.Row.SaveDefaults.Title", "Save the current settings as defaults");
         table.Add("About.Row.Skip.Clear", "Stop skipping");
         table.Add("About.Row.Skip.Description", "Skipping affects only the automatic notice; a manual check still reports that version");
-        table.Add("About.Row.Sponsors.Description", "The sponsor list ships with the release and is never read from the network");
-        table.Add("About.Row.Sponsors.First", "Be the first supporter");
-        table.Add("About.Row.Sponsors.Title", "No sponsors yet");
+        table.Add("About.Licenses.Open", "Open project");
+        table.Add("About.Support.Afdian", "Afdian");
+        table.Add("About.Support.Alipay", "Alipay");
+        table.Add("About.Support.Open", "Open link");
+        table.Add("About.Support.Pending", "The payment codes and the support link are supplied by the author later; the path above is where the file belongs");
+        table.Add("About.Support.WeChat", "WeChat");
+        table.Add("Credits.Contributions", "{0} commits");
+        table.Add("Credits.Reason.ContributorsEmpty", "The contributors list is empty");
+        table.Add("Credits.Reason.ContributorsShape", "The contributors list has an unexpected shape");
+        table.Add("Credits.Reason.Empty", "The list was empty");
+        table.Add("Credits.Reason.InvalidJson", "The list is not valid JSON");
+        table.Add("Credits.Reason.SchemaTooNew", "The sponsor list is schema version {0}, newer than the supported version {1}");
+        table.Add("Credits.Reason.SponsorsShape", "The sponsor list has an unexpected shape");
+        table.Add("Credits.Sponsors.Count", "{0} sponsors in total");
+        table.Add("Credits.SponsorSeparator", ", ");
+        table.Add("Credits.Status.Failed", "The lists cannot be loaded right now: {0}");
+        table.Add("Credits.Status.Loading", "Loading the developer and sponsor lists…");
+        table.Add("Credits.Retry", "Retry");
         table.Add("About.Row.Startup.Description", "Runs AF Media Bar after you sign in to Windows (writes only the current user's startup entry)");
         table.Add("About.Row.Startup.Title", "Start when signing in");
         table.Add("About.Row.Version.Check", "Check for updates");
@@ -166,6 +181,7 @@ internal static class StringsEn
         table.Add("Common.Group.Fonts", "Fonts");
         table.Add("Common.Group.InAppRestLayer", "In the application (rest layer)");
         table.Add("Common.Group.IslandAppearance", "Dynamic island appearance");
+        table.Add("Common.Group.Licenses", "Open-source licenses");
         table.Add("Common.Group.LyricsAlignment", "Alignment");
         table.Add("Common.Group.LyricsDisplay", "Display");
         table.Add("Common.Group.LyricsSources", "Sources");
@@ -177,7 +193,8 @@ internal static class StringsEn
         table.Add("Common.Group.ScreenAndPlacement", "Screen and placement");
         table.Add("Common.Group.SettingsFile", "Settings file");
         table.Add("Common.Group.SharedModifier", "Shared modifier");
-        table.Add("Common.Group.Sponsors", "Sponsorship");
+        table.Add("Common.Group.Sponsors", "Sponsors");
+        table.Add("Common.Group.Support", "Support me");
         table.Add("Common.Group.ThemeAndBackdrop", "Theme and backdrop");
         table.Add("Common.Group.TrackChangeNotification", "Track-change notification");
         table.Add("Common.HoverLayer", "Hover layer");
@@ -192,7 +209,8 @@ internal static class StringsEn
         table.Add("Common.OpenFolder", "Open folder");
         table.Add("Common.OpenFullPanel", "Open the full panel");
         table.Add("Common.OutputDevice", "Output device");
-        table.Add("Common.Page.AppAndAbout", "Application and about");
+        table.Add("Common.Page.About", "About");
+        table.Add("Common.Page.Application", "Application");
         table.Add("Common.Page.Appearance", "Appearance");
         table.Add("Common.Page.DisplayModes", "Display mode");
         table.Add("Common.Page.Interaction", "Interaction");
@@ -555,10 +573,15 @@ internal static class StringsEn
         table.Add("Panel.Volume.Unavailable", "Unavailable");
 
         // ---- Search ----
-        table.Add("Search.AppAndAbout.Application.Description", "Version information, update checks, automatic updates, launch at sign-in, and the interface language");
-        table.Add("Search.AppAndAbout.ProjectInfo.Description", "Version information and the feedback entry");
-        table.Add("Search.AppAndAbout.SettingsFile.Description", "Opening the settings folder and resetting every setting");
-        table.Add("Search.AppAndAbout.Sponsors.Description", "List of sponsors");
+        table.Add("Search.About.Developers.Description", "The developer list, taken from the GitHub contributors list");
+        table.Add("Search.About.Licenses.Description", "The open-source packages and derived code this program uses, with their licenses");
+        table.Add("Search.About.ProjectInfo.Description", "The repository, the feedback entry, and help");
+        table.Add("Search.About.Sponsors.Description", "The sponsor list, read from the file in the repository");
+        table.Add("Search.About.Support.Description", "WeChat and Alipay payment codes and the Afdian support link");
+        table.Add("Search.Application.Application.Description", "Version information, update checks, automatic updates, launch at sign-in, and the interface language");
+        table.Add("Search.Application.Diagnostics.Description", "Open the log folder (logs\\app.log, the file to send when something breaks) or return the working set to the system");
+        table.Add("Search.Application.SettingsFile.Description", "Opening the settings folder and resetting every setting");
+        table.Add("Application.Header.Subtitle", "Version and updates, interface language, run-at-startup, the settings file, and diagnostics");
         table.Add("Search.Appearance.Fonts.Description", "Latin font, Chinese font, and font weight");
         table.Add("Search.Appearance.MediaBarText.Description", "Color and size of the text on the media bar");
         table.Add("Search.Appearance.ThemeAndBackdrop.Description", "Light or dark appearance, and the window backdrop material");

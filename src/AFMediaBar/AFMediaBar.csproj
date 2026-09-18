@@ -65,11 +65,25 @@
   <ItemGroup>
     <None Remove="Assets\wpfui-icon-256.png" />
     <None Remove="Assets\wpfui-icon-1024.png" />
+    <!--
+      赞助收款码按**通配**打包，而不是逐个文件名列出：这两张图由用户后续放入，文件名也由他自己决定
+      （候选名见 CreditLinks）。逐个列出时，放进去的图不会被编进程序集，界面上的表现就是"图不显示"且没有任何错误
+      ——这个坑已经真实发生过一次。
+      The sponsor payment codes are packed with a **wildcard** instead of being listed one by one: the user adds these two images later and chooses
+      their file names (the candidates live in CreditLinks). When they are listed one by one, an added image is not embedded in the assembly and the
+      interface simply shows nothing, with no error at all — which has already happened once.
+    -->
+    <None Remove="Assets\Sponsor\*.png" />
+    <None Remove="Assets\Sponsor\*.jpg" />
+    <None Remove="Assets\Sponsor\*.jpeg" />
   </ItemGroup>
 
   <ItemGroup>
     <Resource Include="Assets\wpfui-icon-256.png" />
     <Resource Include="Assets\wpfui-icon-1024.png" />
+    <Resource Include="Assets\Sponsor\*.png" />
+    <Resource Include="Assets\Sponsor\*.jpg" />
+    <Resource Include="Assets\Sponsor\*.jpeg" />
   </ItemGroup>
 
 </Project>

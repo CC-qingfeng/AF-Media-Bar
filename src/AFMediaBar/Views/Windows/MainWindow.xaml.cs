@@ -803,7 +803,7 @@ namespace AFMediaBar.Views.Windows
         /// <summary>
         /// 打开设置窗口并直接落在「应用与关于」：托盘菜单、媒体栏右键菜单与系统通知都走这条路，
         /// 用户因此不需要自己在六个页面里再找一次。
-        /// Opens the settings window straight on "application and about": the tray menu, the media-bar context menu
+        /// Opens the settings window straight on "application": the tray menu, the media-bar context menu
         /// and the system notification all take this path, so the user never has to find that page again among six.
         /// </summary>
         private void ViewModel_OpenUpdateSettingsRequested(object? sender, EventArgs e)
@@ -822,7 +822,7 @@ namespace AFMediaBar.Views.Windows
             // like a click that does nothing.
             settingsWindow.Dispatcher.BeginInvoke(
                 System.Windows.Threading.DispatcherPriority.Loaded,
-                new Action(() => settingsWindow.Navigate(typeof(AFMediaBar.Views.Pages.AboutPage))));
+                new Action(() => settingsWindow.Navigate(typeof(AFMediaBar.Views.Pages.ApplicationPage))));
         }
 
         private void UpdateService_OnStateChanged(UpdateState state)

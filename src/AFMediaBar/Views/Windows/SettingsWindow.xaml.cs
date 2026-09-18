@@ -34,7 +34,8 @@ namespace AFMediaBar.Views.Windows
                 [SettingsPageKey.Interaction] = typeof(InteractionPage),
                 [SettingsPageKey.Lyrics] = typeof(LyricsPage),
                 [SettingsPageKey.Appearance] = typeof(AppearancePage),
-                [SettingsPageKey.AppAndAbout] = typeof(AboutPage),
+                [SettingsPageKey.Application] = typeof(ApplicationPage),
+                [SettingsPageKey.About] = typeof(AboutPage),
             };
 
         public SettingsWindowViewModel ViewModel { get; }
@@ -207,9 +208,9 @@ namespace AFMediaBar.Views.Windows
         /// </summary>
         private void UpdateNoticeNavItem_Click(object sender, RoutedEventArgs e)
         {
-            // 提示行本身不是页面，因此点击它等同于导航到「应用与关于」。
-            // The notice row is not a page, so clicking it simply navigates to "application and about".
-            Navigate(typeof(AboutPage));
+            // 提示行本身不是页面，因此点击它等同于导航到「应用」——拆分之后更新操作全部留在那一页。
+            // The notice row is not a page, so clicking it simply navigates to "application", where every update action lives after the split.
+            Navigate(typeof(ApplicationPage));
         }
 
         private void ViewModel_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)

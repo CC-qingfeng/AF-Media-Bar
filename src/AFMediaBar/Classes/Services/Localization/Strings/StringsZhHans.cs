@@ -20,7 +20,7 @@ internal static class StringsZhHans
     internal static void Register(LanguageTable table)
     {
         // ---- About ----
-        table.Add("About.Header.Subtitle", "应用信息、设置文件与支持入口");
+        table.Add("About.Header.Subtitle", "开发人员、赞助者与开源许可");
         table.Add("About.Language.Description", "界面文字的显示语言；选「跟随系统」时按 Windows 显示语言决定，切换后立即生效");
         table.Add("About.Language.English", "English");
         table.Add("About.Language.FollowSystem", "跟随系统");
@@ -46,8 +46,8 @@ internal static class StringsZhHans
         table.Add("About.Row.TrimMemory.Button", "立即压缩");
         table.Add("About.Row.TrimMemory.Description", "把工作集（占用的物理内存）交还给系统：任务管理器里的读数会立刻下降，下次用到这部分时程序需要重新读回，可能有短暂卡顿；提交大小不变");
         table.Add("About.Row.TrimMemory.Title", "压缩内存占用");
+        table.Add("Common.Group.Developers", "开发人员");
         table.Add("Common.Group.Diagnostics", "诊断与日志");
-        table.Add("Search.AppAndAbout.Diagnostics.Description", "打开日志文件夹（logs\\app.log，出现错误时发这个文件），或把工作集交还给系统");
         table.Add("About.Row.Portable.Badge", "便携版");
         table.Add("About.Row.Portable.Description", "当前不是安装版本，无法自动替换文件；请从下载页获取安装包或手动替换程序文件");
         table.Add("About.Row.Portable.Title", "自动更新不可用");
@@ -63,9 +63,24 @@ internal static class StringsZhHans
         table.Add("About.Row.SaveDefaults.Title", "保存当前设置为默认");
         table.Add("About.Row.Skip.Clear", "取消跳过");
         table.Add("About.Row.Skip.Description", "跳过只影响自动提示，手动检查仍会显示该版本");
-        table.Add("About.Row.Sponsors.Description", "赞助名单随版本发布，不会联网读取");
-        table.Add("About.Row.Sponsors.First", "成为第一位支持者");
-        table.Add("About.Row.Sponsors.Title", "暂无赞助者");
+        table.Add("About.Licenses.Open", "查看项目");
+        table.Add("About.Support.Afdian", "爱发电");
+        table.Add("About.Support.Alipay", "支付宝");
+        table.Add("About.Support.Open", "打开链接");
+        table.Add("About.Support.Pending", "收款码与赞助链接由作者后续补充；上方的路径就是文件应当放入的位置");
+        table.Add("About.Support.WeChat", "微信");
+        table.Add("Credits.Contributions", "提交 {0} 次");
+        table.Add("Credits.Reason.ContributorsEmpty", "贡献者列表为空");
+        table.Add("Credits.Reason.ContributorsShape", "贡献者列表结构不正确");
+        table.Add("Credits.Reason.Empty", "名单内容为空");
+        table.Add("Credits.Reason.InvalidJson", "名单内容不是有效的 JSON");
+        table.Add("Credits.Reason.SchemaTooNew", "赞助名单的结构版本（{0}）高于本程序支持的版本（{1}）");
+        table.Add("Credits.Reason.SponsorsShape", "赞助名单结构不正确");
+        table.Add("Credits.Sponsors.Count", "共 {0} 位赞助者");
+        table.Add("Credits.SponsorSeparator", "、");
+        table.Add("Credits.Status.Failed", "暂时无法获取名单：{0}");
+        table.Add("Credits.Status.Loading", "正在获取开发人员与赞助者名单…");
+        table.Add("Credits.Retry", "重试");
         table.Add("About.Row.Startup.Description", "登录 Windows 后自动运行 AF Media Bar（只写入当前用户的启动项）");
         table.Add("About.Row.Startup.Title", "开机自动启动");
         table.Add("About.Row.Version.Check", "检查更新");
@@ -166,6 +181,7 @@ internal static class StringsZhHans
         table.Add("Common.Group.Fonts", "字体");
         table.Add("Common.Group.InAppRestLayer", "程序内（静置层）");
         table.Add("Common.Group.IslandAppearance", "灵动岛外观");
+        table.Add("Common.Group.Licenses", "开源许可");
         table.Add("Common.Group.LyricsAlignment", "对齐");
         table.Add("Common.Group.LyricsDisplay", "显示");
         table.Add("Common.Group.LyricsSources", "来源");
@@ -177,7 +193,8 @@ internal static class StringsZhHans
         table.Add("Common.Group.ScreenAndPlacement", "屏幕与位置");
         table.Add("Common.Group.SettingsFile", "设置文件");
         table.Add("Common.Group.SharedModifier", "共用的按键");
-        table.Add("Common.Group.Sponsors", "赞助支持");
+        table.Add("Common.Group.Sponsors", "赞助者名单");
+        table.Add("Common.Group.Support", "赞助我");
         table.Add("Common.Group.ThemeAndBackdrop", "主题与背景");
         table.Add("Common.Group.TrackChangeNotification", "曲目切换通知");
         table.Add("Common.HoverLayer", "悬停层");
@@ -192,7 +209,8 @@ internal static class StringsZhHans
         table.Add("Common.OpenFolder", "打开文件夹");
         table.Add("Common.OpenFullPanel", "打开完整层");
         table.Add("Common.OutputDevice", "输出设备");
-        table.Add("Common.Page.AppAndAbout", "应用与关于");
+        table.Add("Common.Page.About", "关于");
+        table.Add("Common.Page.Application", "应用");
         table.Add("Common.Page.Appearance", "外观");
         table.Add("Common.Page.DisplayModes", "显示模式");
         table.Add("Common.Page.Interaction", "交互");
@@ -555,10 +573,15 @@ internal static class StringsZhHans
         table.Add("Panel.Volume.Unavailable", "不可用");
 
         // ---- Search ----
-        table.Add("Search.AppAndAbout.Application.Description", "版本信息、检查更新、自动更新、开机自动启动与界面语言");
-        table.Add("Search.AppAndAbout.ProjectInfo.Description", "版本信息与反馈入口");
-        table.Add("Search.AppAndAbout.SettingsFile.Description", "打开设置文件夹与重置全部设置");
-        table.Add("Search.AppAndAbout.Sponsors.Description", "赞助者名单");
+        table.Add("Search.About.Developers.Description", "开发人员名单，取自 GitHub 的贡献者列表");
+        table.Add("Search.About.Licenses.Description", "本程序使用的开源软件包与衍生代码及其许可");
+        table.Add("Search.About.ProjectInfo.Description", "仓库、反馈入口与使用帮助");
+        table.Add("Search.About.Sponsors.Description", "赞助者名单，取自仓库里的名单文件");
+        table.Add("Search.About.Support.Description", "微信与支付宝收款码、爱发电赞助链接");
+        table.Add("Search.Application.Application.Description", "版本信息、检查更新、自动更新、开机自动启动与界面语言");
+        table.Add("Search.Application.Diagnostics.Description", "打开日志文件夹（logs\\app.log，出现错误时发这个文件），或把工作集交还给系统");
+        table.Add("Search.Application.SettingsFile.Description", "打开设置文件夹与重置全部设置");
+        table.Add("Application.Header.Subtitle", "版本与更新、界面语言、开机自启、设置文件与诊断日志");
         table.Add("Search.Appearance.Fonts.Description", "英文字体、中文字体与字体粗细");
         table.Add("Search.Appearance.MediaBarText.Description", "媒体栏上文字的颜色与大小");
         table.Add("Search.Appearance.ThemeAndBackdrop.Description", "浅色还是深色，以及窗口背景材质");

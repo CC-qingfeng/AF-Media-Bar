@@ -139,16 +139,25 @@
                 <ui:NavigationViewItem Content="{DynamicResource Loc.Common.Page.Appearance}"
                                        Icon="{ui:SymbolIcon PaintBrush24}"
                                        TargetPageType="{x:Type pages:AppearancePage}" />
+                <!--
+                    「应用」紧跟在「外观」下面：两者都是应用自身的设置（外观改观感，应用改版本、更新、语言、
+                    开机自启、设置文件与诊断日志），把它们排在一起，用户不需要再往页脚找。
+                    "Application" sits right below "appearance": both are the application's own settings — appearance changes
+                    how it looks, while application covers version, updates, language, run-at-startup, the settings file, and
+                    diagnostics — and keeping them together saves a trip to the footer.
+                -->
+                <ui:NavigationViewItem Content="{DynamicResource Loc.Common.Page.Application}"
+                                       Icon="{ui:SymbolIcon Settings24}"
+                                       TargetPageType="{x:Type pages:ApplicationPage}" />
             </ui:NavigationView.MenuItems>
 
             <ui:NavigationView.FooterMenuItems>
                 <!--
-                    更新提示：它排在「应用与关于」上方，只在确有可用版本时出现（窗口代码后置按视图模型的纯数据
-                    属性显示或隐藏它）。点击它跳到「应用与关于」，亮点、进度与全部更新操作都在那一页。
-                    Update notice: it sits above "application and about" and only appears when a newer version
-                    really exists; the window's code-behind shows or hides it from the view model's plain-data
-                    property. Clicking it lands on "application and about", where the highlights, progress and every
-                    update action live.
+                    更新提示：它排在「关于」上方，只在确有可用版本时出现（窗口代码后置按视图模型的纯数据
+                    属性显示或隐藏它）。点击它跳到「应用」，亮点、进度与全部更新操作都在那一页。
+                    Update notice: it sits above "about" and only appears when a newer version really exists; the
+                    window's code-behind shows or hides it from the view model's plain-data property. Clicking it lands
+                    on "application", where the highlights, progress and every update action live.
                 -->
                 <ui:NavigationViewItem
                     x:Name="UpdateNoticeNavItem"
@@ -156,7 +165,7 @@
                     Content="{Binding ViewModel.UpdateNoticeTitle}"
                     Icon="{ui:SymbolIcon ArrowSync24}"
                     Visibility="Collapsed" />
-                <ui:NavigationViewItem Content="{DynamicResource Loc.Common.Page.AppAndAbout}" Icon="{ui:SymbolIcon QuestionCircle24}"
+                <ui:NavigationViewItem Content="{DynamicResource Loc.Common.Page.About}" Icon="{ui:SymbolIcon QuestionCircle24}"
                                        TargetPageType="{x:Type pages:AboutPage}" />
             </ui:NavigationView.FooterMenuItems>
 
