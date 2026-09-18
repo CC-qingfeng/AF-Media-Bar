@@ -10,13 +10,7 @@
     <!--
         关于页 / About page
 
-        它由原「应用与关于」页的后半部分独立而来，并参照 FluentFlyout 的关于界面重做：页面按"人 → 钱 → 法 → 项目"
-        排列——开发人员、赞助者名单、赞助我、开源许可、项目信息。凡是"改了会影响程序怎么跑"的设置都留在「应用」页。
-
         每一项都由代码拼出的文案走视图模型（它们在语言切换后必须重取），静态文案走 {DynamicResource Loc.*}。
-        It was split out of the second half of the former "application and about" page and rebuilt following FluentFlyout's
-        about screen: the page runs people → money → law → project, that is developers, sponsors, how to support, open-source
-        licenses, and project information. Everything that changes how the program behaves stays on the "application" page.
 
         Text composed in code goes through the view model, because it has to be re-read after a language switch, while static
         text uses {DynamicResource Loc.*}.
@@ -147,11 +141,24 @@
                     Icon="{ui:SymbolIcon Heart24}"
                     Visibility="{Binding ViewModel.HasSponsors, Converter={StaticResource AfBooleanToVisibilityConverter}}">
                     <StackPanel>
+                        <!--
+                            没有赞助者时显示一行"暂无"，而不是让整个分组消失：用户因此能区分"确实还没人赞助"与"名单没取到"
+                            （后者由页面上方的状态说明条负责说出来）。
+                            With no sponsors a "none yet" line appears instead of the whole group vanishing, so the user can tell "nobody has sponsored yet" from
+                            "the list could not be loaded"; the latter is stated by the status callout near the top of the page.
+                        -->
                         <components:SettingsCallout
                             Margin="0,0,0,4"
                             IsAccent="True"
                             Symbol="Heart24"
-                            Text="{Binding ViewModel.SponsorNamesText}" />
+                            Text="{Binding ViewModel.SponsorNamesText}"
+                            Visibility="{Binding ViewModel.HasSponsors, Converter={StaticResource AfBooleanToVisibilityConverter}}" />
+                        <components:SettingsCallout
+                            Margin="0,0,0,4"
+                            IsAccent="False"
+                            Symbol="Heart24"
+                            Text="{DynamicResource Loc.Credits.Sponsors.None}"
+                            Visibility="{Binding ViewModel.HasNoSponsorsYet, Converter={StaticResource AfBooleanToVisibilityConverter}}" />
                         <TextBlock
                             Margin="16,0,0,0"
                             Style="{StaticResource AfSettingsHintTextStyle}"

@@ -4,6 +4,7 @@ using System.Net.Http;
 using System.Text.Json;
 using AFMediaBar.Classes.Models.Credits;
 using AFMediaBar.Classes.Services.Updates;
+using AFMediaBar.Resources;
 
 namespace AFMediaBar.Classes.Services.Credits;
 
@@ -68,8 +69,10 @@ public sealed class CreditsService : IDisposable
                 cached.Sponsors,
                 FromCache: true,
                 cached.FetchedUtc,
-                FailureReason: null,
-                IsLoading: false);
+                FailureReason: cached.Partial ? Translations.Get("Credits.Status.PartialCached") : null,
+                IsLoading: false,
+                ContributorsLoaded: cached.Contributors.Count > 0,
+                SponsorsLoaded: cached.Sponsors.Count > 0 || !cached.Partial);
         }
     }
 
@@ -89,9 +92,22 @@ public sealed class CreditsService : IDisposable
         }
 
         var now = DateTimeOffset.UtcNow;
-        if (!CreditsCachePolicy.ShouldFetch(Current.FetchedUtc, now, isManual))
+
+        // 覆盖变量在场时等同于手动请求：明确指向某个地址的那一次取数不该被缓存挡住（见 CreditsSourcePolicy.HasAnyOverride）。
+        // While an override is in place this counts as a manual request: a fetch explicitly pointed at an address must not be held back by the cache, which is what
+        // CreditsSourcePolicy.HasAnyOverride explains.
+        var bypassCache = isManual || CreditsSourcePolicy.HasAnyOverride;
+        if (!CreditsCachePolicy.ShouldFetch(Current.FetchedUtc, now, bypassCache, Current.IsPartial))
         {
             return;
+        }
+
+        if (CreditsSourcePolicy.HasAnyOverride)
+        {
+            _log?.Info(
+                "Credits",
+                $"使用覆盖地址 / credits override in effect（提交者快照 contributors snapshot={CreditsSourcePolicy.ResolveOverride(CreditsSourcePolicy.ContributorsSnapshotUrlOverrideVariable)}，" +
+                $"赞助名单 sponsors={CreditsSourcePolicy.ResolveOverride(CreditsSourcePolicy.SponsorsUrlOverrideVariable)}）");
         }
 
         _cancellation?.Cancel();
@@ -130,12 +146,15 @@ public sealed class CreditsService : IDisposable
             var contributors = Current.Contributors;
             var sponsors = Current.Sponsors;
             var failures = new List<string>();
+            var contributorsLoaded = Current.ContributorsLoaded;
+            var sponsorsLoaded = Current.SponsorsLoaded;
             var fetchedSomething = false;
 
             var loadedContributors = await LoadContributorsAsync(token).ConfigureAwait(false);
             if (loadedContributors.Contributors is { Count: > 0 })
             {
                 contributors = loadedContributors.Contributors;
+                contributorsLoaded = true;
                 fetchedSomething = true;
             }
             else if (loadedContributors.FailureReason is { } contributorFailure && contributors.Count == 0)
@@ -147,6 +166,7 @@ public sealed class CreditsService : IDisposable
             if (loadedSponsors.Sponsors is not null)
             {
                 sponsors = loadedSponsors.Sponsors;
+                sponsorsLoaded = true;
                 fetchedSomething = true;
             }
             else if (loadedSponsors.FailureReason is { } sponsorFailure)
@@ -165,19 +185,27 @@ public sealed class CreditsService : IDisposable
             }
 
             var fetchedUtc = DateTimeOffset.UtcNow;
-            _cache.TryWrite(contributors, sponsors, fetchedUtc);
+
+            // 只取到一部分时也要写缓存（否则已取到的那半份会被丢掉），但要标成"不完整"：
+            // 缓存时效据此从 24 小时缩到 1 小时，没取到的那份名单因此不会被一整天的缓存挡住。
+            // A partial result is cached as well — otherwise the half that did arrive would be thrown away — but it is marked incomplete, which shortens the cache
+            // from 24 hours to one; the list that failed therefore never gets stuck behind a whole day of cache.
+            var isPartial = failures.Count > 0;
+            _cache.TryWrite(contributors, sponsors, fetchedUtc, isPartial);
             Publish(new CreditsSnapshot(
                 contributors,
                 sponsors,
                 FromCache: false,
                 fetchedUtc,
                 FailureReason: failures.Count > 0 ? string.Join(" ", failures) : null,
-                IsLoading: false));
+                IsLoading: false,
+                ContributorsLoaded: contributorsLoaded,
+                SponsorsLoaded: sponsorsLoaded));
 
             _log?.Info(
                 "Credits",
                 $"名单已更新 / credits updated（{contributors.Count} 位贡献者 contributors，{sponsors.Count} 位赞助者 sponsors，" +
-                $"手动 manual={isManual}）");
+                $"不完整 partial={isPartial}，手动 manual={isManual}）");
         }
         catch (OperationCanceledException)
         {

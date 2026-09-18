@@ -22,6 +22,20 @@ public static class CreditsCachePolicy
     public static readonly TimeSpan CacheLifetime = TimeSpan.FromHours(24);
 
     /// <summary>
+    /// 只取到一部分名单时的重试间隔（1 小时）。
+    ///
+    /// 这条规则是为一个真实故障加的：开发人员名单取到了、赞助名单没取到（例如名单文件只在另一个分支上），
+    /// 旧实现把这份"半份名单"当成一次成功缓存了 24 小时，于是那 24 小时里再也不会去取赞助名单——用户看到的是
+    /// "赞助者名单怎么都不出现"，而且没有任何提示。
+    /// The retry interval when only part of the lists arrived: one hour.
+    ///
+    /// The rule exists because of a real failure: the developer list arrived while the sponsor list did not — for instance when the list file only exists on
+    /// another branch — and the old implementation cached that half-result as a success for 24 hours, so the sponsor list was not fetched again for a day. What
+    /// the user saw was "the sponsor list never shows up", with no explanation at all.
+    /// </summary>
+    public static readonly TimeSpan PartialCacheLifetime = TimeSpan.FromHours(1);
+
+    /// <summary>
     /// 是否可以直接用缓存（在有效期内且确实有缓存时间）。
     ///
     /// 「未来时间戳」按过期处理：系统时钟被往前调、或缓存文件被手工改过时，若只判断"经过时间 < 有效期"，
@@ -34,8 +48,9 @@ public static class CreditsCachePolicy
     /// </summary>
     /// <param name="fetchedUtc">缓存写入时间；没有缓存时为 null。/ When the cache was written, or null when there is none.</param>
     /// <param name="nowUtc">当前时间。/ The current time.</param>
+    /// <param name="isPartial">这份缓存是不是"只取到一部分"的结果。/ Whether this cache holds a partial result.</param>
     /// <returns>可直接使用时为 true。/ True when the cache may be used directly.</returns>
-    public static bool IsFresh(DateTimeOffset? fetchedUtc, DateTimeOffset nowUtc)
+    public static bool IsFresh(DateTimeOffset? fetchedUtc, DateTimeOffset nowUtc, bool isPartial = false)
     {
         if (fetchedUtc is not { } fetched)
         {
@@ -43,7 +58,7 @@ public static class CreditsCachePolicy
         }
 
         var elapsed = nowUtc - fetched;
-        return elapsed >= TimeSpan.Zero && elapsed < CacheLifetime;
+        return elapsed >= TimeSpan.Zero && elapsed < (isPartial ? PartialCacheLifetime : CacheLifetime);
     }
 
     /// <summary>
@@ -53,7 +68,12 @@ public static class CreditsCachePolicy
     /// <param name="fetchedUtc">缓存写入时间；没有缓存时为 null。/ When the cache was written, or null when there is none.</param>
     /// <param name="nowUtc">当前时间。/ The current time.</param>
     /// <param name="isManual">是否由用户手动触发（按钮）。/ Whether the user triggered this manually, from a button.</param>
+    /// <param name="isPartial">这份缓存是不是"只取到一部分"的结果。/ Whether this cache holds a partial result.</param>
     /// <returns>应该联网时为 true。/ True when a fetch should happen.</returns>
-    public static bool ShouldFetch(DateTimeOffset? fetchedUtc, DateTimeOffset nowUtc, bool isManual) =>
-        isManual || !IsFresh(fetchedUtc, nowUtc);
+    public static bool ShouldFetch(
+        DateTimeOffset? fetchedUtc,
+        DateTimeOffset nowUtc,
+        bool isManual,
+        bool isPartial = false) =>
+        isManual || !IsFresh(fetchedUtc, nowUtc, isPartial);
 }

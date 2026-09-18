@@ -77,8 +77,11 @@ internal static class StringsEn
         table.Add("Credits.Reason.SchemaTooNew", "The sponsor list is schema version {0}, newer than the supported version {1}");
         table.Add("Credits.Reason.SponsorsShape", "The sponsor list has an unexpected shape");
         table.Add("Credits.Sponsors.Count", "{0} sponsors in total");
+        table.Add("Credits.Sponsors.None", "No sponsors yet. If this list does not appear, press Retry, or add entries to docs/sponsors.json in the repository");
         table.Add("Credits.SponsorSeparator", ", ");
         table.Add("Credits.Status.Failed", "The lists cannot be loaded right now: {0}");
+        table.Add("Credits.Status.Partial", "Part of the lists cannot be loaded right now: {0}");
+        table.Add("Credits.Status.PartialCached", "Only part of the lists was fetched last time");
         table.Add("Credits.Status.Loading", "Loading the developer and sponsor lists…");
         table.Add("Credits.Retry", "Retry");
         table.Add("About.Row.Startup.Description", "Runs AF Media Bar after you sign in to Windows (writes only the current user's startup entry)");

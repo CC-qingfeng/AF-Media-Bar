@@ -152,6 +152,21 @@ public static class CreditsSourcePolicy
     }
 
     /// <summary>
+    /// 当前是否有任何覆盖变量生效。
+    ///
+    /// 它被用来**跳过缓存**：维护者一旦明确指向某个地址（本地文件或某个分支的 raw），那一次取数就不该被"24 小时内的缓存"挡住——
+    /// 否则表现是"我把环境变量设了、程序却连一次网络请求都没发"，而这正是本功能第一次验收时踩到的坑。
+    /// Whether any override variable is in effect.
+    ///
+    /// It is used to **skip the cache**: once a maintainer has explicitly pointed at an address — a local file or a branch's raw URL — that fetch must not be held
+    /// back by "the cache is less than 24 hours old". Otherwise the symptom is "I set the environment variable and the program never even made a request", which
+    /// is exactly what the first acceptance run of this feature hit.
+    /// </summary>
+    public static bool HasAnyOverride =>
+        ResolveOverride(SponsorsUrlOverrideVariable).Length > 0 ||
+        ResolveOverride(ContributorsSnapshotUrlOverrideVariable).Length > 0;
+
+    /// <summary>
     /// 赞助名单的完整尝试序列，已包含覆盖变量。
     /// The full attempt sequence for the sponsor list, including the override variable.
     /// </summary>

@@ -77,8 +77,11 @@ internal static class StringsZhHans
         table.Add("Credits.Reason.SchemaTooNew", "赞助名单的结构版本（{0}）高于本程序支持的版本（{1}）");
         table.Add("Credits.Reason.SponsorsShape", "赞助名单结构不正确");
         table.Add("Credits.Sponsors.Count", "共 {0} 位赞助者");
+        table.Add("Credits.Sponsors.None", "暂无赞助者。如果这份名单没有出现，请点「重试」，或在仓库的 docs/sponsors.json 里补充");
         table.Add("Credits.SponsorSeparator", "、");
         table.Add("Credits.Status.Failed", "暂时无法获取名单：{0}");
+        table.Add("Credits.Status.Partial", "部分名单暂时无法获取：{0}");
+        table.Add("Credits.Status.PartialCached", "上次只取到一部分名单");
         table.Add("Credits.Status.Loading", "正在获取开发人员与赞助者名单…");
         table.Add("Credits.Retry", "重试");
         table.Add("About.Row.Startup.Description", "登录 Windows 后自动运行 AF Media Bar（只写入当前用户的启动项）");

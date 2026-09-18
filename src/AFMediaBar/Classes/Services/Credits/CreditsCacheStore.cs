@@ -70,10 +70,14 @@ public sealed class CreditsCacheStore
                 return null;
             }
 
+            var partial = root.TryGetProperty("partial", out var partialElement) &&
+                          partialElement.ValueKind == JsonValueKind.True;
+
             return new CachedCredits(
                 contributors.Contributors ?? [],
                 sponsors.Sponsors ?? [],
-                fetchedUtc);
+                fetchedUtc,
+                partial);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException)
         {
@@ -89,11 +93,13 @@ public sealed class CreditsCacheStore
     /// <param name="contributors">贡献者。/ Contributors.</param>
     /// <param name="sponsors">赞助者。/ Sponsors.</param>
     /// <param name="fetchedUtc">写入时间。/ When the data was written.</param>
+    /// <param name="isPartial">是否只取到一部分名单（决定缓存时效）。/ Whether only part of the lists arrived, which decides the cache lifetime.</param>
     /// <returns>是否写入成功。/ Whether the write succeeded.</returns>
     public bool TryWrite(
         IReadOnlyList<ContributorInfo> contributors,
         IReadOnlyList<SponsorInfo> sponsors,
-        DateTimeOffset fetchedUtc)
+        DateTimeOffset fetchedUtc,
+        bool isPartial = false)
     {
         try
         {
@@ -107,6 +113,7 @@ public sealed class CreditsCacheStore
             {
                 schemaVersion = 1,
                 fetchedUtc = fetchedUtc.ToString("O"),
+                partial = isPartial,
                 contributors = contributors.Select(contributor => new
                 {
                     login = contributor.Login,
@@ -146,7 +153,9 @@ public sealed class CreditsCacheStore
 /// <param name="Contributors">贡献者。/ Contributors.</param>
 /// <param name="Sponsors">赞助者。/ Sponsors.</param>
 /// <param name="FetchedUtc">写入时间。/ When it was written.</param>
+/// <param name="Partial">是否只取到一部分名单。/ Whether only part of the lists arrived.</param>
 public sealed record CachedCredits(
     IReadOnlyList<ContributorInfo> Contributors,
     IReadOnlyList<SponsorInfo> Sponsors,
-    DateTimeOffset FetchedUtc);
+    DateTimeOffset FetchedUtc,
+    bool Partial = false);

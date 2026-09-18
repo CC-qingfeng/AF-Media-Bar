@@ -86,6 +86,42 @@ public sealed class CreditsSourcePolicyTests
     }
 
     /// <summary>
+    /// 覆盖变量**替换**整份尝试序列，并且被识别为"有覆盖"（服务据此跳过缓存）。
+    ///
+    /// 后一半是关键：第一次验收时环境变量设了、程序却一次请求都没发——因为 24 小时内的缓存直接命中了。
+    /// An override variable **replaces** the whole attempt sequence and is reported as such, which the service uses to skip the cache.
+    ///
+    /// The second half matters: during the first acceptance run the variable was set while the program made no request at all, because a cache younger than 24
+    /// hours simply matched.
+    /// </summary>
+    [TestMethod]
+    public void AnOverrideReplacesThePlanAndIsReported()
+    {
+        const string variable = CreditsSourcePolicy.SponsorsUrlOverrideVariable;
+        var original = Environment.GetEnvironmentVariable(variable);
+        try
+        {
+            Assert.IsFalse(CreditsSourcePolicy.HasAnyOverride);
+
+            Environment.SetEnvironmentVariable(variable, @"E:\temp\sponsors.json");
+            Assert.IsTrue(CreditsSourcePolicy.HasAnyOverride);
+            CollectionAssert.AreEqual(
+                new[] { @"E:\temp\sponsors.json" },
+                CreditsSourcePolicy.BuildSponsorsPlan(accelerators: null).ToArray());
+
+            // 覆盖地址不带加速候选，也不追加镜像：验收看到的顺序必须与线上一致。
+            // An override carries no accelerators and no mirror is appended: what acceptance sees has to match production order exactly.
+            Assert.AreEqual(1, CreditsSourcePolicy.BuildSponsorsPlan(accelerators: null).Count);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(variable, original);
+        }
+
+        Assert.IsFalse(CreditsSourcePolicy.HasAnyOverride);
+    }
+
+    /// <summary>
     /// 贡献者接口主机不是 github.com，因此它只有直连一档；快照才走"直连 + 镜像 + 加速"这条链。
     /// The contributors API host is not github.com, so it has exactly one attempt; only the snapshot goes through the "direct + mirror + accelerator"
     /// chain.

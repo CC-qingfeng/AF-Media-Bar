@@ -134,6 +134,7 @@ namespace AFMediaBar.ViewModels.Pages
         private readonly Dispatcher _dispatcher = DispatcherHelper.Current;
         private CancellationTokenSource? _avatarCancellation;
         private IReadOnlyList<SponsorInfo> _sponsorEntries = [];
+        private bool _sponsorsLoaded;
 
         /// <summary>名单的加载状态说明（正在取 / 取失败的原因）；没有可说的内容时为空。/ The load-status text for the lists — a fetch in flight, or the reason it failed — empty when there is nothing to say.</summary>
         [ObservableProperty]
@@ -195,8 +196,23 @@ namespace AFMediaBar.ViewModels.Pages
         /// <summary>是否已经拿到开发人员名单（决定该分组是否显示）。/ Whether the developer list has arrived, which decides if that group is shown.</summary>
         public bool HasContributors => Contributors.Count > 0;
 
-        /// <summary>是否已经拿到赞助名单。/ Whether the sponsor list has arrived.</summary>
-        public bool HasSponsors => _sponsorEntries.Count > 0;
+        /// <summary>
+        /// 是否显示赞助者分组。
+        ///
+        /// 判据是"这份名单取到过没有"，而不是"里面有没有名字"：没有赞助者时显示一行"暂无"，用户才知道这一节存在且确实是空的；
+        /// 而"取不到"是另一回事，由状态说明条负责说出来（此前的实现把两种情况都藏成一个不存在的分组，于是"看不到赞助者名单"
+        /// 既可能是没人赞助，也可能是名单没取到，用户无从分辨）。
+        /// Whether the sponsor group is shown.
+        ///
+        /// The criterion is "has this list ever been loaded", not "does it contain any names": with no sponsors the group shows a "none yet" line, which tells the
+        /// user the section exists and is genuinely empty, while "could not be loaded" is a different matter that the status callout states. The earlier
+        /// implementation hid both cases behind a group that simply was not there, so "I cannot see the sponsor list" could mean either nobody had sponsored or the
+        /// list had not loaded, and the user had no way to tell.
+        /// </summary>
+        public bool HasSponsors => _sponsorsLoaded;
+
+        /// <summary>是否还没有任何赞助者（显示"暂无"而不是空白）。/ Whether there are no sponsors yet, which shows a "none yet" line instead of an empty area.</summary>
+        public bool HasNoSponsorsYet => _sponsorsLoaded && _sponsorEntries.Count == 0;
 
         /// <summary>是否有任何赞助入口可以展示（收款码已放入，或链接已填）。/ Whether any support entry can be shown: its payment code is present, or its link is filled in.</summary>
         public bool HasSupportEntries => SupportEntries.Any(entry => entry.IsReady);
@@ -268,18 +284,24 @@ namespace AFMediaBar.ViewModels.Pages
         {
             RebuildContributors(snapshot.Contributors);
             _sponsorEntries = snapshot.Sponsors;
+            _sponsorsLoaded = snapshot.SponsorsLoaded;
             ApplySponsorNames();
 
             IsCreditsLoading = snapshot.IsLoading;
-            HasCreditsFailure = !snapshot.HasAny && !snapshot.IsLoading && snapshot.FailureReason is not null;
+            HasCreditsFailure = !snapshot.IsLoading && snapshot.FailureReason is not null;
             CreditsStatusText = snapshot.IsLoading
                 ? Translations.Get("Credits.Status.Loading")
-                : HasCreditsFailure
-                    ? Translations.Format("Credits.Status.Failed", snapshot.FailureReason ?? string.Empty)
-                    : string.Empty;
+                : snapshot.FailureReason is not { } reason
+                    ? string.Empty
+                    : snapshot.IsPartial
+                        // 一部分取到了、一部分没取到：这是最容易被静默吞掉的状态，必须说出来并给出重试。
+                        // Part of the lists arrived and part did not: this is the state most easily swallowed silently, so it is stated and a retry is offered.
+                        ? Translations.Format("Credits.Status.Partial", reason)
+                        : Translations.Format("Credits.Status.Failed", reason);
 
             OnPropertyChanged(nameof(HasContributors));
             OnPropertyChanged(nameof(HasSponsors));
+            OnPropertyChanged(nameof(HasNoSponsorsYet));
             OnPropertyChanged(nameof(HasCreditsStatus));
         }
 

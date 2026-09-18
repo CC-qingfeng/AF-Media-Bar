@@ -49,12 +49,17 @@ public sealed class UpdateVersionPolicyTests
     }
 
     [TestMethod]
-    public void Format_DropsTrailingZeroSegmentsButKeepsMajorAndMinor()
+    public void Format_DropsTrailingZeroSegmentsButKeepsMajorMinorAndBuild()
     {
+        // 期望值跟随后续的刻意改动：`MinimumDisplaySegments` 从 2 调到 3，界面因此显示 "1.2.0" 而不是 "1.2"，
+        // 与项目文件里的 `<Version>1.2.0</Version>` 保持一致（改动本身由使用者提交，测试当时没有跟着改）。
+        // The expectations follow a deliberate later change: `MinimumDisplaySegments` went from 2 to 3, so the interface shows "1.2.0" instead of "1.2",
+        // matching `<Version>1.2.0</Version>` in the project file. That change was committed on its own and the test was not updated with it.
         Assert.AreEqual("1.1.1", UpdateVersionPolicy.Format(new Version(1, 1, 1, 0)));
         Assert.AreEqual("1.2.3", UpdateVersionPolicy.Format(new Version(1, 2, 3, 0)));
-        Assert.AreEqual("1.2", UpdateVersionPolicy.Format(new Version(1, 2, 0, 0)));
-        Assert.AreEqual("2.0", UpdateVersionPolicy.Format(new Version(2, 0, 0, 0)));
+        Assert.AreEqual("1.2.0", UpdateVersionPolicy.Format(new Version(1, 2, 0, 0)));
+        Assert.AreEqual("2.0.0", UpdateVersionPolicy.Format(new Version(2, 0, 0, 0)));
+        Assert.AreEqual("1.2.3.4", UpdateVersionPolicy.Format(new Version(1, 2, 3, 4)));
         Assert.AreEqual(string.Empty, UpdateVersionPolicy.Format(null));
     }
 

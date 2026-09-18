@@ -34,6 +34,19 @@ public sealed class MediaSessionSelectionService : IDisposable, IMemoryPrunable
     public string? SelectedKey { get; private set; }
     public string? SelectedSourceId { get; private set; }
 
+    /// <summary>
+    /// 当前选择是否来自用户的明确动作（源菜单），而不是自动跟随挑的。
+    ///
+    /// 自动跟随必须尊重它：此前它不认识这个区别，于是用户手动选的来源会在约一秒后被"有别的来源在播"抢回去，
+    /// 而从浏览器切走之后又永远回不来——同一个根因的两个表现。会话消失或用户再选一次时它会回到 false。
+    /// Whether the current selection came from an explicit user action, the source menu, rather than from auto-follow.
+    ///
+    /// Auto-follow has to respect it: it used to have no idea about the difference, so a source the user picked by hand was taken back about a second later by
+    /// "another source is playing", while switching away from a browser could never be undone — two faces of one cause. It returns to false when that session
+    /// disappears or the user picks again.
+    /// </summary>
+    public bool IsManualSelection { get; private set; }
+
     public event Action? RefreshRequested;
 
     /// <summary>
@@ -68,6 +81,7 @@ public sealed class MediaSessionSelectionService : IDisposable, IMemoryPrunable
         ClearMissingSession();
         SelectedKey = selected.Id;
         SelectedSourceId = MediaSessionGuard.GetSourceId(selected);
+        IsManualSelection = true;
         return true;
     }
 
@@ -123,77 +137,88 @@ public sealed class MediaSessionSelectionService : IDisposable, IMemoryPrunable
         {
             SelectedKey = null;
             SelectedSourceId = null;
+            IsManualSelection = false;
             return null;
         }
 
         SelectedKey = selected.Id;
         SelectedSourceId = MediaSessionGuard.GetSourceId(selected);
+
+        // 走到这里说明当前选择已经不存在，这一份是**自动**挑的，因此自动跟随可以继续接管它。
+        // Reaching this point means the previous selection no longer exists and this one was picked **automatically**, so auto-follow may keep managing it.
+        IsManualSelection = false;
         return selected;
     }
 
     /// <summary>
     /// 在自动跟随模式下尝试切换到正在播放的会话，并报告选择是否变化。
+    ///
+    /// 判定本身在 <see cref="MediaAutoSwitchPolicy"/> 里（可单元测试），这里只负责把状态映射成信号、并按判定结果启动计时器或改选择。
     /// Attempts to follow a playing session in automatic mode and reports whether the selection changed.
+    ///
+    /// The decision itself lives in <see cref="MediaAutoSwitchPolicy"/> so that it can be unit-tested; this method only maps state into signals and then starts
+    /// the timer or changes the selection according to the decision.
     /// </summary>
     public bool TryAutoSwitchToPlaying(IReadOnlyList<MediaSession> sessions)
     {
         var current = sessions.FirstOrDefault(session =>
             MediaSessionGuard.IsUsable(session) &&
             string.Equals(session.Id, SelectedKey, StringComparison.Ordinal));
-        if (current is null)
+
+        var replacement = current is null
+            ? null
+            : sessions.FirstOrDefault(candidate =>
+                MediaSessionGuard.IsUsable(candidate) &&
+                !ReferenceEquals(candidate, current) && IsPlaying(candidate));
+
+        var decision = MediaAutoSwitchPolicy.Resolve(new MediaAutoSwitchSignals(
+            CurrentExists: current is not null,
+            CurrentIsPlaying: current is not null && IsPlaying(current),
+            CurrentIsBrowserSource: current is not null && IsBrowserSource(MediaSessionGuard.GetSourceId(current)),
+            IsManualSelection: IsManualSelection,
+            HasPlayingReplacement: replacement is not null,
+            ReplacementMatchesPending: replacement is not null &&
+                                       string.Equals(_pendingAutoSwitchKey, replacement.Id, StringComparison.Ordinal),
+            SincePending: DateTime.UtcNow - _pendingAutoSwitchSinceUtc,
+            GracePeriod: AutoSwitchGracePeriod));
+
+        switch (decision)
         {
-            if (IsMissingSessionGraceActive)
-            {
+            case MediaAutoSwitchDecision.WaitForGrace:
+                if (!string.Equals(_pendingAutoSwitchKey, replacement!.Id, StringComparison.Ordinal))
+                {
+                    _pendingAutoSwitchKey = replacement.Id;
+                    _pendingAutoSwitchSinceUtc = DateTime.UtcNow;
+                }
+
                 _timer.Start();
-            }
-            else
-            {
+                return false;
+
+            case MediaAutoSwitchDecision.Switch:
                 ClearPendingAutoSwitch();
-            }
+                SelectedKey = replacement!.Id;
+                SelectedSourceId = MediaSessionGuard.GetSourceId(replacement);
 
-            return false;
+                // 切换之后这一份是自动挑的：用户没有参与，自动跟随继续对它负责。
+                // After a switch this selection is automatic: the user took no part in it, so auto-follow keeps managing it.
+                IsManualSelection = false;
+                return true;
+
+            default:
+                // 当前会话不存在时，仍要维持"会话临时缺失"的宽限：浏览器会话重建期间媒体栏不该跳到别的来源。
+                // While the current session is missing the missing-session grace still has to be maintained: the bar must not jump to another source while a
+                // browser session is being recreated.
+                if (current is null && IsMissingSessionGraceActive)
+                {
+                    _timer.Start();
+                }
+                else
+                {
+                    ClearPendingAutoSwitch();
+                }
+
+                return false;
         }
-
-        if (IsPlaying(current))
-        {
-            ClearPendingAutoSwitch();
-            return false;
-        }
-
-        var currentSourceId = MediaSessionGuard.GetSourceId(current);
-        if (IsBrowserSource(currentSourceId))
-        {
-            ClearPendingAutoSwitch();
-            return false;
-        }
-
-        var replacement = sessions.FirstOrDefault(candidate =>
-            MediaSessionGuard.IsUsable(candidate) &&
-            !ReferenceEquals(candidate, current) && IsPlaying(candidate));
-        if (replacement is null)
-        {
-            ClearPendingAutoSwitch();
-            return false;
-        }
-
-        if (!string.Equals(_pendingAutoSwitchKey, replacement.Id, StringComparison.Ordinal))
-        {
-            _pendingAutoSwitchKey = replacement.Id;
-            _pendingAutoSwitchSinceUtc = DateTime.UtcNow;
-            _timer.Start();
-            return false;
-        }
-
-        if (DateTime.UtcNow - _pendingAutoSwitchSinceUtc < AutoSwitchGracePeriod)
-        {
-            _timer.Start();
-            return false;
-        }
-
-        ClearPendingAutoSwitch();
-        SelectedKey = replacement.Id;
-        SelectedSourceId = MediaSessionGuard.GetSourceId(replacement);
-        return true;
     }
 
     public bool IsMissingSessionGraceActive =>
@@ -236,6 +261,7 @@ public sealed class MediaSessionSelectionService : IDisposable, IMemoryPrunable
     {
         SelectedKey = null;
         SelectedSourceId = null;
+        IsManualSelection = false;
         ClearPendingAutoSwitch();
         ClearMissingSession();
     }
