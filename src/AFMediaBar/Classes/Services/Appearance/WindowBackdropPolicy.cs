@@ -10,15 +10,21 @@ namespace AFMediaBar.Classes.Services;
 public static class WindowBackdropPolicy
 {
     /// <summary>
-    /// 按系统能力回退：高对比度一律纯色；云母 Alt 在拿不到它时退到云母，云母也拿不到时退到纯色。
+    /// 按系统能力回退：高对比度一律纯色；云母 Alt 在拿不到它时退到云母，两种系统材质都拿不到时退到 Acrylic。
     ///
     /// 回退链而不是"不支持就纯色"是刻意的：云母 Alt 只在 Windows 11 22621 之后存在，而 22000 那一档已经有云母，
-    /// 让用户为了一个新材质在选择与纯色之间二选一是没必要的。
+    /// 让用户为了一个新材质在选择与纯色之间二选一是没必要的；Windows 10 上没有系统材质（云母不存在，Acrylic 走 Accent 模糊路径，
+    /// 那条路径由窗口自己绘制、在 Windows 10 上可用），因此退到 Acrylic 仍然给到半透明表面，而不是把默认材质变成一块纯色。
+    /// 若那条路径在个别系统上失败，适配器会返回"没应用上"，调用方随即退回纯色（`WindowAppearanceService.ApplyWindow`）。
     /// Falls back by system capability: high contrast is always solid; Mica Alt falls back to Mica when it is unavailable, and to
-    /// solid when Mica is unavailable too.
+    /// Acrylic when neither system material is available.
     ///
-    /// A chain rather than "unsupported means solid" is deliberate: Mica Alt exists only from Windows 11 22621 on, while the
-    /// 22000 tier already has Mica, so forcing the user to choose between a new material and a solid surface would be pointless.
+    /// A chain rather than "unsupported means solid" is deliberate: Mica Alt exists only from Windows 11 22621 on, while the 22000
+    /// tier already has Mica, so forcing the user to choose between a new material and a solid surface would be pointless. Windows 10
+    /// has no system material at all (no Mica, and Acrylic goes through the window-painted Accent blur path, which does work there),
+    /// so falling back to Acrylic still yields a translucent surface instead of turning the default material into a slab of colour. If
+    /// that path fails on some system the adapter reports "not applied" and the caller falls back to solid
+    /// (`WindowAppearanceService.ApplyWindow`).
     /// </summary>
     /// <param name="requested">设置里请求的材质。/ Requested backdrop from the settings.</param>
     /// <param name="highContrast">是否处于高对比度。/ Whether high contrast is active.</param>
@@ -34,10 +40,10 @@ public static class WindowBackdropPolicy
             return ApplicationBackdropMode.FluentSolid;
 
         if (requested == ApplicationBackdropMode.MicaAlt && !supportsMicaAlt)
-            requested = supportsMica ? ApplicationBackdropMode.Mica : ApplicationBackdropMode.FluentSolid;
+            requested = supportsMica ? ApplicationBackdropMode.Mica : ApplicationBackdropMode.Acrylic;
 
         if (requested == ApplicationBackdropMode.Mica && !supportsMica)
-            return ApplicationBackdropMode.FluentSolid;
+            return ApplicationBackdropMode.Acrylic;
 
         return requested;
     }

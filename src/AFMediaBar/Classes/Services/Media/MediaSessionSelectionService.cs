@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Windows;
 using System.Windows.Threading;
+using AFMediaBar.Classes.Abstractions;
 using WindowsMediaController;
 using static WindowsMediaController.MediaManager;
 
@@ -10,10 +11,19 @@ namespace AFMediaBar.Classes.Services;
 /// 维护当前媒体来源选择、自动跟随和浏览器会话重建缓冲。
 /// Maintains the selected source, auto-follow behavior, and the browser session recreation grace period.
 /// </summary>
-public sealed class MediaSessionSelectionService : IDisposable
+public sealed class MediaSessionSelectionService : IDisposable, IMemoryPrunable
 {
     private static readonly TimeSpan AutoSwitchGracePeriod = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan MissingSessionGracePeriod = TimeSpan.FromSeconds(3);
+
+    /// <summary>常规刷新周期。计时器只在自动切换或会话重建的宽限期内运行，因此这是"正在挣扎着切源"时的节奏。
+    /// The ordinary refresh period. The timer only runs inside the auto-switch or session-recreation grace period, so this is the cadence while a
+    /// switch is being resolved.</summary>
+    private static readonly TimeSpan RefreshInterval = TimeSpan.FromMilliseconds(200);
+
+    /// <summary>剪枝后的刷新周期：宽限期是按时间戳判定的，放慢只是让恢复得晚一点，不会漏掉切换。
+    /// The refresh period while pruned: the grace periods are decided from timestamps, so slowing down only delays the resolution instead of losing it.</summary>
+    private static readonly TimeSpan PrunedRefreshInterval = TimeSpan.FromSeconds(1);
     private readonly MediaSessionCatalog _catalog;
     private readonly DispatcherTimer _timer;
     private string? _pendingAutoSwitchKey;
@@ -35,7 +45,7 @@ public sealed class MediaSessionSelectionService : IDisposable
         _catalog = catalog;
         _timer = new DispatcherTimer(DispatcherPriority.Background, Application.Current.Dispatcher)
         {
-            Interval = TimeSpan.FromMilliseconds(200)
+            Interval = RefreshInterval
         };
         _timer.Tick += OnTimerTick;
     }
@@ -228,6 +238,31 @@ public sealed class MediaSessionSelectionService : IDisposable
         SelectedSourceId = null;
         ClearPendingAutoSwitch();
         ClearMissingSession();
+    }
+
+    /// <summary>参与者名称，只用于诊断。/ Participant name, used for diagnostics only.</summary>
+    public string PruneParticipantName => "session-selection";
+
+    /// <summary>
+    /// 放慢或恢复刷新周期。这个计时器本身只在自己的宽限期内运行（平时是停的），因此剪枝对它做的只是"每秒看一次"而不是"每秒看五次"：
+    /// 它的状态机完全按时间戳判定，放慢只影响恰好卡在宽限期里的那一次切换早几百毫秒还是晚几百毫秒被发现。
+    /// Slows down or restores the refresh period. This timer only runs inside its own grace period — it is stopped the rest of the time — so pruning
+    /// only changes five looks per second into one, and since the state machine decides everything from timestamps, the only effect is that a switch
+    /// caught mid-grace-period is noticed a few hundred milliseconds later.
+    /// </summary>
+    /// <param name="level">目标档位。/ The target level.</param>
+    public void Prune(MemoryPruneLevel level)
+    {
+        if (_isDisposed)
+        {
+            return;
+        }
+
+        var interval = level == MemoryPruneLevel.None ? RefreshInterval : PrunedRefreshInterval;
+        if (_timer.Interval != interval)
+        {
+            _timer.Interval = interval;
+        }
     }
 
     /// <summary>

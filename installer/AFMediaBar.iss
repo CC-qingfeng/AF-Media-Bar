@@ -49,6 +49,12 @@ PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
+; 程序自身的下限是 Windows 10 1809（17763）：用到的每个系统接口在该版本上就已可用。
+; 注意 .NET 10 官方只支持 Windows 10 的长期服务版与企业版（1809 E、21H2 E），因此下限写在这里只是"能装能跑"，
+; 并不等于消费版 Windows 10 处于 Microsoft 的支持范围内（见 README 的「系统要求」）。
+; The application's own floor is Windows 10 1809 (17763): every system interface it uses already exists there.
+; Note that .NET 10 officially supports only the Windows 10 LTSC and Enterprise editions (1809 E, 21H2 E), so this floor means
+; "installs and runs" rather than putting consumer Windows 10 inside Microsoft support (see the README's requirements section).
 MinVersion=10.0.17763
 OutputDir=..\artifacts
 OutputBaseFilename=AFMediaBar-Setup-v{#MyAppVersion}-win-x64

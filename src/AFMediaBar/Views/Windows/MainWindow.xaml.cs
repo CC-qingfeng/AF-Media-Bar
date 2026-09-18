@@ -52,6 +52,11 @@ namespace AFMediaBar.Views.Windows
         private readonly Func<TrackChangeNotificationWindow> _trackChangeNotificationFactory;
         private readonly ShellTrayIconService _trayIconService;
         private readonly UpdateService _updateService;
+
+        /// <summary>后台剪枝协调器：任务栏宿主订阅它的档位变化，因此这里只做转交，不在宿主里查询电源状态。
+        /// The background prune coordinator: the taskbar host subscribes to its level changes, so this field only hands it over and the host never
+        /// queries the power state itself.</summary>
+        private readonly MemoryPruneCoordinator _memoryPruneCoordinator;
         private TaskbarWindow? _taskbarWindow;
         private DynamicIslandWindow? _dynamicIslandWindow;
         private SettingsWindow? _settingsWindow;
@@ -105,7 +110,8 @@ namespace AFMediaBar.Views.Windows
             TrackChangeNotificationCoordinator trackChangeNotificationCoordinator,
             Func<TrackChangeNotificationWindow> trackChangeNotificationFactory,
             ShellTrayIconService trayIconService,
-            UpdateService updateService)
+            UpdateService updateService,
+            MemoryPruneCoordinator memoryPruneCoordinator)
         {
             ViewModel = viewModel;
             DataContext = this;
@@ -131,6 +137,7 @@ namespace AFMediaBar.Views.Windows
             _trackChangeNotificationFactory = trackChangeNotificationFactory;
             _trayIconService = trayIconService;
             _updateService = updateService;
+            _memoryPruneCoordinator = memoryPruneCoordinator;
 
             InitializeComponent();
             UpdateSystemThemeWatcher(SettingsManager.Current.Appearance);
@@ -657,6 +664,13 @@ namespace AFMediaBar.Views.Windows
             window.Closed -= TrackChangeNotificationWindow_Closed;
             if (ReferenceEquals(window, _trackChangeNotificationWindow))
                 _trackChangeNotificationWindow = null;
+
+            // 通知窗口每一首歌都会关闭一次，而它刚显示过一张封面位图：关掉之后做一遍温和回收（后台 GC，不碰工作集），
+            // 由剪枝协调器自己的 5 秒节流保证不会变成"每首歌一次 GC 风暴"。
+            // The notification window closes once per track and it has just shown a cover bitmap, so a gentle reclaim follows it — a background
+            // collection that leaves the working set alone — with the coordinator's own five-second throttle keeping it from becoming a collection per
+            // track.
+            _memoryPruneCoordinator.RequestTrim(MemoryTrimTrigger.PanelClosed);
         }
 
         private void SettingsManager_OnTaskbarTargetMonitorChanged(object? sender, EventArgs e) =>
@@ -739,7 +753,8 @@ namespace AFMediaBar.Views.Windows
                 _sourceActivationService,
                 _systemMetricsMonitor,
                 _screenBackgroundSampler,
-                _mouseInputMonitor);
+                _mouseInputMonitor,
+                _memoryPruneCoordinator);
             window.OpenFullPanelRequested += TaskbarWindow_OpenFullPanelRequested;
             return window;
         }
@@ -766,6 +781,10 @@ namespace AFMediaBar.Views.Windows
                 if (ReferenceEquals(window, _fullPanelWindow))
                     _fullPanelWindow = null;
                 _fullPanelClosedAtUtc = DateTime.UtcNow;
+
+                // 完整层是歌词与封面的另一个消费者，关闭后做一遍温和回收。
+                // The full panel is another consumer of lyrics and artwork, so a gentle reclaim follows its close.
+                _memoryPruneCoordinator.RequestTrim(MemoryTrimTrigger.PanelClosed);
             }
         }
 
@@ -843,6 +862,13 @@ namespace AFMediaBar.Views.Windows
                 window.Closed -= SettingsWindow_Closed;
                 if (ReferenceEquals(_settingsWindow, window))
                     _settingsWindow = null;
+
+                // 设置窗口是最大的界面树与缓存持有者（六个页面、说明图与全部设置控件），因此走**深度**回收：
+                // 关掉设置页之后用户通常回去做别的事，短时间不会再开，交还工作集换来的页错误不落在交互路径上。
+                // The settings window holds the largest visual tree and the most caches — six pages, the diagrams, and every settings control — so it gets
+                // the **deep** reclaim: after closing the settings the user usually goes off to do something else and will not reopen it right away, which
+                // keeps the page faults caused by returning the working set off the interaction path.
+                _memoryPruneCoordinator.RequestTrim(MemoryTrimTrigger.SettingsWindowClosed);
             }
         }
 

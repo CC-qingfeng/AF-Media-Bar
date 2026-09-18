@@ -117,10 +117,13 @@ public partial class TaskBarMediaControl
     /// Decides whether syllable highlighting is currently possible.
     ///
     /// 用户开关与环境降级是两件事：开关关掉就不再擦亮，开关打开时环境仍能否决它（高对比度、系统关闭动效、控件不可见），
-    /// 因为那两种情况下擦亮要么破坏可读性，要么与"减少动效"的意图冲突。
+    /// 因为那两种情况下擦亮要么破坏可读性，要么与"减少动效"的意图冲突。后台剪枝是第三种否决：屏幕熄灭时 33 ms 的逐帧推进只有功耗没有画面
+    /// （播放可以继续，锁屏听歌是常见情形）。
     /// The user's switch and the environment's degradations are two different things: turning the switch off stops the reveal, and
     /// while it is on the environment can still veto it (high contrast, system animations off, the control not visible), because in
-    /// those cases the reveal would either hurt readability or contradict the intent to reduce motion.
+    /// those cases the reveal would either hurt readability or contradict the intent to reduce motion. Background pruning is the third veto: while
+    /// the display is dark, a 33 ms frame advance costs power and shows nothing at all, and playback may well continue — listening to music with a
+    /// locked screen is an ordinary case.
     /// </summary>
     private bool CanAnimateLyricHighlight() =>
         SettingsManager.Current.LyricsSyllableHighlightEnabled &&
@@ -129,6 +132,7 @@ public partial class TaskBarMediaControl
         _snapshot.IsPlaying &&
         SongLyricsPanel.Visibility == Visibility.Visible &&
         IsVisible &&
+        !IsAdvancePruned &&
         !SystemParameters.HighContrast &&
         CurrentMotion.UseContinuousMotion;
 

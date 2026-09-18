@@ -43,8 +43,11 @@ internal static class StringsZhHant
         table.Add("About.Row.OpenFolder.Title", "開啟設定資料夾");
         table.Add("About.Row.LogFolder.Description", "日誌是 logs\\app.log 一個檔案，只保留最近 1000 條；出現錯誤時請把這個檔案送出來");
         table.Add("About.Row.LogFolder.Title", "日誌檔案");
+        table.Add("About.Row.TrimMemory.Button", "立即壓縮");
+        table.Add("About.Row.TrimMemory.Description", "把工作集（佔用的實體記憶體）交還給系統：工作管理員裡的讀數會立刻下降，下次用到這部分時程式需要重新讀回，可能有短暫卡頓；認可大小不變");
+        table.Add("About.Row.TrimMemory.Title", "壓縮記憶體佔用");
         table.Add("Common.Group.Diagnostics", "診斷與日誌");
-        table.Add("Search.AppAndAbout.Diagnostics.Description", "開啟日誌資料夾（logs\\app.log，出現錯誤時送這個檔案）");
+        table.Add("Search.AppAndAbout.Diagnostics.Description", "開啟日誌資料夾（logs\\app.log，出現錯誤時送這個檔案），或把工作集交還給系統");
         table.Add("About.Row.Portable.Badge", "免安裝版");
         table.Add("About.Row.Portable.Description", "目前不是安裝版本，無法自動取代檔案；請從下載頁取得安裝程式或手動取代程式檔案");
         table.Add("About.Row.Portable.Title", "自動更新無法使用");

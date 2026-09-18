@@ -2,6 +2,17 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
+    <!--
+      目标框架只决定编译期可用的 API 面与 SupportedOSPlatform 元数据，不决定程序能在哪些系统上启动：
+      运行下限是 Windows 10 1809（17763，由 app.manifest 与安装程序的 MinVersion 声明），本项目用到的每个系统接口
+      在该版本上都已经可用。这里取 19041 是为了拿到较新的 SDK 投影（任务栏与 DWM 相关声明）。
+      另见 README「系统要求」：.NET 10 官方只支持 Windows 10 的长期服务版与企业版（1809 E、21H2 E）。
+      The target framework decides which APIs are available at compile time and what SupportedOSPlatform metadata says; it does not
+      decide where the app can start. The runtime floor is Windows 10 1809 (17763, declared by app.manifest and the installer's
+      MinVersion), where every system interface used here already exists. 19041 is chosen for the newer SDK projections used by the
+      taskbar and DWM declarations. See the README's requirements section: .NET 10 officially supports only the Windows 10 LTSC and
+      Enterprise editions (1809 E, 21H2 E).
+    -->
     <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>wpfui-icon.ico</ApplicationIcon>

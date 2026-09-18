@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Runtime.InteropServices;
+using AFMediaBar.Classes.Abstractions;
 using AFMediaBar.Classes.Settings;
 
 namespace AFMediaBar.Classes.Services;
@@ -8,7 +9,7 @@ namespace AFMediaBar.Classes.Services;
 /// 通过 WASAPI 回环采集默认输出，并以复用缓冲区计算可变段数的 FFT 频谱。
 /// Captures the default render loopback and computes a variable-count FFT spectrum with reused buffers.
 /// </summary>
-public sealed class AudioMonitorService : IDisposable
+public sealed class AudioMonitorService : IDisposable, IMemoryPrunable
 {
     private const int FftSize = 512;
     private const int SampleRingSize = 4096;
@@ -116,6 +117,31 @@ public sealed class AudioMonitorService : IDisposable
         ReleaseComObject(ref _deviceEnumerator);
         _captureFailureCount = 0;
         _nextCaptureAttemptTick = 0;
+    }
+
+    /// <summary>参与者名称，只用于诊断。/ Participant name, used for diagnostics only.</summary>
+    public string PruneParticipantName => "audio-capture";
+
+    /// <summary>
+    /// 停掉 WASAPI 回环采集，把音频引擎、设备与两个 client 全部还给系统。空闲档位不动它：那时频谱组件可能仍然可见，
+    /// 而采集只花一点 CPU、不占内存，真正值得停的是"屏幕已经关了"的情形。
+    /// Stops the WASAPI loopback capture and gives the audio engine, the device, and both clients back to the system. The idle level leaves it
+    /// alone, because the spectrum component may still be visible then and capture costs a little CPU rather than memory; what is really worth
+    /// stopping is a display that is already off.
+    ///
+    /// 这里不"记住需要重建"：下一次 <see cref="GetSpectrum"/> 会通过 <see cref="EnsureCapture"/> 自己懒建，因此恢复无需额外预热。
+    /// Nothing is remembered for later: the next <see cref="GetSpectrum"/> lazily recreates through <see cref="EnsureCapture"/>, so restoring needs
+    /// no warm-up.
+    /// </summary>
+    /// <param name="level">目标档位。/ The target level.</param>
+    public void Prune(MemoryPruneLevel level)
+    {
+        if (_disposed || level < MemoryPruneLevel.DisplayOff)
+        {
+            return;
+        }
+
+        ReleaseCapture();
     }
 
     public void Dispose()

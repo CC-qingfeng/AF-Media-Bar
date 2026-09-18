@@ -11,6 +11,7 @@ namespace AFMediaBar.Classes.Services;
 public sealed class NativeWindowBackdropAdapter
 {
     private const int DwmUseImmersiveDarkMode = 20;
+    private const int DwmUseImmersiveDarkModeLegacy = 19;
     private const int DwmWindowCornerPreference = 33;
     private const int DwmBorderColor = 34;
     private const int DwmCaptionColor = 35;
@@ -23,6 +24,15 @@ public sealed class NativeWindowBackdropAdapter
     private const int DwmCornerRound = 2;
     private const int DwmColorDefault = unchecked((int)0xFFFFFFFF);
     private const int DwmColorNone = unchecked((int)0xFFFFFFFE);
+
+    /// <summary>
+    /// 当前系统可用的深色属性号：Windows 10 18985 起为 20，更早的版本只有 19；首次失败后自动改写为可用的那个。
+    /// The dark-mode attribute number this system accepts: 20 from Windows 10 18985 on, 19 on anything earlier; after a failure it is
+    /// rewritten to whichever one worked.
+    /// </summary>
+    private int _immersiveDarkModeAttribute = OperatingSystem.IsWindowsVersionAtLeast(10, 0, 18985)
+        ? DwmUseImmersiveDarkMode
+        : DwmUseImmersiveDarkModeLegacy;
 
     /// <summary>
     /// 创建原生窗口背景适配器。
@@ -45,7 +55,7 @@ public sealed class NativeWindowBackdropAdapter
 
         SetDwmAttribute(handle, DwmSystemBackdropType, DwmBackdropNone);
         SetDwmAttribute(handle, DwmMicaEffect, 0);
-        ApplyAccentPolicy(handle, AccentState.Disabled, 0);
+        _ = ApplyAccentPolicy(handle, AccentState.Disabled, 0);
     }
 
     /// <summary>
@@ -55,11 +65,14 @@ public sealed class NativeWindowBackdropAdapter
     /// <param name="handle">窗口句柄。/ Window handle.</param>
     /// <param name="mode">已经过 <see cref="WindowBackdropPolicy.Resolve"/> 回退的有效材质。/ Effective backdrop already run through <see cref="WindowBackdropPolicy.Resolve"/>.</param>
     /// <param name="tint">Accent 模糊路径的 ARGB 底色（来自材质浓度）。/ ARGB tint for the Accent blur path, taken from the material concentration.</param>
-    public void ApplyBackdrop(nint handle, ApplicationBackdropMode mode, int tint)
+    /// <returns>材质确实应用上了时为 true；Acrylic 走 Accent 路径失败时返回 false，调用方必须退回纯色。
+    /// True when the material really was applied; false when Acrylic's Accent path failed, in which case the caller has to fall back to a
+    /// solid surface.</returns>
+    public bool ApplyBackdrop(nint handle, ApplicationBackdropMode mode, int tint)
     {
         if (handle == nint.Zero)
         {
-            return;
+            return false;
         }
 
         ResetBackdrop(handle);
@@ -73,7 +86,7 @@ public sealed class NativeWindowBackdropAdapter
                 ApplicationBackdropMode.MicaAlt => DwmBackdropMicaAlt,
                 _ => DwmBackdropAcrylic
             });
-            return;
+            return true;
         }
 
         // 22000–22620 上只有旧式云母属性，没有云母 Alt；此处按云母处理，回退链已在上层策略里走过一遍。
@@ -83,11 +96,11 @@ public sealed class NativeWindowBackdropAdapter
         {
             SetFrame(handle, extended: true);
             SetDwmAttribute(handle, DwmMicaEffect, 1);
-            return;
+            return true;
         }
 
         SetFrame(handle, extended: false);
-        ApplyAccentPolicy(handle, AccentState.EnableAcrylicBlurBehind, tint);
+        return ApplyAccentPolicy(handle, AccentState.EnableAcrylicBlurBehind, tint);
     }
 
     /// <summary>
@@ -116,16 +129,18 @@ public sealed class NativeWindowBackdropAdapter
     /// <param name="handle">窗口句柄。/ Window handle.</param>
     /// <param name="mode">请求的有效材质；<see cref="ApplicationBackdropMode.FluentSolid"/> 由调用方处理。/ Requested effective backdrop; <see cref="ApplicationBackdropMode.FluentSolid"/> is handled by the caller.</param>
     /// <param name="tint">Accent 模糊路径的 ARGB 底色（来自材质浓度）。/ ARGB tint for the Accent blur path, taken from the material concentration.</param>
-    public void ApplyNonActivatingBackdrop(nint handle, ApplicationBackdropMode mode, int tint)
+    /// <returns>材质确实应用上了时为 true；Accent 路径失败时返回 false，调用方必须退回纯色。
+    /// True when the material really was applied; false when the Accent path failed, in which case the caller has to fall back to solid.</returns>
+    public bool ApplyNonActivatingBackdrop(nint handle, ApplicationBackdropMode mode, int tint)
     {
         if (handle == nint.Zero || mode == ApplicationBackdropMode.FluentSolid)
         {
-            return;
+            return false;
         }
 
         ResetBackdrop(handle);
         SetFrame(handle, extended: false);
-        ApplyAccentPolicy(handle, AccentState.EnableAcrylicBlurBehind, tint);
+        return ApplyAccentPolicy(handle, AccentState.EnableAcrylicBlurBehind, tint);
     }
 
     /// <summary>
@@ -164,6 +179,12 @@ public sealed class NativeWindowBackdropAdapter
     /// <summary>
     /// 应用深色模式和圆角等通用 DWM 属性。
     /// Applies common DWM attributes such as dark mode and rounded corners.
+    ///
+    /// 深色属性号分两档：Windows 10 18985（20H1）起、以及 Windows 11 用 20，17863–18984 只认 19。这里按系统版本先选一个，
+    /// 失败再换另一个并把可用值记住，因此旧版 Windows 10 上标题栏与边框的深色着色不再静默失效，后续窗口也不会重复那次失败调用。
+    /// The dark-mode attribute number has two tiers: 20 from Windows 10 18985 (20H1) and on Windows 11, but only 19 on 17763-18984.
+    /// This picks one by system version, retries with the other when the call fails, and remembers which one worked, so dark caption
+    /// and border colouring no longer fails silently on older Windows 10 and later windows do not repeat the failing call.
     /// </summary>
     public void SetThemeAttributes(nint handle, bool dark)
     {
@@ -172,8 +193,24 @@ public sealed class NativeWindowBackdropAdapter
             return;
         }
 
-        SetDwmAttribute(handle, DwmUseImmersiveDarkMode, dark ? 1 : 0);
+        SetImmersiveDarkMode(handle, dark);
         SetDwmAttribute(handle, DwmWindowCornerPreference, DwmCornerRound);
+    }
+
+    private void SetImmersiveDarkMode(nint handle, bool dark)
+    {
+        if (SetDwmAttribute(handle, _immersiveDarkModeAttribute, dark ? 1 : 0))
+        {
+            return;
+        }
+
+        var fallback = _immersiveDarkModeAttribute == DwmUseImmersiveDarkModeLegacy
+            ? DwmUseImmersiveDarkMode
+            : DwmUseImmersiveDarkModeLegacy;
+        if (SetDwmAttribute(handle, fallback, dark ? 1 : 0))
+        {
+            _immersiveDarkModeAttribute = fallback;
+        }
     }
 
     /// <summary>
@@ -197,10 +234,24 @@ public sealed class NativeWindowBackdropAdapter
             NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE | NativeMethods.SWP_NOACTIVATE);
     }
 
-    private static void SetDwmAttribute(nint handle, int attribute, int value) =>
-        _ = DwmSetWindowAttribute(handle, attribute, ref value, sizeof(int));
+    /// <summary>
+    /// 写一个 DWM 窗口属性。
+    /// Writes one DWM window attribute.
+    /// </summary>
+    /// <returns>调用成功（HRESULT 为 0）时为 true；属性在该系统上不存在时返回 false，供调用方换一种写法重试。
+    /// True when the call succeeded (a zero HRESULT); false when the attribute does not exist on this system, so the caller can
+    /// retry with another spelling.</returns>
+    private static bool SetDwmAttribute(nint handle, int attribute, int value) =>
+        DwmSetWindowAttribute(handle, attribute, ref value, sizeof(int)) == 0;
 
-    private static unsafe void ApplyAccentPolicy(nint handle, AccentState state, int gradientColor)
+    /// <summary>
+    /// 应用 Accent 模糊策略。
+    /// Applies the Accent blur policy.
+    /// </summary>
+    /// <returns>调用成功时为 true；Windows 10 上该 API 未公开，失败时调用方要退回纯色而不是留下透明窗口。
+    /// True on success; the API is undocumented on Windows 10, so on failure the caller has to fall back to a solid surface instead of
+    /// leaving a transparent window behind.</returns>
+    private static unsafe bool ApplyAccentPolicy(nint handle, AccentState state, int gradientColor)
     {
         var policy = new AccentPolicy
         {
@@ -213,7 +264,7 @@ public sealed class NativeWindowBackdropAdapter
             Data = (nint)(&policy),
             SizeOfData = sizeof(AccentPolicy)
         };
-        _ = SetWindowCompositionAttribute(handle, ref data);
+        return SetWindowCompositionAttribute(handle, ref data);
     }
 
     [StructLayout(LayoutKind.Sequential)]

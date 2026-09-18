@@ -9,6 +9,7 @@ using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using AFMediaBar.Classes.Abstractions;
 using AFMediaBar.Classes.Models;
 using AFMediaBar.Classes.Models.Layout;
 using AFMediaBar.Classes.Services;
@@ -124,7 +125,11 @@ namespace AFMediaBar.Components
             // One tooltip instance carries the text, which is rewritten live as the gesture and its result change.
             _wheelTooltip = new ToolTip { Placement = System.Windows.Controls.Primitives.PlacementMode.Top };
             InteractionSurface.ToolTip = _wheelTooltip;
-            Loaded += (_, _) => _progressTimer.Start();
+            // 进度条计时器按"当前是否处于剪枝档位"启动：窗口可能在档位已经生效时才加载出来（任务栏在屏幕关闭期间重建），
+            // 那时直接 Start 会让剪枝白做。
+            // The progress timer starts according to whether a prune level is in effect: the window can be loaded while the level already holds —
+            // a taskbar rebuilt during a dark screen, for instance — and starting it outright there would undo the prune.
+            Loaded += (_, _) => ResumeBackgroundTimers();
             Unloaded += (_, _) =>
             {
                 _progressTimer.Stop();
@@ -167,6 +172,9 @@ namespace AFMediaBar.Components
         private readonly DispatcherTimer _hoverOpenTimer;
         private readonly DispatcherTimer _hoverCloseTimer;
         private readonly DispatcherTimer _hoverHideFallbackTimer;
+
+        /// <summary>宿主传达的后台剪枝档位；控件只据此停表，不自行查询电源状态。/ The background prune level the host publishes; the control only stops timers from it and never queries the power state itself.</summary>
+        private MemoryPruneLevel _backgroundPruneLevel = MemoryPruneLevel.None;
 
         /// <summary>兜底收起比退出动画多等的余量，确保正常动画回调先跑。/ Extra margin the fallback waits beyond the exit animation, so the normal animation callback runs first.</summary>
         private static readonly TimeSpan HoverHideFallbackMargin = TimeSpan.FromMilliseconds(150);
@@ -976,6 +984,93 @@ namespace AFMediaBar.Components
 
         /// <summary>当前是否有已连接且正在播放的媒体。/ Indicates whether connected media is currently playing.</summary>
         public bool IsPlaying => _isConnected && !_isPaused;
+
+        /// <summary>
+        /// 按宿主传达的后台剪枝档位停止或恢复本控件自己的计时器。
+        /// Stops or restores this control's own timers for the background prune level the host publishes.
+        ///
+        /// 控件不认识电源状态，也不去查询它：档位由宿主（任务栏窗口）传进来，和外观、布局设置的传达方式一致。屏幕熄灭时进度条、跑马灯与
+        /// 逐字擦亮都没有人看得到，停掉它们省下的是每分钟几百次唤醒；恢复时从下一帧（最多 250 毫秒）继续推进，用户看不到空档。
+        /// The control neither knows the power state nor asks for it: the host — the taskbar window — passes the level in, exactly as it passes the
+        /// appearance and layout settings. While the display is dark nothing can see the progress bar, the marquee, or the syllable highlight, so
+        /// stopping them saves several hundred wakeups a minute; on restore they advance again from the next frame, at most 250 ms later, which the
+        /// user never notices.
+        /// </summary>
+        /// <param name="level">宿主当前应用的剪枝档位。/ The prune level the host currently applies.</param>
+        public void ApplyBackgroundPruneLevel(MemoryPruneLevel level)
+        {
+            _backgroundPruneLevel = level;
+            if (level == MemoryPruneLevel.None)
+            {
+                ResumeBackgroundTimers();
+                return;
+            }
+
+            // 空闲档停进度条与两支推进计时器：空闲的前提是既没有在播的媒体、用户也已经离开十分钟以上，此时进度条不动，
+            // 暂停曲目的标题也只会为一个不在座位上的人滚动。悬停层与滚轮提示的计时器不在这里停——它们只在指针停在栏上时运行，
+            // 那意味着用户刚刚动过鼠标，档位本来就会立刻回到常规。
+            // The idle level stops the progress timer and both advance timers: idle requires no playing media and a user who has been away for over ten
+            // minutes, so the progress bar does not move and a paused track's title would only scroll for somebody who is not there. The hover and
+            // wheel-tooltip timers are left alone: they run only while the pointer rests on the bar, which means the mouse has just moved and the level
+            // is about to return to normal anyway.
+            _progressTimer.Stop();
+            if (level < MemoryPruneLevel.DisplayOff)
+            {
+                StopLyricHighlight();
+                ReapplyLyricMarquee();
+                return;
+            }
+
+            _hoverOpenTimer.Stop();
+            _hoverCloseTimer.Stop();
+            _wheelTooltipTimer.Stop();
+
+            // 推进类计时器交给各自的判定路径收尾：停表的条件同时也是"把窗口文字还原成原文"的条件，因此这里重新判定一次，
+            // 而不是直接停表、把半个滚动窗口留在那里。擦亮的停表同样要走它自己的路径，否则 `_lyricHighlightActive` 会停在"开启"上，
+            // 恢复时便再也不会重新启动。
+            // The advance timers are wound down through their own decision path: the condition that stops them is also the one that restores the
+            // window text, so the decision is made again instead of stopping the timer and leaving half a scroll window behind. The reveal has to go
+            // through its own path as well, otherwise `_lyricHighlightActive` would stay on "enabled" and never start again after the restore.
+            StopLyricHighlight();
+            ReapplyLyricMarquee();
+        }
+
+        /// <summary>
+        /// 恢复控件自己的计时器并让推进类逻辑重新判定一次；只重启进度条，其余按需自启（跑马灯与逐字擦亮由呈现状态启动，悬停层与滚轮提示由交互启动）。
+        /// Restores the control's own timers and lets the advance logic decide again. Only the progress bar is restarted, because the others start on
+        /// demand: the marquee and the syllable highlight from the presentation state, and the hover layer and wheel tooltip from interaction.
+        /// </summary>
+        private void ResumeBackgroundTimers()
+        {
+            if (IsBackgroundPruned || !IsLoaded)
+            {
+                return;
+            }
+
+            if (!_progressTimer.IsEnabled)
+            {
+                _progressTimer.Start();
+            }
+
+            ReapplyLyricMarquee();
+            RefreshLyricHighlightPresentation();
+        }
+
+        /// <summary>是否因宿主传达的后台剪枝档位而暂停推进类计时器。/ Whether the advance timers are paused by the prune level the host published.</summary>
+        private bool IsBackgroundPruned => _backgroundPruneLevel >= MemoryPruneLevel.DisplayOff;
+
+        /// <summary>
+        /// 是否连"推进类"（跑马灯、逐字擦亮）也一并停下：空闲档就停，显示器关闭与睡眠当然也停。
+        /// Whether even the "advance" timers — the marquee and the syllable highlight — stop as well: they stop at the idle level too, and of course while
+        /// the display is dark or the system is suspending.
+        ///
+        /// 空闲档之所以也停，是因为它的前提就是"没有在播的媒体 + 用户已离开十分钟以上"：此时跑马灯只会为一个不在座位上的人每 16 毫秒推进一次，
+        /// 而恢复的代价最多是一次评估周期（用户一有输入，档位就回到常规）。
+        /// The idle level stops them because its premise is exactly "no playing media and a user gone for over ten minutes": the marquee would then advance
+        /// once every 16 ms for somebody who is not at their desk, while the restore costs at most one evaluation period, since any input returns the level
+        /// to normal.
+        /// </summary>
+        private bool IsAdvancePruned => _backgroundPruneLevel != MemoryPruneLevel.None;
 
         /// <summary>
         /// 设置竖向模式：任务栏在屏幕左侧或右侧时调整布局。

@@ -265,26 +265,35 @@ public sealed class WindowAppearanceService : IDisposable
         if (!MotionPolicy.ResolveCurrent().UseDecorativeEffects)
             mode = ApplicationBackdropMode.FluentSolid;
         var dark = ApplicationThemeManager.GetAppTheme() == ApplicationTheme.Dark;
-        if (mode == ApplicationBackdropMode.FluentSolid)
-        {
-            _nativeBackdropAdapter.ResetBackdrop(source.Handle);
-            _nativeBackdropAdapter.SetFrame(source.Handle, extended: false);
-            _nativeBackdropAdapter.SetNonClientColors(source.Handle, transparent: false);
-            source.CompositionTarget.BackgroundColor = Colors.Transparent;
-            window.SetResourceReference(Control.BackgroundProperty, "ApplicationBackgroundBrush");
-        }
-        else
+        if (mode != ApplicationBackdropMode.FluentSolid)
         {
             window.Background = Brushes.Transparent;
             source.CompositionTarget.BackgroundColor = Colors.Transparent;
             var tint = WindowBackdropPolicy.ResolveLegacyTint(dark, appearance.ResolveBackdropTintOpacityPercent());
-            if (_nonActivatingTransientWindows.Contains(window))
-                _nativeBackdropAdapter.ApplyNonActivatingBackdrop(source.Handle, mode, tint);
-            else
-                _nativeBackdropAdapter.ApplyBackdrop(source.Handle, mode, tint);
-            _nativeBackdropAdapter.SetNonClientColors(source.Handle, transparent: true);
+            var applied = _nonActivatingTransientWindows.Contains(window)
+                ? _nativeBackdropAdapter.ApplyNonActivatingBackdrop(source.Handle, mode, tint)
+                : _nativeBackdropAdapter.ApplyBackdrop(source.Handle, mode, tint);
+
+            // Acrylic 走的是未公开的 Accent 路径（Windows 10 上唯一的半透明途径），调用可能在个别系统上失败；
+            // 那种情况下绝不能把窗口留在透明状态——退回纯色表面，用户看到的是纯色而不是"窗口不见了"。
+            // Acrylic goes through the undocumented Accent path, the only translucent route on Windows 10, and that call can fail on
+            // some systems. A window must never be left transparent then: fall back to the solid surface, so the user sees a solid
+            // window instead of a window that is not there.
+            if (applied)
+            {
+                _nativeBackdropAdapter.SetNonClientColors(source.Handle, transparent: true);
+                _nativeBackdropAdapter.SetThemeAttributes(source.Handle, dark);
+                return;
+            }
+
+            mode = ApplicationBackdropMode.FluentSolid;
         }
 
+        _nativeBackdropAdapter.ResetBackdrop(source.Handle);
+        _nativeBackdropAdapter.SetFrame(source.Handle, extended: false);
+        _nativeBackdropAdapter.SetNonClientColors(source.Handle, transparent: false);
+        source.CompositionTarget.BackgroundColor = Colors.Transparent;
+        window.SetResourceReference(Control.BackgroundProperty, "ApplicationBackgroundBrush");
         _nativeBackdropAdapter.SetThemeAttributes(source.Handle, dark);
     }
 

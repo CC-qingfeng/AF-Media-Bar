@@ -371,22 +371,29 @@ public sealed class LayoutSizeCalculatorTests
     [TestMethod]
     public void WindowBackdropPolicyFallsBackForUnsupportedMicaAndHighContrast()
     {
+        // 没有系统材质时退到 Acrylic（Windows 10 上走窗口自绘的 Accent 模糊路径，仍然给到半透明表面），
+        // 只有高对比度才退到纯色。
+        // Without a system material it falls back to Acrylic, which on Windows 10 goes through the window-painted Accent blur path and
+        // still yields a translucent surface; only high contrast falls back to solid.
         Assert.AreEqual(
-            ApplicationBackdropMode.FluentSolid,
+            ApplicationBackdropMode.Acrylic,
             WindowBackdropPolicy.Resolve(ApplicationBackdropMode.Mica, highContrast: false, supportsMica: false, supportsMicaAlt: false));
         Assert.AreEqual(
             ApplicationBackdropMode.FluentSolid,
             WindowBackdropPolicy.Resolve(ApplicationBackdropMode.Acrylic, highContrast: true, supportsMica: true, supportsMicaAlt: true));
         Assert.AreEqual(
+            ApplicationBackdropMode.FluentSolid,
+            WindowBackdropPolicy.Resolve(ApplicationBackdropMode.Mica, highContrast: true, supportsMica: false, supportsMicaAlt: false));
+        Assert.AreEqual(
             ApplicationBackdropMode.Acrylic,
             WindowBackdropPolicy.Resolve(ApplicationBackdropMode.Acrylic, highContrast: false, supportsMica: false, supportsMicaAlt: false));
-        // 云母 Alt 拿不到时退到云母而不是纯色；连云母都没有（Windows 10）才退到纯色。
-        // Mica Alt falls back to Mica when unavailable, and to solid only when Mica is unavailable too (Windows 10).
+        // 云母 Alt 拿不到时退到云母；连云母都没有（Windows 10）时退到 Acrylic 而不是纯色。
+        // Mica Alt falls back to Mica when unavailable, and to Acrylic rather than solid when Mica is unavailable too (Windows 10).
         Assert.AreEqual(
             ApplicationBackdropMode.Mica,
             WindowBackdropPolicy.Resolve(ApplicationBackdropMode.MicaAlt, highContrast: false, supportsMica: true, supportsMicaAlt: false));
         Assert.AreEqual(
-            ApplicationBackdropMode.FluentSolid,
+            ApplicationBackdropMode.Acrylic,
             WindowBackdropPolicy.Resolve(ApplicationBackdropMode.MicaAlt, highContrast: false, supportsMica: false, supportsMicaAlt: false));
         Assert.AreEqual(
             ApplicationBackdropMode.MicaAlt,

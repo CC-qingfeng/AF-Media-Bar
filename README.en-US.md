@@ -135,6 +135,11 @@ The Windows 10/11 media card is an internal Explorer/Shell surface rather than a
 - Windows 10 version 1809 (build 17763) or later, x64
 - Both the installer and the portable package are self-contained, so no separate .NET installation is required
 
+> **About Windows 10 support scope**: every system interface this app uses — GSMTC media sessions, taskbar docking, the DWM material fallback —
+> is available on 1809, so 1809 and later run. However **.NET 10 officially supports only the Windows 10 LTSC and Enterprise editions**
+> (1809 E, 21H2 E); consumer Windows 10 is no longer on the .NET support list. It still runs, it is just outside Microsoft support.
+> Windows 11 is unaffected.
+
 ### Option 1: installer (recommended)
 
 1. Open [Releases](https://github.com/Fervent-Tempo/AF-Media-Bar/releases) and download `AFMediaBar-Setup-vX.Y.Z-win-x64.exe`. Do not download GitHub's automatically generated source archives.

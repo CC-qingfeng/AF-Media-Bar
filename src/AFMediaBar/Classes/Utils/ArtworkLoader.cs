@@ -134,6 +134,13 @@ internal static class ArtworkLoader
     }
 
     /// <summary>
+    /// 丢弃缩略图缓存；已经交给界面的位图不受影响（界面自己持有引用），丢掉的只是"下次不用重新解码"的那一份。
+    /// Drops the thumbnail cache. Bitmaps already handed to the interface stay alive because it holds its own references; what is dropped is only the
+    /// copy that saved a re-decode.
+    /// </summary>
+    internal static void ClearCache() => ThumbnailCache.Clear();
+
+    /// <summary>
     /// 从缩略图中心裁剪正方形区域。
     /// Crops a centered square region from a thumbnail.
     /// </summary>

@@ -17,23 +17,45 @@ namespace AFMediaBar.Classes.Services;
 /// 读取网易云客户端内存并提供更精确的进度、歌曲标识、封面和歌词。
 /// Reads NetEase client memory and provides precise progress, song identity, artwork, and lyrics.
 /// </summary>
-public sealed class NetEaseMediaProvider : IMediaSourceProvider
+public sealed class NetEaseMediaProvider : IMediaSourceProvider, IMemoryPrunable
 {
     private const string MemoryPlayerSourceId = "cloudmusic";
     private const string NetEaseWindowClass = "OrpheusBrowserHost";
     private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(233);
 
     /// <summary>
+    /// 空闲档位的轮询周期。空闲意味着已经有五分钟没有媒体、十分钟没有用户操作：此时连"有没有在放"都不需要每秒问四次，
+    /// 两秒一次足够在用户按下播放后很快跟上，而内存读取频率降到原来的十二分之一。
+    /// The poll period at the idle level. Idle means no media for five minutes and no user input for ten, so "is anything playing" does not need to be
+    /// asked four times a second: once every two seconds still follows a play press closely while cutting memory reads to a twelfth.
+    /// </summary>
+    private const int IdlePollIntervalMilliseconds = 2_000;
+
+    /// <summary>
     /// 歌词缓存的容量：来源变多以后必须封顶，否则长时间播放会一直堆积解析结果。
-    /// Capacity of the lyric cache: with more sources it has to be capped, otherwise long playback keeps accumulating parsed results.
+    /// 条数之外还受 <see cref="LyricsCacheBudgetPolicy.DefaultBudgetBytes"/> 约束（见该策略的说明）。
+    /// Capacity of the lyric cache: with more sources it has to be capped, otherwise long playback keeps accumulating parsed results. On top of that entry
+    /// count it is bounded by <see cref="LyricsCacheBudgetPolicy.DefaultBudgetBytes"/>; see that policy for why.
     /// </summary>
     private const int LyricsCacheCapacity = 64;
 
+    /// <summary>
+    /// 封面缓存的容量：每张封面解码后约 256 KB，无界字典会随播放曲目数一直涨（长时间播放是一条稳定的内存增长曲线）。
+    /// 只留最后几首的封面足够：封面总与当前曲目一起出现，切回上一首时重新下载一次的代价远小于常驻几十兆。
+    /// Capacity of the artwork cache: one decoded cover is about 256 KB, and an unbounded dictionary grows with the number of played
+    /// tracks, which is a steady memory climb over a long session. Keeping the last few covers is enough: a cover only appears together
+    /// with its track, and re-downloading one beats keeping tens of megabytes resident.
+    /// </summary>
+    private const int ArtworkCacheCapacity = 8;
+
     private readonly Dispatcher _dispatcher;
     private readonly LyricsService _lyricsService;
-    private readonly Dictionary<string, BitmapImage?> _artworkCache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly LruCache<string, BitmapImage?> _artworkCache = new(ArtworkCacheCapacity);
     private readonly HashSet<string> _pendingArtwork = new(StringComparer.OrdinalIgnoreCase);
-    private readonly LruCache<string, LyricsResult?> _lyricsCache = new(LyricsCacheCapacity);
+    private readonly LruCache<string, LyricsResult?> _lyricsCache = new(
+        LyricsCacheCapacity,
+        result => LyricsCacheBudgetPolicy.EstimateBytes(result?.Document),
+        LyricsCacheBudgetPolicy.DefaultBudgetBytes);
     private readonly HashSet<string> _pendingLyrics = new(StringComparer.Ordinal);
 
     /// <summary>缓存代次：取词设置变化时自增，让仍在飞行中的结果写不回来。/ Cache generation: incremented when retrieval settings change, so an in-flight result cannot be written back.</summary>
@@ -44,6 +66,12 @@ public sealed class NetEaseMediaProvider : IMediaSourceProvider
     private MediaSnapshot _sessionSnapshot = MediaSnapshot.Disconnected;
     private int _version;
     private bool _isDisposed;
+
+    /// <summary>
+    /// 轮询周期。剪枝会改写它，而轮询线程在另一个线程上读取，因此这是一个 volatile 字段而不是配置常量。
+    /// The poll period. Pruning rewrites it and the polling thread reads it from another thread, so it is a volatile field rather than a constant.
+    /// </summary>
+    private volatile int _pollIntervalMilliseconds = (int)PollInterval.TotalMilliseconds;
 
     public event Action<IMediaSourceProvider, MediaSnapshot?>? SnapshotChanged;
 
@@ -125,6 +153,64 @@ public sealed class NetEaseMediaProvider : IMediaSourceProvider
         _memoryPlayer = null;
     }
 
+    /// <summary>参与者名称，只用于诊断。/ Participant name, used for diagnostics only.</summary>
+    public string PruneParticipantName => "netease-source";
+
+    /// <summary>
+    /// 按档位丢弃封面与歌词缓存，并放慢或停掉内存轮询。
+    /// Drops the artwork and lyric caches for the level and slows down or stops the memory poll.
+    ///
+    /// 两级处理是有区别的：空闲档位只是"没人看，别那么勤快"，而显示器关闭或系统睡眠时连"看看有没有在放"都不必做——恢复由媒体事件驱动，
+    /// 协调器一收到播放状态变化就会把档位调回常规，本提供器随即被重新启动。
+    /// The two levels differ on purpose: the idle level only says "nobody is looking, so do not be so eager", while a closed display or a suspending
+    /// system does not even need the "is anything playing" check, because the restore is driven by media events: the coordinator drops back to the
+    /// ordinary level the moment a playback state changes, which restarts this provider.
+    /// </summary>
+    /// <param name="level">目标档位。/ The target level.</param>
+    public void Prune(MemoryPruneLevel level)
+    {
+        if (_isDisposed)
+        {
+            return;
+        }
+
+        if (level >= MemoryPruneLevel.Idle)
+        {
+            // 缓存清掉不会让界面变空：正在显示的那张封面由快照自己持有，这里丢掉的只是"下次再要时不用重新下载"的那一份。
+            // Clearing the caches does not blank the interface: the cover on screen is held by the snapshot itself, and what is dropped here is only
+            // the copy that saved a re-download.
+            _artworkCache.Clear();
+            _lyricsCache.Clear();
+            _lyricsCacheGeneration++;
+        }
+
+        if (level >= MemoryPruneLevel.DisplayOff)
+        {
+            StopPolling();
+            return;
+        }
+
+        _pollIntervalMilliseconds = level == MemoryPruneLevel.Idle
+            ? IdlePollIntervalMilliseconds
+            : (int)PollInterval.TotalMilliseconds;
+
+        // 从 L2/L3 回到 L0/L1 时轮询是停着的，这里按需重启（Start 自身幂等）。
+        // Coming back from L2/L3 the poll is stopped, so it is restarted here on demand; Start is idempotent by itself.
+        Start();
+    }
+
+    /// <summary>
+    /// 停止轮询并释放内存读取器，保留提供器本身可再次启动。
+    /// Stops polling and releases the memory reader while keeping the provider restartable.
+    /// </summary>
+    private void StopPolling()
+    {
+        var cancellation = _cancellation;
+        _cancellation = null;
+        cancellation?.Cancel();
+        ResetMemoryPlayer();
+    }
+
     private async Task PollAsync(CancellationTokenSource cancellation, CancellationToken token)
     {
         try
@@ -155,7 +241,7 @@ public sealed class NetEaseMediaProvider : IMediaSourceProvider
                     PublishSnapshot(null);
                 }
 
-                await Task.Delay(PollInterval, token);
+                await Task.Delay(_pollIntervalMilliseconds, token);
             }
         }
         catch (OperationCanceledException)
@@ -286,7 +372,7 @@ public sealed class NetEaseMediaProvider : IMediaSourceProvider
         try
         {
             var artwork = await ArtworkLoader.GetImageFromUrlAsync(coverUrl, token);
-            _artworkCache[coverUrl] = artwork;
+            _artworkCache.Set(coverUrl, artwork);
             if (artwork is not null && !_isDisposed && version == _version &&
                 _currentInfo is { } info && string.Equals(info.Cover, coverUrl, StringComparison.OrdinalIgnoreCase))
             {
@@ -299,7 +385,7 @@ public sealed class NetEaseMediaProvider : IMediaSourceProvider
         }
         catch
         {
-            _artworkCache[coverUrl] = null;
+            _artworkCache.Set(coverUrl, null);
         }
         finally
         {

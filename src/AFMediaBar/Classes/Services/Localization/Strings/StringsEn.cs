@@ -43,8 +43,11 @@ internal static class StringsEn
         table.Add("About.Row.OpenFolder.Title", "Open the settings folder");
         table.Add("About.Row.LogFolder.Description", "The log is one file, logs\\app.log, holding the newest 1000 lines; send that file when something breaks");
         table.Add("About.Row.LogFolder.Title", "Log file");
+        table.Add("About.Row.TrimMemory.Button", "Compress now");
+        table.Add("About.Row.TrimMemory.Description", "Returns the working set — the physical memory in use — to the system: the figure in Task Manager drops at once, the next use has to read that part back in and may stutter briefly; the commit size does not change");
+        table.Add("About.Row.TrimMemory.Title", "Compress memory usage");
         table.Add("Common.Group.Diagnostics", "Diagnostics and logs");
-        table.Add("Search.AppAndAbout.Diagnostics.Description", "Open the log folder (logs\\app.log, the file to send when something breaks)");
+        table.Add("Search.AppAndAbout.Diagnostics.Description", "Open the log folder (logs\\app.log, the file to send when something breaks) or return the working set to the system");
         table.Add("About.Row.Portable.Badge", "Portable");
         table.Add("About.Row.Portable.Description", "This is not an installed build, so files cannot be replaced automatically; get the installer from the download page or replace the program files by hand");
         table.Add("About.Row.Portable.Title", "Automatic updates are unavailable");

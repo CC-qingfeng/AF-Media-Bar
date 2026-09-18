@@ -1,20 +1,61 @@
 using System.Windows.Threading;
+using AFMediaBar.Classes.Abstractions;
 using AFMediaBar.Classes.Models;
 
 namespace AFMediaBar.Classes.Services;
 
 /// <summary>在多个可见表面之间合并性能采样计时和 GPU 需求。 / Coalesces metric sampling and GPU demand across visible surfaces.</summary>
-public sealed class SystemMetricsMonitorService : IDisposable
+public sealed class SystemMetricsMonitorService : IDisposable, IMemoryPrunable
 {
+    /// <summary>
+    /// 空闲档位的采样间隔倍数。性能文字是给人看的，而空闲意味着没有媒体、也没有人操作：把采样放慢四倍仍然看得出趋势，
+    /// 而 PDH 查询（含 GPU 计数器）的开销直接降到四分之一。
+    /// The sampling-interval multiplier at the idle level. Performance text is meant for a person, and idle means no media and no user input: sampling
+    /// four times slower still shows the trend, while the cost of the PDH queries, GPU counters included, drops to a quarter.
+    /// </summary>
+    private const double IdleIntervalScale = 4d;
+
     private readonly SystemMetricsService _sampler;
     private readonly DispatcherTimer _timer = new();
     private readonly List<Subscription> _subscriptions = [];
+    private double _intervalScale = 1d;
     private bool _disposed;
 
     public SystemMetricsMonitorService(SystemMetricsService sampler)
     {
         _sampler = sampler;
         _timer.Tick += OnTick;
+    }
+
+    /// <summary>参与者名称，只用于诊断。/ Participant name, used for diagnostics only.</summary>
+    public string PruneParticipantName => "metrics-monitor";
+
+    /// <summary>
+    /// 按档位放慢采样或停掉整个采样计时器并释放 GPU 计数器。
+    /// Slows sampling down for the level, or stops the whole sampling timer and releases the GPU counters.
+    ///
+    /// 订阅关系本身不动：消费者手里那个 <see cref="IDisposable"/> 仍然有效，恢复后继续收到回调。剪枝期间只是没人报警，
+    /// 而不是"订阅被悄悄取消"。
+    /// The subscriptions themselves stay untouched: the <see cref="IDisposable"/> a consumer holds keeps working and receives callbacks again after the
+    /// restore. While pruned it simply goes quiet, rather than having its subscription silently cancelled.
+    /// </summary>
+    /// <param name="level">目标档位。/ The target level.</param>
+    public void Prune(MemoryPruneLevel level)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        if (level >= MemoryPruneLevel.DisplayOff)
+        {
+            _timer.Stop();
+            _sampler.ReleaseGpu();
+            return;
+        }
+
+        _intervalScale = level == MemoryPruneLevel.Idle ? IdleIntervalScale : 1d;
+        ReconfigureTimer();
     }
 
     public IDisposable Subscribe(IReadOnlyCollection<MetricKind> metrics, TimeSpan interval, Action<SystemMetricsSnapshot> callback)
@@ -57,7 +98,8 @@ public sealed class SystemMetricsMonitorService : IDisposable
     {
         _timer.Stop();
         if (_subscriptions.Count == 0) return;
-        _timer.Interval = TimeSpan.FromMilliseconds(_subscriptions.Min(item => item.Interval.TotalMilliseconds));
+        var baseInterval = _subscriptions.Min(item => item.Interval.TotalMilliseconds);
+        _timer.Interval = TimeSpan.FromMilliseconds(baseInterval * _intervalScale);
         _timer.Start();
     }
 

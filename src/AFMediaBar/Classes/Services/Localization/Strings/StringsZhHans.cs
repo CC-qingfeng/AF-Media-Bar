@@ -43,8 +43,11 @@ internal static class StringsZhHans
         table.Add("About.Row.OpenFolder.Title", "打开设置文件夹");
         table.Add("About.Row.LogFolder.Description", "日志是 logs\\app.log 一个文件，只保留最近 1000 条；出现错误时请把这个文件发出来");
         table.Add("About.Row.LogFolder.Title", "日志文件");
+        table.Add("About.Row.TrimMemory.Button", "立即压缩");
+        table.Add("About.Row.TrimMemory.Description", "把工作集（占用的物理内存）交还给系统：任务管理器里的读数会立刻下降，下次用到这部分时程序需要重新读回，可能有短暂卡顿；提交大小不变");
+        table.Add("About.Row.TrimMemory.Title", "压缩内存占用");
         table.Add("Common.Group.Diagnostics", "诊断与日志");
-        table.Add("Search.AppAndAbout.Diagnostics.Description", "打开日志文件夹（logs\\app.log，出现错误时发这个文件）");
+        table.Add("Search.AppAndAbout.Diagnostics.Description", "打开日志文件夹（logs\\app.log，出现错误时发这个文件），或把工作集交还给系统");
         table.Add("About.Row.Portable.Badge", "便携版");
         table.Add("About.Row.Portable.Description", "当前不是安装版本，无法自动替换文件；请从下载页获取安装包或手动替换程序文件");
         table.Add("About.Row.Portable.Title", "自动更新不可用");

@@ -53,7 +53,12 @@ public partial class TaskbarWindow : Window
     private readonly MediaSourceActivationService _sourceActivationService;
     private readonly SystemMetricsMonitorService _metricsMonitor;
     private readonly TaskbarCompactFlyoutWindow _compactFlyout;
+    private readonly MemoryPruneCoordinator _memoryPruneCoordinator;
     private IDisposable? _metricsSubscription;
+
+    /// <summary>当前生效的后台剪枝档位；只在恢复计时器时用来判断该不该真正启动它们。
+    /// The background prune level currently in effect, only consulted while restoring timers to decide whether they should really start.</summary>
+    private MemoryPruneLevel _backgroundPruneLevel = MemoryPruneLevel.None;
 
     private IntPtr _lastTaskbarHandle;
     private IntPtr _windowHandle;
@@ -113,7 +118,8 @@ public partial class TaskbarWindow : Window
         MediaSourceActivationService sourceActivationService,
         SystemMetricsMonitorService metricsMonitor,
         ScreenBackgroundSampler screenBackgroundSampler,
-        NativeMouseInputMonitor mouseInputMonitor)
+        NativeMouseInputMonitor mouseInputMonitor,
+        MemoryPruneCoordinator memoryPruneCoordinator)
     {
         WindowHelper.SetNoActivate(this);
         InitializeComponent();
@@ -170,6 +176,17 @@ public partial class TaskbarWindow : Window
         _timer.Tick += PositionTimer_Tick;
         _timer.Start();
 
+        // 后台剪枝：宿主自己订阅档位变化，按档位停掉或恢复自己的计时器与指标订阅。
+        // 窗口由 MainWindow 构造（不是容器构造的），因此它不能作为参与者被注入，而是订阅协调器的事件——订阅在 OnClosed 里解除，
+        // 否则每次重建任务栏（Explorer 重启）都会留下一个不会释放的窗口引用。
+        // Background pruning: the host subscribes to the level changes itself and stops or restores its own timers and metrics subscription from them.
+        // The window is built by MainWindow rather than by the container, so it cannot be injected as a participant; instead it subscribes to the
+        // coordinator's event, and unsubscribes in OnClosed, because every taskbar rebuild after an Explorer restart would otherwise leave a window
+        // reference behind that never gets released.
+        _memoryPruneCoordinator = memoryPruneCoordinator;
+        _memoryPruneCoordinator.LevelChanged += MemoryPruneCoordinator_LevelChanged;
+        _backgroundPruneLevel = _memoryPruneCoordinator.CurrentLevel;
+
         _sizeAnimationTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
         _sizeAnimationTimer.Tick += (_, _) => AdvanceSizeAnimation();
         _spectrumTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
@@ -193,6 +210,15 @@ public partial class TaskbarWindow : Window
             }
         };
         _spectrumTimer.Start();
+
+        // 窗口也可能在档位已经生效时被创建（屏幕关闭期间 Explorer 重建了任务栏）：那时不能等下一次档位变化，
+        // 否则刚启动的计时器会一直转到一个没人看得见的窗口上。这里只走"停"的一侧，不触发恢复路径。
+        // The window can also be created while a level already holds, when Explorer rebuilds the taskbar during a dark screen. It must not wait for the
+        // next level change there, or the timers that just started would keep running for a window nobody can see. Only the stopping side runs here.
+        if (IsBackgroundPruned)
+        {
+            ApplyBackgroundPruneLevel(_backgroundPruneLevel);
+        }
 
         _outputDeviceApplyTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(AudioApplyPolicy.OutputDevicePreviewDelayMilliseconds) };
         _outputDeviceApplyTimer.Tick += async (_, _) =>
@@ -824,6 +850,71 @@ public partial class TaskbarWindow : Window
             return;
 
         _isEnvironmentSuspended = false;
+        ResumeOperationalTimers();
+    }
+
+    /// <summary>
+    /// 是否因为后台剪枝而停掉了本宿主自己的计时器与指标订阅。
+    /// Whether this host stopped its own timers and metrics subscription because of background pruning.
+    /// </summary>
+    private bool IsBackgroundPruned => _backgroundPruneLevel >= MemoryPruneLevel.DisplayOff;
+
+    /// <summary>
+    /// 挡板：把协调器的档位变化转成宿主自己的动作，并跳过没有实际变化的通知。
+    /// The adapter that turns a coordinator level change into this host's own actions, skipping notifications without an actual change.
+    /// </summary>
+    private void MemoryPruneCoordinator_LevelChanged(object? sender, MemoryPruneLevelChangedEventArgs e)
+    {
+        if (_isClosing || _backgroundPruneLevel == e.Level)
+            return;
+
+        _backgroundPruneLevel = e.Level;
+        ApplyBackgroundPruneLevel(e.Level);
+    }
+
+    /// <summary>
+    /// 按剪枝档位停掉或恢复任务栏宿主自己的计时器、指标订阅与频谱采集。
+    /// Stops or restores this taskbar host's own timers, metrics subscription, and spectrum capture for the prune level.
+    ///
+    /// 屏幕熄灭或系统睡眠时，这一整套（1.5 s 定位、50 ms 频谱、性能指标订阅）都在为一个没人看得见的窗口工作，因此全部停掉；
+    /// 恢复由档位变化触发，而档位变化又由显示器打开或唤醒的广播驱动，所以恢复是立刻的，不需要等任何轮询。
+    /// While the display is dark or the system is suspending, this whole set — the 1.5 s repositioning, the 50 ms spectrum, the performance metrics
+    /// subscription — works for a window nobody can see, so all of it stops. The restore comes from the level change, which the display-on or resume
+    /// broadcast drives, so it is immediate and waits for no poll.
+    /// </summary>
+    /// <param name="level">剪枝档位。/ The prune level.</param>
+    internal void ApplyBackgroundPruneLevel(MemoryPruneLevel level)
+    {
+        _backgroundPruneLevel = level;
+
+        // 控件自己那几只计时器由宿主转达；控件不查询电源状态（所有权与依赖方向见 IMPLEMENTATION_CONSTRAINTS）。
+        // The control's own timers are passed down by the host; the control never queries the power state, which keeps ownership and dependency
+        // direction as IMPLEMENTATION_CONSTRAINTS requires.
+        MediaControl.ApplyBackgroundPruneLevel(level);
+
+        if (!IsBackgroundPruned)
+        {
+            ResumeOperationalTimers();
+            return;
+        }
+
+        _timer.Stop();
+        _spectrumTimer.Stop();
+        _metricsSubscription?.Dispose();
+        _metricsSubscription = null;
+        _pendingSizeRequest = null;
+    }
+
+    /// <summary>
+    /// 恢复本宿主的常规节奏：定位、频谱、指标订阅与自适应前景采样。挡板状态（关闭中、环境恢复中、后台剪枝中）任一成立时什么都不做。
+    /// Restores this host's ordinary cadence: repositioning, spectrum, metrics subscription, and adaptive foreground sampling. It does nothing while any
+    /// blocker holds: closing, recovering the environment, or background pruning.
+    /// </summary>
+    private void ResumeOperationalTimers()
+    {
+        if (_isClosing || _isEnvironmentSuspended || IsBackgroundPruned)
+            return;
+
         if (!_timer.IsEnabled)
             _timer.Start();
         if (!_spectrumTimer.IsEnabled)
@@ -1133,7 +1224,7 @@ public partial class TaskbarWindow : Window
         MediaControl.ApplyQuickLaunchEntries(SettingsManager.Current.QuickLaunch.Entries ?? []);
         MediaControl.ApplyTaskbarExperienceSettings();
         _metricsSubscription?.Dispose();
-        _metricsSubscription = !_isClosing && !_isEnvironmentSuspended &&
+        _metricsSubscription = !_isClosing && !_isEnvironmentSuspended && !IsBackgroundPruned &&
                                SettingsManager.Current.TaskbarExperience.PerformanceVisible
             ? _metricsMonitor.Subscribe(
                 performance.Metrics!,
@@ -1451,6 +1542,7 @@ public partial class TaskbarWindow : Window
     protected override void OnClosed(EventArgs e)
     {
         _isClosing = true;
+        _memoryPruneCoordinator.LevelChanged -= MemoryPruneCoordinator_LevelChanged;
         _timer.Stop();
         _sizeAnimationTimer.Stop();
         _spectrumTimer.Stop();

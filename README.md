@@ -141,6 +141,10 @@ Windows 10/11 控制中心里的媒体卡片是 Explorer/Shell 的内部界面�
 - Windows 10 版本 1809（内部版本 17763）或更高版本，x64
 - 安装程序与便携版都自带 .NET 运行时，无需另行安装
 
+> **关于 Windows 10 的支持范围**：程序自身用到的每一个系统接口（GSMTC 媒体会话、任务栏停靠、DWM 材质回退）在 1809 上就可用，
+> 因此 1809 及以上都能跑。但 **.NET 10 官方只支持 Windows 10 的长期服务版与企业版**（1809 E、21H2 E），消费版 Windows 10
+> 已不在 .NET 的支持列表内：它仍然能运行，只是不受 Microsoft 支持。Windows 11 不受此影响。
+
 ### 方式一：安装程序（推荐）
 
 1. 打开 [Releases](https://github.com/Fervent-Tempo/AF-Media-Bar/releases)，下载 `AFMediaBar-Setup-vX.Y.Z-win-x64.exe`，不要下载 GitHub 自动生成的 Source code 压缩包。

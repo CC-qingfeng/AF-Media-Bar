@@ -27,6 +27,8 @@ pwsh -NoProfile -File .\installer\build-installer.ps1 -EnsureIscc
 
 要求：Windows 10 1809 或更高、.NET 10 SDK、[Inno Setup 6](https://jrsoftware.org/isinfo.php) **6.3 或更高版本**（`ArchitecturesAllowed=x64compatible` 需要 6.3+；安装方式 `winget install --id JRSoftware.InnoSetup -e`，CI 用 `choco install innosetup`）。脚本会校验发布目录里恰好只有 `AFMediaBar.exe`；发布模式一旦退化（例如丢失 `PublishSingleFile`）就在这里失败，而不是在安装包里悄悄塞进整个运行时。
 
+安装包的下限是 `MinVersion=10.0.17763`（Windows 10 1809）：这是**程序自身**的下限，与 README 的口径一致。注意 .NET 10 官方只支持 Windows 10 的长期服务版与企业版（1809 E、21H2 E），消费版 Windows 10 不在 .NET 支持列表内，因此这个下限表示"能装能跑"，不等同于"受 Microsoft 支持"。
+
 产物：
 
 ```text

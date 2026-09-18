@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Windows.Media;
+using AFMediaBar.Classes.Abstractions;
 using AFMediaBar.Classes.Models;
 using AFMediaBar.Classes.Services.Lyrics;
 using AFMediaBar.Classes.Settings;
@@ -15,7 +16,7 @@ namespace AFMediaBar.Classes.Services;
 /// 从选中的 SMTC 会话构建统一媒体快照，并异步补充歌词。
 /// Builds the unified media snapshot from a selected SMTC session and enriches it with lyrics asynchronously.
 /// </summary>
-public sealed class MediaSnapshotBuilder
+public sealed class MediaSnapshotBuilder : IMemoryPrunable
 {
     /// <summary>
     /// 无法识别来源时的回退名称，按快照构建时的语言取值：它不能是常量，否则切换语言后来源名会停在启动时的语言上。
@@ -26,12 +27,19 @@ public sealed class MediaSnapshotBuilder
 
     /// <summary>
     /// 歌词缓存的容量：来源变多以后必须封顶，否则长时间播放会一直堆积解析结果。
-    /// Capacity of the lyric cache: with more sources it has to be capped, otherwise long playback keeps accumulating parsed results.
+    /// 条数之外还受 <see cref="LyricsCacheBudgetPolicy.DefaultBudgetBytes"/> 约束：带逐字时间轴的条目比纯文本的重几十倍，
+    /// 只按条数封顶挡不住真正占内存的那一类。
+    /// Capacity of the lyric cache: with more sources it has to be capped, otherwise long playback keeps accumulating parsed results. On top of that entry
+    /// count it is bounded by <see cref="LyricsCacheBudgetPolicy.DefaultBudgetBytes"/>: entries with a syllable timeline are tens of times heavier than
+    /// plain text, and an entry-count cap alone does not hold back the kind that actually costs memory.
     /// </summary>
     private const int LyricsCacheCapacity = 64;
 
     private readonly LyricsService _lyricsService;
-    private readonly LruCache<string, LyricsResult?> _lyricsCache = new(LyricsCacheCapacity);
+    private readonly LruCache<string, LyricsResult?> _lyricsCache = new(
+        LyricsCacheCapacity,
+        result => LyricsCacheBudgetPolicy.EstimateBytes(result?.Document),
+        LyricsCacheBudgetPolicy.DefaultBudgetBytes);
     private readonly HashSet<string> _pendingLyrics = new(StringComparer.Ordinal);
 
     /// <summary>
@@ -42,6 +50,38 @@ public sealed class MediaSnapshotBuilder
     private int _lyricsCacheGeneration;
 
     public event Action? EnrichmentCompleted;
+
+    /// <summary>参与者名称，只用于诊断。/ Participant name, used for diagnostics only.</summary>
+    public string PruneParticipantName => "lyrics-cache";
+
+    /// <summary>
+    /// 丢开歌词缓存。空闲档位就做这件事：此时既没有在播的媒体、用户也已经离开，缓存的歌词文本与解析结果只会占着内存，
+    /// 而重新取回它们的代价只是一次网络请求，发生在用户真的回来播放之后。
+    /// Drops the lyric cache. This is the whole job at the idle level: nothing is playing and the user is gone, so cached lyric text and parse
+    /// results only occupy memory, while fetching them again costs one network request that happens after the user is genuinely back.
+    ///
+    /// 代次自增与设置变化时一致：仍在飞行中的取词结果会因此被丢弃，而不是把剪枝前的歌词写回新缓存。
+    /// The generation is bumped exactly as a settings change does, so a retrieval still in flight is discarded instead of writing pre-prune lyrics
+    /// back into the fresh cache.
+    /// </summary>
+    /// <param name="level">目标档位。/ The target level.</param>
+    public void Prune(MemoryPruneLevel level)
+    {
+        if (level < MemoryPruneLevel.Idle)
+        {
+            return;
+        }
+
+        _lyricsCache.Clear();
+        _lyricsCacheGeneration++;
+
+        // 封面缩略图与主色缓存也归本构建器管：它们是本类在构建快照时填进去的（见 Build），因此也由本类丢弃，
+        // 而不是让某个"清理服务"隔着模块去动别人的静态缓存。
+        // The thumbnail and dominant-color caches belong to this builder as well: this class fills them while building a snapshot (see Build), so it
+        // drops them too, instead of some cleanup service reaching into another module's static cache.
+        ArtworkLoader.ClearCache();
+        BitmapHelper.ClearCache();
+    }
 
     /// <summary>
     /// 创建快照构建器，并使用歌词服务执行与当前曲目版本绑定的异步补全。

@@ -349,7 +349,7 @@ public static class SettingsSearchIndex
             "Common.Group.Diagnostics",
             "Search.AppAndAbout.Diagnostics.Description",
             language,
-            ["日志", "log", "logs", "诊断", "diagnostics", "报错", "崩溃", "crash", "上报", "报告", "排查", "打开文件夹", "导出"]),
+            ["日志", "log", "logs", "诊断", "diagnostics", "报错", "崩溃", "crash", "上报", "报告", "排查", "打开文件夹", "导出", "内存", "memory", "ram", "占用", "压缩", "释放", "工作集"]),
         Create(
             SettingsPageKey.AppAndAbout,
             3,

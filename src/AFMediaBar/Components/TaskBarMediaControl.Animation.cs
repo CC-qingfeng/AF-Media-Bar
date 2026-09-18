@@ -62,11 +62,15 @@ public partial class TaskBarMediaControl
     {
         // 判据是"文字真的超出了可用宽度"，而不是长度模式：跟随内容模式下媒体栏被任务栏安全上限夹住时，
         // 文字同样会超出，此时也必须能推进看全，否则用户只能看到被截断的标题。
+        // 后台剪枝期间否决推进：屏幕熄灭时 16 ms 的逐帧推进同样只有功耗没有画面（见 TaskBarMediaControl.ApplyBackgroundPruneLevel）。
         // The criterion is the text actually overflowing its available width rather than the length mode: in follow-content mode the bar
         // is clamped by the taskbar's safe maximum, the text overflows there too, and it has to stay readable as well.
+        // Background pruning vetoes advancing for the same reason the display going dark does: a 16 ms frame advance costs power and shows nothing
+        // (see TaskBarMediaControl.ApplyBackgroundPruneLevel).
         var enabled = _currentMode == WindowMode.Taskbar &&
                       !_isVertical &&
                       _isConnected &&
+                      !IsAdvancePruned &&
                       CurrentMotion.UseContinuousMotion;
         var anyAdvancing = false;
         foreach (var state in _marqueeTexts)

@@ -1,6 +1,7 @@
 // Copyright (c) 2024-2026 The FluentFlyout Authors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+using System.Buffers;
 using System.Diagnostics;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -14,6 +15,10 @@ namespace AFMediaBar.Classes.Utils;
 /// </summary>
 internal static class BitmapHelper
 {
+    /// <summary>取色时的最大采样边长（像素）：64 px 足够得到主色分布，而缓冲只有 16 KB。<br/>
+    /// Maximum sampling edge length in pixels: 64 px is enough for a dominant-colour distribution and keeps the buffer at 16 KB.</summary>
+    private const int MaximumSampleSize = 64;
+
     // cached bitmapImage hashes and their dominant colors
     private static readonly LruCache<int, List<SolidColorBrush>> _dominantColorsCache = new(5);
 
@@ -34,6 +39,18 @@ internal static class BitmapHelper
     {
         get => _currentDominantColors ??= [];
     }
+
+    /// <summary>
+    /// 丢弃主色缓存，但保留最近一次的结果。
+    /// Drops the dominant-color cache while keeping the most recent result.
+    ///
+    /// `SavedDominantColors` 是界面此刻正在用的画刷（媒体栏的强调色取自它），把它清掉界面就会当场失去颜色；缓存里存的只是"以前某张封面算过什么"，
+    /// 那份随时可以重算，而且只在切换曲目时才被读到。
+    /// `SavedDominantColors` is what the interface is painting with right now — the media bar takes its accent from it — so clearing it would strip the
+    /// colors on the spot. What the cache holds is only "what some earlier cover computed to", which can always be recomputed and is read only when
+    /// the track changes.
+    /// </summary>
+    internal static void ClearCache() => _dominantColorsCache.Clear();
 
     /// <summary>
     /// 从最近一次 ArtworkLoader.GetThumbnail 缓存的位图提取主色；单色使用直方图峰值，多色使用 K-means。
@@ -82,26 +99,34 @@ internal static class BitmapHelper
                 return _currentDominantColors ?? [];
             }
 
-            var formattedBitmap = new FormatConvertedBitmap();
-            formattedBitmap.BeginInit();
-            formattedBitmap.Source = sourceBitmap;
-            formattedBitmap.DestinationFormat = PixelFormats.Bgra32;
-            formattedBitmap.EndInit();
+            // 取色只需要大致的颜色分布：先把封面缩到 ≤64 px 再采样。临时缓冲因此从 256 KB（会直接进大对象堆）降到 16 KB，
+            // 并且从 <see cref="ArrayPool{T}"/> 借还——播放时每切一首歌都要取一次色，这条路径原本会给 LOH 持续制造垃圾。
+            // Sampling only needs the rough colour distribution: the cover is scaled to at most 64 px first. That drops the temporary
+            // buffer from 256 KB, which lands straight on the large object heap, to 16 KB, and it is rented from an ArrayPool instead:
+            // this path runs once per track, and it used to feed the LOH continuously.
+            var convertSource = CreateSampledSource(sourceBitmap, MaximumSampleSize);
+            var formattedBitmap = new FormatConvertedBitmap(convertSource, PixelFormats.Bgra32, null, 0);
 
             int width = formattedBitmap.PixelWidth;
             int height = formattedBitmap.PixelHeight;
             int stride = width * 4;
-
-            byte[] pixels = new byte[height * stride];
-            formattedBitmap.CopyPixels(pixels, stride, 0);
-
-            var result = DominantColorCalculator.Calculate(
-                pixels,
-                width,
-                height,
-                colorCount,
-                maxIterations,
-                ApplicationThemeManager.GetSystemTheme() == SystemTheme.Dark);
+            var pixels = ArrayPool<byte>.Shared.Rent(height * stride);
+            IReadOnlyList<Color> result;
+            try
+            {
+                formattedBitmap.CopyPixels(pixels, stride, 0);
+                result = DominantColorCalculator.Calculate(
+                    pixels,
+                    width,
+                    height,
+                    colorCount,
+                    maxIterations,
+                    ApplicationThemeManager.GetSystemTheme() == SystemTheme.Dark);
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(pixels);
+            }
 
             // convert to brushes
             var brushes = result.Select(c =>
@@ -127,6 +152,30 @@ internal static class BitmapHelper
             Debug.WriteLine($"Error extracting dominant colors: {ex}");
             return [];
         }
+    }
+
+    /// <summary>
+    /// 取色前把封面缩到不超过给定边长；已经足够小时直接返回原图。
+    /// Scales the cover down to at most the given edge length before sampling, returning the original when it already is small enough.
+    /// </summary>
+    /// <param name="source">缓存的封面位图（已冻结）。/ The cached cover bitmap, already frozen.</param>
+    /// <param name="maximumSize">采样用的最大边长（像素）。/ Maximum edge length in pixels for sampling.</param>
+    private static BitmapSource CreateSampledSource(BitmapSource source, int maximumSize)
+    {
+        var longestEdge = Math.Max(source.PixelWidth, source.PixelHeight);
+        if (longestEdge <= maximumSize)
+        {
+            return source;
+        }
+
+        var scale = maximumSize / (double)longestEdge;
+        var transformed = new TransformedBitmap();
+        transformed.BeginInit();
+        transformed.Source = source;
+        transformed.Transform = new ScaleTransform(scale, scale);
+        transformed.EndInit();
+        transformed.Freeze();
+        return transformed;
     }
 
     /// <summary>

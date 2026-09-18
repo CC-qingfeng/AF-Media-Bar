@@ -60,6 +60,13 @@ namespace AFMediaBar
                 // The application log: every other service writes into it (settings loads, media switches, audio applies, the update chain, exit).
                 services.AddSingleton(_ => new AppLogService());
 
+                // 后台内存与休眠剪枝：电源状态监听 → 参与者各自回收自己的资源 → 进程级回收。
+                // Background memory and suspend pruning: the power state monitor, then each participant reclaiming its own resources, then the
+                // process-level reclaim.
+                services.AddSingleton<PowerStateMonitor>();
+                services.AddSingleton<ProcessMemoryTrimmer>();
+                services.AddSingleton<MemoryPruneCoordinator>();
+
                 // === 核心服务层 Core Service Layer ===
                 // 主题管理（深浅色主题切换）Theme management (light/dark theme switching)
                 services.AddSingleton<IThemeService, ThemeService>();
@@ -91,6 +98,12 @@ namespace AFMediaBar
                 services.AddSingleton<MediaSessionSelectionService>();
                 services.AddSingleton<MediaSnapshotBuilder>();
                 services.AddSingleton<IMediaSourceProvider, NetEaseMediaProvider>();
+
+                // 可剪枝的参与者：每个资源的所有者自己实现回收，协调器只按档位发通知。
+                // The prunable participants: each resource owner implements its own reclaim while the coordinator only publishes a level.
+                services.AddSingleton<IMemoryPrunable>(sp => sp.GetRequiredService<MediaSnapshotBuilder>());
+                services.AddSingleton<IMemoryPrunable>(sp => sp.GetRequiredService<MediaSessionSelectionService>());
+                services.AddSingleton<IMemoryPrunable>(sp => (IMemoryPrunable)sp.GetRequiredService<IMediaSourceProvider>());
                 services.AddSingleton<MediaSourceActivationService>();
                 services.AddSingleton<MediaSessionService>();
                 services.AddSingleton<TrackChangeNotificationCoordinator>();
@@ -102,8 +115,10 @@ namespace AFMediaBar
                 services.AddSingleton<AudioInteractionService>();
                 services.AddSingleton<GlobalInteractionRouter>();
                 services.AddSingleton<AudioMonitorService>();
+                services.AddSingleton<IMemoryPrunable>(sp => sp.GetRequiredService<AudioMonitorService>());
                 services.AddSingleton<SystemMetricsService>();
                 services.AddSingleton<SystemMetricsMonitorService>();
+                services.AddSingleton<IMemoryPrunable>(sp => sp.GetRequiredService<SystemMetricsMonitorService>());
                 services.AddSingleton<SpatialAudioService>();
                 // 自有 Shell 托盘图标与统一鼠标输入监听
                 // App-owned Shell tray icon and unified mouse input monitor
@@ -295,6 +310,12 @@ namespace AFMediaBar
             // Update scheduling starts once the host is ready; it carries its own initial delay, so it never competes
             // with media sessions or taskbar docking during startup.
             updateService.Start();
+
+            // 后台剪枝最后启动：它要等媒体会话目录已经就绪才判得准"现在有没有在播"，而且电源消息窗口必须在 UI 线程上建立
+            // （SystemEvents 的回调会从自己的线程进来，本类统一把它们搬回这里）。
+            // Background pruning starts last: it can only judge "is anything playing" once the media session catalog is up, and its power message
+            // window has to be created on the UI thread, which is also the thread every SystemEvents callback is marshalled back to.
+            Services.GetRequiredService<MemoryPruneCoordinator>().Start();
 
 #if DEBUG
             _debugLyricsDiagnostics = new DebugLyricsDiagnostics();
