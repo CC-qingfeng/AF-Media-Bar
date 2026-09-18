@@ -500,7 +500,11 @@ public partial class TaskbarWindow : Window
         double barWidth = canvas?.Width ?? 300;
         double barHeight = canvas?.Height ?? 44;
         var orientation = _appliedOrientation ?? LayoutOrientation.Horizontal;
-        var preferredRange = GetPreferredSafeRange(taskbarRect, orientation, dpiScale);
+        var preferredRange = GetPreferredSafeRange(
+            taskbarRect,
+            orientation,
+            dpiScale,
+            (int)Math.Round((orientation == LayoutOrientation.Horizontal ? barWidth : barHeight) * dpiScale));
         var maximumPrimary = preferredRange.Length / dpiScale;
         if (orientation == LayoutOrientation.Horizontal)
             _lengthConstraints.Update(MediaControl.MinimumPrimaryLength, maximumPrimary);
@@ -1332,7 +1336,33 @@ public partial class TaskbarWindow : Window
             0,
             _dragPrimaryLimit);
         SettingsManager.Current.Position = TaskbarBarPosition.Start;
-        SettingsManager.Current.TaskbarBarManualPadding = targetPrimary - EdgePadding;
+
+        // 偏移的基准 MUST 与放置时的加法基准一致（空闲区间起点），否则媒体栏会整体偏离鼠标；
+        // 自动避让打开且区间起点不在最左边时，这个差值就是"拖不动"的来源。
+        // The offset's base MUST match the base the placement adds it to (the free range's start), otherwise the bar misses the mouse
+        // by that difference; with "avoid icons" on and a range that does not start at the left edge, that is exactly what makes
+        // dragging feel broken.
+        var dragDpiScale = _taskBarService.GetTaskbarDpiScale(_lastTaskbarHandle);
+        if (dragDpiScale <= 0 ||
+            !_taskBarService.TryGetTaskbarRect(_lastTaskbarHandle, out var dragTaskbarRect))
+        {
+            return;
+        }
+
+        var dragIsVertical = _appliedOrientation == LayoutOrientation.Vertical;
+        var dragCanvas = MediaControl.CurrentLayout?.Canvas;
+        var dragPrimarySize = (int)Math.Round(
+            (dragIsVertical ? dragCanvas?.Height ?? 168 : dragCanvas?.Width ?? 300) * dragDpiScale);
+        var dragRange = GetPreferredSafeRange(
+            dragTaskbarRect,
+            _appliedOrientation ?? LayoutOrientation.Horizontal,
+            dragDpiScale,
+            dragPrimarySize);
+        SettingsManager.Current.TaskbarBarManualPadding = TaskbarBarPlacementCalculator.ResolveManualPadding(
+            targetPrimary,
+            dragRange.Start,
+            dragRange.End,
+            dragPrimarySize);
 
         var windowHandle = new WindowInteropHelper(this).Handle;
         if (_lastTaskbarHandle != IntPtr.Zero && windowHandle != IntPtr.Zero)
@@ -1430,11 +1460,17 @@ public partial class TaskbarWindow : Window
         if (dpi <= 0)
             return 0;
 
-        var range = GetPreferredSafeRange(rect, orientation, dpi);
+        // 这里问的是"这个方向最多能有多长"，因此不做"放得下"判断（0 表示按位置偏好取区间）。
+        // This asks how long the bar may become in this orientation, so no fitting test is applied (0 keeps the plain preference).
+        var range = GetPreferredSafeRange(rect, orientation, dpi, requiredPrimaryPixels: 0);
         return Math.Max(1, range.Length / dpi);
     }
 
-    private TaskbarPrimaryRange GetPreferredSafeRange(RECT taskbarRect, LayoutOrientation orientation, double dpiScale)
+    private TaskbarPrimaryRange GetPreferredSafeRange(
+        RECT taskbarRect,
+        LayoutOrientation orientation,
+        double dpiScale,
+        int requiredPrimaryPixels)
     {
         var primaryLength = orientation == LayoutOrientation.Horizontal
             ? taskbarRect.Right - taskbarRect.Left
@@ -1458,12 +1494,10 @@ public partial class TaskbarWindow : Window
         if (ranges.Count == 0)
             return fallback;
 
-        return SettingsManager.Current.Position switch
-        {
-            TaskbarBarPosition.End => ranges[^1],
-            TaskbarBarPosition.Center => ranges.OrderByDescending(range => range.Length).First(),
-            _ => ranges[0]
-        };
+        // 选区间 MUST 用纯策略：空闲区间里可能有比媒体栏还窄的缝隙，"最左边那条"会把媒体栏压细并钉在缝里。
+        // The range MUST be chosen by the pure policy: the free ranges can hold a gap narrower than the bar itself, and "the leftmost
+        // one" would squash the bar into that sliver.
+        return TaskbarFreeRangeCalculator.Select(ranges, SettingsManager.Current.Position, requiredPrimaryPixels);
     }
 
     private void AdvanceSizeAnimation()

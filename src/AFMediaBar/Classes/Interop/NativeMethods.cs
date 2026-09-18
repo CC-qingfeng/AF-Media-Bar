@@ -313,6 +313,17 @@ public static partial class NativeMethods
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool IsWindowVisible(IntPtr hWnd);
 
+    /// <summary>取窗口层次里的指定祖先。/ Retrieves the requested ancestor of a window.</summary>
+    [LibraryImport("user32.dll")]
+    public static partial IntPtr GetAncestor(IntPtr hWnd, uint flags);
+
+    /// <summary>取屏幕坐标点上的窗口（只返回可见、可命中测试的窗口）。/ Retrieves the window at a screen point, skipping invisible and hit-test-transparent windows.</summary>
+    [LibraryImport("user32.dll")]
+    public static partial IntPtr WindowFromPoint(POINT point);
+
+    /// <summary>窗口层次中的顶层祖先标志，用于把命中到的子窗口提升成顶层窗口。/ Root-ancestor flag, used to promote a hit child window to its top-level window.</summary>
+    public const uint GA_ROOT = 2;
+
     /// <summary>判断窗口是否最小化。 / Determines whether a window is minimized.</summary>
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
