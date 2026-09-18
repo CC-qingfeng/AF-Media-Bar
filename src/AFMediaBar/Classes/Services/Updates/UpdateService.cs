@@ -214,14 +214,13 @@ public sealed class UpdateService : IDisposable
             return;
         }
 
-        var settings = SettingsManager.Current.Update;
         if (!fetch.Succeeded)
         {
-            SettingsManager.Current.Update = settings with
+            WriteUpdateSettings(current => current with
             {
                 LastCheckUtc = DateTimeOffset.UtcNow,
                 LastCheckSucceeded = false
-            };
+            });
             PublishState(CurrentState with
             {
                 Phase = UpdatePhase.Failed,
@@ -231,12 +230,60 @@ public sealed class UpdateService : IDisposable
             return;
         }
 
-        SettingsManager.Current.Update = settings with
+        WriteUpdateSettings(current => current with
         {
             LastCheckUtc = DateTimeOffset.UtcNow,
             LastCheckSucceeded = true
-        };
+        });
         ApplyManifest(fetch.Manifest!, manual);
+    }
+
+    /// <summary>
+    /// 在 UI 线程上改写更新设置，改写函数收到的是**当前**值而不是调用方先前读到的副本。
+    ///
+    /// 设置写入会同步通知所有订阅者，其中包含绑定到界面的集合（`ExtraFeaturesViewModel` 的来源与快捷启动列表、
+    /// `LyricsViewModel` 的来源与第二行列表）：从后台线程写会让 WPF 的 `CollectionView` 抛
+    /// “该类型的 CollectionView 不支持从调度程序线程以外的线程对其 SourceCollection 进行的更改”，随后异常以
+    /// `TaskScheduler.UnobservedTaskException` 的形式落到崩溃日志里。`CheckAsync` 的网络等待带 `ConfigureAwait(false)`，
+    /// 它之后的代码默认跑在线程池线程上，因此回到调度器这一步 MUST 显式做在这里。
+    ///
+    /// 传函数而不是新值还顺带修掉一次覆盖：等待网络的那段时间里用户可能刚在设置页改过开关，
+    /// 用旧副本整体写回会把那次修改悄悄抹掉。
+    /// Rewrites the update settings on the UI thread, and the mutation receives the **current** value rather than the copy the
+    /// caller read earlier.
+    ///
+    /// A settings write notifies every subscriber synchronously, including collections bound to the interface (the source and
+    /// quick-launch lists of `ExtraFeaturesViewModel`, the source and second-line lists of `LyricsViewModel`): writing from a
+    /// background thread makes WPF's `CollectionView` throw "this type of CollectionView does not support changes to its
+    /// SourceCollection from a thread different from the Dispatcher thread", and the exception then reaches the crash log as a
+    /// `TaskScheduler.UnobservedTaskException`. The network wait in `CheckAsync` carries `ConfigureAwait(false)`, so the code after
+    /// it runs on a thread-pool thread by default, which is why the return to the dispatcher has to be explicit and has to happen
+    /// here.
+    ///
+    /// Taking a mutation instead of a new value also removes an overwrite: during that network wait the user may have changed a
+    /// toggle on the settings page, and writing the earlier copy back would silently discard the change.
+    /// </summary>
+    /// <param name="mutate">按当前值算出新值的函数。/ Function computing the new value from the current one.</param>
+    private void WriteUpdateSettings(Func<UpdateSettings, UpdateSettings> mutate)
+    {
+        void Apply() => SettingsManager.Current.Update = mutate(SettingsManager.Current.Update);
+
+        // 关闭中的调度器必须先挡住：此时 Invoke 会直接抛，而这次写入已经没有意义。
+        // A shutting-down dispatcher is filtered first: Invoke would throw outright and the write no longer matters.
+        if (_dispatcher.HasShutdownStarted || _dispatcher.HasShutdownFinished)
+            return;
+
+        if (_dispatcher.CheckAccess())
+        {
+            Apply();
+            return;
+        }
+
+        // 这里用同步 Invoke 而不是 BeginInvoke：调用方紧接着就要读设置（ApplyManifest、跳过版本），
+        // 排队会让"刚写的值"和"马上读到的值"不一致。
+        // A synchronous Invoke rather than BeginInvoke: the caller reads the settings immediately afterwards (ApplyManifest,
+        // skipping a version), and queueing would make "the value just written" differ from "the value read next".
+        _dispatcher.Invoke(Apply, DispatcherPriority.Normal);
     }
 
     /// <summary>
@@ -283,7 +330,7 @@ public sealed class UpdateService : IDisposable
             return;
         }
 
-        SettingsManager.Current.Update = SettingsManager.Current.Update with { SkippedVersion = version };
+        WriteUpdateSettings(current => current with { SkippedVersion = version });
         PublishState(state with { Phase = UpdatePhase.Skipped, IsSkipped = true });
     }
 

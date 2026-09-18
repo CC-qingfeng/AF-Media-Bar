@@ -1,9 +1,11 @@
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Windows.Threading;
 using AFMediaBar.Classes.Models;
 using AFMediaBar.Classes.Services;
 using AFMediaBar.Classes.Services.Localization;
 using AFMediaBar.Classes.Settings;
+using AFMediaBar.Classes.Utils;
 using AFMediaBar.Resources;
 
 namespace AFMediaBar.ViewModels.Pages;
@@ -14,6 +16,16 @@ public partial class ExtraFeaturesViewModel : ObservableObject
     private readonly MediaSessionService _mediaSessions;
     private readonly IDisplayMonitorService _displayMonitorService;
     private readonly LocalizationService _localization;
+
+    // 设置写入会同步通知订阅者，而写设置的那一方可能在后台线程上（更新检查的网络等待之后就是如此）：
+    // 本页的 Sources / QuickLaunchEntries 绑定到界面，跨线程改它们会让 WPF 的 CollectionView 抛异常，
+    // 因此刷新 MUST 回到 UI 线程。根因侧同样已修（`UpdateService.WriteUpdateSettings`），这里是第二道防线。
+    // A settings write notifies its subscribers synchronously, and whoever writes may be on a background thread (that is exactly
+    // what happens after the update check's network wait): this page's Sources and QuickLaunchEntries are bound to the interface,
+    // and mutating them across threads makes WPF's CollectionView throw, so the refresh MUST come back to the UI thread. The root
+    // cause is fixed as well (`UpdateService.WriteUpdateSettings`); this is the second line of defence.
+    private readonly Dispatcher _dispatcher = DispatcherHelper.Current;
+
     private bool _isRefreshing;
     private string? _statusKey;
 
@@ -378,7 +390,7 @@ public partial class ExtraFeaturesViewModel : ObservableObject
     }
 
     private void OnDiscoveredSourcesChanged(IReadOnlyList<MediaSourceDescriptor> sources) => RefreshSources();
-    private void OnSettingsChanged(object? sender, SettingsChangedEventArgs e) => RefreshAll();
+    private void OnSettingsChanged(object? sender, SettingsChangedEventArgs e) => DispatcherHelper.Run(_dispatcher, RefreshAll);
     private void OnMonitorsChanged(object? sender, EventArgs e) => RefreshMonitors();
 
     private void RefreshAll()

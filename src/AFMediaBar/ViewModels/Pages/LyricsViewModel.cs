@@ -1,7 +1,9 @@
 using System.Collections.ObjectModel;
+using System.Windows.Threading;
 using AFMediaBar.Classes.Services.Localization;
 using AFMediaBar.Classes.Services.Lyrics;
 using AFMediaBar.Classes.Settings;
+using AFMediaBar.Classes.Utils;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -11,6 +13,13 @@ namespace AFMediaBar.ViewModels.Pages;
 public partial class LyricsViewModel : ObservableObject
 {
     private readonly LocalizationService _localization;
+
+    // 与 ExtraFeaturesViewModel 同理：设置写入可能来自后台线程，而来源列表与第二行列表绑定到界面，
+    // 跨线程改它们会被 WPF 的 CollectionView 拒绝，因此重建 MUST 回到 UI 线程。
+    // For the same reason as in ExtraFeaturesViewModel: a settings write can come from a background thread, while the source list
+    // and the second-line list are bound to the interface, and mutating them across threads is refused by WPF's CollectionView, so
+    // rebuilding MUST come back to the UI thread.
+    private readonly Dispatcher _dispatcher = DispatcherHelper.Current;
     private bool _isRefreshing;
 
     /// <summary>
@@ -102,6 +111,14 @@ public partial class LyricsViewModel : ObservableObject
 
     private void OnSettingsChanged(object? sender, SettingsChangedEventArgs e)
     {
+        // 重建绑定列表的动作全部回到 UI 线程（写设置的一方可能在后台线程上）。
+        // Everything that rebuilds a bound list goes back to the UI thread (whoever writes the settings may be on a background one).
+        if (!_dispatcher.CheckAccess())
+        {
+            DispatcherHelper.Run(_dispatcher, () => OnSettingsChanged(sender, e));
+            return;
+        }
+
         if (e.ResetScope is SettingsResetScope.Lyrics or SettingsResetScope.All)
         {
             RefreshSourceEntries();
