@@ -18,6 +18,12 @@ namespace AFMediaBar.Classes.Services.Lyrics;
 /// 判定顺序即优先级：先排除逐字格式，再落到行级格式，最后才是 LRC，避免把逐字歌词误判成 Lyricify Lines 或 LRC。
 /// The order is the precedence: syllable formats are ruled out first, then line-level formats, and LRC last, which keeps
 /// syllable lyrics from being mistaken for Lyricify Lines or LRC.
+///
+/// 整段 JSON/XML 包装（YRC Full、QRC Full、TTML）只有在整段确实是一份 JSON 或 XML 时才成立；解析失败说明它是混合载荷
+/// （实测网易云新版端点的逐字字段就是"署名 JSON 行 + YRC 行"），此时继续按行扫描，而不是把整首歌判成无法识别。
+/// A whole-document JSON or XML wrapper (YRC Full, QRC Full, TTML) is only recognized when the whole text really is one JSON
+/// or XML value; a failed parse means the payload is mixed (the new NetEase word-level field really is "credit JSON lines plus
+/// YRC lines"), and line scanning continues instead of writing the whole song off as unrecognizable.
 /// </summary>
 public static class LyricsFormatDetector
 {
@@ -91,15 +97,23 @@ public static class LyricsFormatDetector
         var trimmed = text.TrimStart();
         if (trimmed[0] == '{')
         {
-            // 只识别逐字 JSON 包装；其余 JSON 歌词（Apple Music、Spotify、Musixmatch）不在本项目来源范围内。
-            // Only the syllable JSON wrapper is recognized; the other JSON lyrics (Apple Music, Spotify, Musixmatch) are
-            // outside this project's sources.
-            return IsYrcFullJson(text) ? LyricsRawTypes.YrcFull : LyricsRawTypes.Unknown;
+            // 只在整段确实是一份 JSON 时才按包装处理；网易云的逐字载荷是"署名 JSON 行 + YRC 行"的混合文本，
+            // 这里必须继续往下按行扫描，否则整首歌会被判成无法识别，歌词就此丢失。
+            // The wrapper is only recognized when the whole text really is one JSON value: NetEase's word-level payload mixes
+            // credit JSON lines with YRC lines, so detection has to keep scanning lines instead of giving up on the whole song,
+            // which would lose its lyrics entirely.
+            if (IsYrcFullJson(text))
+            {
+                return LyricsRawTypes.YrcFull;
+            }
         }
-
-        if (trimmed[0] == '<')
+        else if (trimmed[0] == '<')
         {
-            return DetectMarkup(text);
+            var markupType = DetectMarkup(text);
+            if (markupType != LyricsRawTypes.Unknown)
+            {
+                return markupType;
+            }
         }
 
         if (KrcLine.IsMatch(text))

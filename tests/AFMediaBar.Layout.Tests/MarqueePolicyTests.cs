@@ -80,70 +80,153 @@ public sealed class MarqueePolicyTests
     }
 
     /// <summary>
-    /// 擦亮贴近右边界才继续滚动：只要已唱段还在可见区左边，窗口就停住，读者因此能盯着当前的字。
-    /// The window keeps still while the sung run is still comfortably inside the visible region, so the reader can keep their eyes on the
-    /// current characters.
+    /// 擦亮还没到容器的 80% 时窗口停在原文开头；越过后窗口跟着亮区走，且走得是连续的（不是一次一个字）。
+    /// While the reveal has not reached 80% of the container the window stays at the content's head; past that it follows the reveal, and
+    /// it follows continuously rather than a character at a time.
     /// </summary>
     [TestMethod]
-    public void FollowWindowOnlyMovesWhenTheRevealReachesTheRightMargin()
+    public void FollowWindowOnlyMovesOnceTheRevealReachesItsRestPosition()
     {
-        const int contentLength = 40;
-        const int visible = 10;
-        var margin = MarqueeFollowPolicy.ResolveFollowMargin(visible);
-        var limit = MarqueeFollowPolicy.ResolveMaximumStart(contentLength, visible);
+        const double available = 100;
 
-        Assert.AreEqual(2, margin);
-        Assert.AreEqual(30, limit);
-
-        // 擦亮还在可见区左边：位置保持在原文开头。
-        // The reveal is still on the left of the visible region: the position stays at the content's head.
-        Assert.AreEqual(0, MarqueeFollowPolicy.ResolvePosition(4, contentLength, visible), 0.0001);
-        Assert.AreEqual(0, MarqueeFollowPolicy.ResolvePosition(visible - margin, contentLength, visible), 0.0001);
-
-        // 擦亮进入右边距：窗口跟着走，且走得是连续的（不是一次一个字）。
-        // The reveal has entered the right margin: the window follows, and it follows continuously rather than a character at a time.
-        Assert.AreEqual(0.5, MarqueeFollowPolicy.ResolvePosition(visible - margin + 0.5, contentLength, visible), 0.0001);
-        Assert.AreEqual(3, MarqueeFollowPolicy.ResolvePosition(visible - margin + 3, contentLength, visible), 0.0001);
-
-        // 整行唱完：位置停在上限，尾巴留在可见区内。
-        // A fully sung line rests at the limit with its tail inside the visible region.
-        Assert.AreEqual(limit, MarqueeFollowPolicy.ResolvePosition(contentLength, contentLength, visible), 0.0001);
-
-        // 窗口长度不超过容器时（文字放得下）根本不进入跟随式。
-        // A window no longer than its container never needs the follow mode at all.
-        Assert.AreEqual(0, MarqueeFollowPolicy.ResolveMaximumStart(5, 10));
+        Assert.AreEqual(0.8, MarqueeFollowPolicy.RevealEdgeRatio, 0.0001);
+        // 亮区还没到 80 DIP：不丢弃任何宽度，窗口停在开头。
+        // The reveal is still short of 80 DIP: nothing is dropped and the window stays at the head.
+        Assert.AreEqual(0, MarqueeFollowPolicy.ResolveDroppedWidth(0, available), 0.0001);
+        Assert.AreEqual(0, MarqueeFollowPolicy.ResolveDroppedWidth(80, available), 0.0001);
+        // 越过后丢弃的宽度就是超出的部分，连续变化。
+        Assert.AreEqual(0.5, MarqueeFollowPolicy.ResolveDroppedWidth(80.5, available), 0.0001);
+        Assert.AreEqual(30, MarqueeFollowPolicy.ResolveDroppedWidth(110, available), 0.0001);
+        Assert.AreEqual(0, MarqueeFollowPolicy.ResolveDroppedWidth(50, 0), 0.0001);
     }
 
     /// <summary>
-    /// 已唱段永远不允许越出窗口的可见区：这是"滚动慢于高亮、高亮跑出显示范围"那条反馈的回归线——
-    /// 位置必须按亮区求解，而不是每 220 毫秒挪一个字。
-    /// The sung run is never allowed to leave the window's visible region: this is the regression line for the report that the scroll fell
-    /// behind the reveal and the highlight left the visible area. The position has to be solved from the reveal instead of shifting one
-    /// character per 220 ms.
+    /// 位置必须**对亮区单调**：同一行内容上逐步推进亮区，窗口位置只允许前进或不动。
+    /// 这是"长歌词抖动"的回归线——按"窗口里还能放下几个字"求解会让位置与窗口互相追赶，混排内容上来回跳。
+    /// The position has to be **monotone in the reveal**: advancing the reveal step by step over one line may only move the window forward or
+    /// hold it. This is the regression line for the long-lyric jitter: solving from "how many characters still fit" makes the position and
+    /// the window chase each other and jump back and forth on mixed content.
     /// </summary>
     [TestMethod]
-    public void SungRunNeverLeavesTheVisibleRegion()
+    public void FollowPositionIsMonotoneOnMixedWidthContent()
     {
+        // 混排：窄字（6 DIP）与宽字（26 DIP）交替，正是"能放下的字数"剧烈变化的内容。
+        // Mixed content: narrow (6 DIP) and wide (26 DIP) characters alternate, which is exactly what makes "how many characters fit" swing.
         const int contentLength = 60;
-        for (var visible = 1; visible <= 40; visible++)
-        {
-            var limit = MarqueeFollowPolicy.ResolveMaximumStart(contentLength, visible);
-            for (var step = 0; step <= contentLength * 4; step++)
-            {
-                // 亮区位置连续推进（模拟按帧求解），并在两端之外取值。
-                // The reveal advances continuously, as it does when it is solved per frame, including values beyond both ends.
-                var sung = step / 4d - 1;
-                var position = MarqueeFollowPolicy.ResolvePosition(sung, contentLength, visible);
-                Assert.IsTrue(position >= 0, "位置不允许为负 / the position never goes negative");
-                Assert.IsTrue(position <= limit, "位置不允许越过上限 / the position never passes its limit");
+        var widths = BuildPrefixWidths(contentLength, index => index % 8 < 4 ? 6 : 26);
+        const double available = 166;
 
-                var revealed = sung - position;
-                Assert.IsTrue(
-                    revealed <= visible,
-                    $"已唱段越出可见区：sung={sung} position={position} visible={visible} / the sung run left the visible region");
-                Assert.IsTrue(revealed <= limit + visible, "已唱段不允许超过整行 / the sung run never exceeds the line");
+        var previous = double.NaN;
+        var backward = 0;
+        var worst = 0d;
+        for (var step = 0; step <= contentLength * 20; step++)
+        {
+            var sung = step / 20d;
+            var sungWidth = MarqueeFollowPolicy.ResolveWidthAt(widths, contentLength, sung);
+            var position = MarqueeFollowPolicy.ResolvePositionAtWidth(
+                widths,
+                contentLength,
+                MarqueeFollowPolicy.ResolveDroppedWidth(sungWidth, available));
+
+            Assert.IsTrue(position >= 0, "位置不允许为负 / the position never goes negative");
+            Assert.IsTrue(position <= sung + 0.0001, "窗口不允许跑到亮区后面 / the window never passes the reveal");
+            Assert.IsTrue(
+                sungWidth - MarqueeFollowPolicy.ResolveWidthAt(widths, contentLength, position) <= available + 0.0001,
+                $"已唱段越出容器：sung={sung} position={position} / the sung run left the container");
+
+            if (!double.IsNaN(previous) && position < previous - 0.0001)
+            {
+                backward++;
+                worst = Math.Max(worst, previous - position);
             }
+
+            previous = position;
         }
+
+        Assert.AreEqual(0, backward, $"窗口位置出现回退，最大 {worst:0.000} 字符 / the window position moved backwards");
+    }
+
+    /// <summary>
+    /// 亮区停在容器的固定位置：唱到哪滚到哪，越往后窗口只前进。
+    /// The reveal rests at a fixed spot in the container: the line scrolls to wherever the singing has got to and only ever moves forward.
+    /// </summary>
+    [TestMethod]
+    public void FollowWindowKeepsTheRevealAtTheRestPosition()
+    {
+        const int contentLength = 40;
+        const double available = 100;
+        var widths = BuildPrefixWidths(contentLength, _ => 10);
+
+        // 亮区已经越过 80 DIP 之后，已唱段的可见宽度恒为容器宽度的 80%。
+        // Once the reveal has passed 80 DIP the sung run is always 80% of the container wide on screen.
+        for (var sung = 8d; sung <= contentLength; sung += 0.25)
+        {
+            var sungWidth = MarqueeFollowPolicy.ResolveWidthAt(widths, contentLength, sung);
+            var position = MarqueeFollowPolicy.ResolvePositionAtWidth(
+                widths,
+                contentLength,
+                MarqueeFollowPolicy.ResolveDroppedWidth(sungWidth, available));
+            Assert.AreEqual(80, sungWidth - MarqueeFollowPolicy.ResolveWidthAt(widths, contentLength, position), 0.0001);
+        }
+
+        // 整行唱完：窗口停在最后，尾巴（原文的剩余部分）仍在窗口里，位置不会越过原文长度。
+        // A fully sung line rests at the end with the rest of the content still in the window, never past the content length.
+        var finalPosition = MarqueeFollowPolicy.ResolvePositionAtWidth(
+            widths,
+            contentLength,
+            MarqueeFollowPolicy.ResolveDroppedWidth(
+                MarqueeFollowPolicy.ResolveWidthAt(widths, contentLength, contentLength),
+                available));
+        Assert.AreEqual(32, finalPosition, 0.0001);
+        Assert.IsTrue(finalPosition <= contentLength);
+    }
+
+    /// <summary>
+    /// 呈现层使用的已唱宽度只前进、每帧最多追赶一小段：播放器上报的播放位置会回退（很多播放器按整秒上报），
+    /// 直接跟着它走会让整块歌词往回跳。这是"这一版比上一版还抖"的回归线。
+    /// The presented sung width only moves forward and catches up by a bounded amount per frame: the player's reported position regresses,
+    /// because many players report whole seconds, and following it directly dragged the whole line backwards. This is the regression line for
+    /// the report that a later build jittered more than the previous one.
+    /// </summary>
+    [TestMethod]
+    public void PresentedRevealOnlyMovesForwardAndCatchesUpInBoundedSteps()
+    {
+        var width = MarqueeFollowPolicy.ResolveRevealWidth(0, 30, 20);
+        Assert.AreEqual(20, width, 0.001);
+        width = MarqueeFollowPolicy.ResolveRevealWidth(width, 30, 20);
+        Assert.AreEqual(30, width, 0.001);
+        // 上报回退：忽略，等播放位置自己追上。
+        // A backwards report is ignored, leaving the playback position to catch up.
+        Assert.AreEqual(30, MarqueeFollowPolicy.ResolveRevealWidth(width, 12, 20), 0.001);
+        Assert.AreEqual(30, MarqueeFollowPolicy.ResolveRevealWidth(width, 30, 20), 0.001);
+        // 大幅前进也按步追赶，一次上报的台阶不会整块推走。
+        // A large step forward is caught up in bounded steps, so one report never pushes the line in one go.
+        Assert.AreEqual(50, MarqueeFollowPolicy.ResolveRevealWidth(width, 200, 20), 0.001);
+        // 非法输入不会造出回退或 NaN。
+        // Invalid input neither creates a regression nor a NaN.
+        Assert.AreEqual(0, MarqueeFollowPolicy.ResolveRevealWidth(0, double.NaN, 20), 0.001);
+        Assert.AreEqual(25, MarqueeFollowPolicy.ResolveRevealWidth(25, 5, 20), 0.001);
+        Assert.AreEqual(40, MarqueeFollowPolicy.ResolveRevealWidth(25, 40, 0), 0.001);
+
+        // 任意目标序列下都不回退。
+        // No target sequence can make it move backwards.
+        var previous = 0d;
+        foreach (var target in new[] { 5d, 3, 40, 39, 39.5, 0, 80 })
+        {
+            var next = MarqueeFollowPolicy.ResolveRevealWidth(previous, target, 6);
+            Assert.IsTrue(next >= previous, "呈现宽度不允许回退 / the presented width never moves backwards");
+            previous = next;
+        }
+    }
+
+    /// <summary>构造前缀宽度表：第 i 项是前 i 个字符的宽度，第 0 项为 0。/ Builds a prefix-width table: the i-th entry is the width of the first i characters and the zeroth is zero.</summary>
+    private static double[] BuildPrefixWidths(int contentLength, Func<int, double> widthOf)
+    {
+        var widths = new double[contentLength + 1];
+        for (var index = 0; index < contentLength; index++)
+            widths[index + 1] = widths[index] + widthOf(index);
+
+        return widths;
     }
 
     /// <summary>
@@ -161,37 +244,45 @@ public sealed class MarqueePolicyTests
     }
 
     /// <summary>
-    /// 前缀宽度表：完整可见的字符数与已唱段的裁剪宽度都从这里读，二分查找必须落在那一段之内；
-    /// 裁剪宽度按小数位置插值，因此擦亮边界与文字一样连续移动。
-    /// The prefix-width table feeds both the visible character count and the sung clip width; the binary search has to land inside the run,
-    /// and the clip width is interpolated by fractional position so the reveal edge moves as continuously as the text.
+    /// 前缀宽度表的两向换算：位置换宽度按小数插值，宽度换位置是它的反函数（二分查找 + 插值），
+    /// 因此亮区边界与窗口位置都连续变化，不会在字与字之间跳。
+    /// The prefix-width table converts both ways: a position becomes a width by interpolation, and a width becomes a position through the
+    /// inverse search, so both the reveal edge and the window position move continuously instead of jumping between characters.
     /// </summary>
     [TestMethod]
-    public void PrefixWidthsDriveTheVisibleCountAndTheSungWidth()
+    public void PrefixWidthsConvertBothWaysWithInterpolation()
     {
-        // 每个字符 10 DIP，窗口 8 个字符。
-        // Ten DIP per character, eight characters in the window.
-        var prefixWidths = new double[9];
-        for (var index = 0; index < prefixWidths.Length; index++)
-            prefixWidths[index] = index * 10;
+        // 每个字符 10 DIP，共 8 个字符。
+        // Ten DIP per character, eight characters in total.
+        var prefixWidths = BuildPrefixWidths(8, _ => 10);
 
-        Assert.AreEqual(5, MarqueeFollowPolicy.ResolveVisibleCharacterCount(prefixWidths, 50));
-        Assert.AreEqual(5, MarqueeFollowPolicy.ResolveVisibleCharacterCount(prefixWidths, 59.9));
-        Assert.AreEqual(0, MarqueeFollowPolicy.ResolveVisibleCharacterCount(prefixWidths, 5));
-        Assert.AreEqual(8, MarqueeFollowPolicy.ResolveVisibleCharacterCount(prefixWidths, 500));
-        Assert.AreEqual(0, MarqueeFollowPolicy.ResolveVisibleCharacterCount(null, 50));
-        Assert.AreEqual(0, MarqueeFollowPolicy.ResolveVisibleCharacterCount(prefixWidths, double.NaN));
+        Assert.AreEqual(0, MarqueeFollowPolicy.ResolveWidthAt(prefixWidths, 8, 0), 0.001);
+        Assert.AreEqual(30, MarqueeFollowPolicy.ResolveWidthAt(prefixWidths, 8, 3), 0.001);
+        // 小数位置在相邻两个前缀之间插值。
+        // A fractional position interpolates between neighbouring prefixes.
+        Assert.AreEqual(25, MarqueeFollowPolicy.ResolveWidthAt(prefixWidths, 8, 2.5), 0.001);
+        Assert.AreEqual(32.5, MarqueeFollowPolicy.ResolveWidthAt(prefixWidths, 8, 3.25), 0.001);
+        // 只测到一半时，越界位置夹到已测范围，不会读到未测的项。
+        // While only half the table is measured an out-of-range position is clamped to the measured range.
+        Assert.AreEqual(40, MarqueeFollowPolicy.ResolveWidthAt(prefixWidths, 4, 99), 0.001);
+        Assert.AreEqual(0, MarqueeFollowPolicy.ResolveWidthAt(null, 8, 3), 0.001);
 
-        Assert.AreEqual(0, MarqueeFollowPolicy.ResolveSungWidth(prefixWidths, 0), 0.001);
-        Assert.AreEqual(30, MarqueeFollowPolicy.ResolveSungWidth(prefixWidths, 3), 0.001);
-        // 小数位置在相邻两个前缀之间插值：擦亮不会在字与字之间跳。
-        // A fractional position interpolates between neighbouring prefixes, so the reveal never jumps between characters.
-        Assert.AreEqual(25, MarqueeFollowPolicy.ResolveSungWidth(prefixWidths, 2.5), 0.001);
-        Assert.AreEqual(32.5, MarqueeFollowPolicy.ResolveSungWidth(prefixWidths, 3.25), 0.001);
-        // 越界索引给出窗口整段宽度，而不是越界异常。
-        // An out-of-range index yields the window's full width instead of throwing.
-        Assert.AreEqual(80, MarqueeFollowPolicy.ResolveSungWidth(prefixWidths, 99), 0.001);
-        Assert.AreEqual(0, MarqueeFollowPolicy.ResolveSungWidth(null, 3), 0.001);
+        Assert.AreEqual(0, MarqueeFollowPolicy.ResolvePositionAtWidth(prefixWidths, 8, 0), 0.001);
+        Assert.AreEqual(3, MarqueeFollowPolicy.ResolvePositionAtWidth(prefixWidths, 8, 30), 0.001);
+        Assert.AreEqual(2.5, MarqueeFollowPolicy.ResolvePositionAtWidth(prefixWidths, 8, 25), 0.001);
+        // 反函数与正函数互为逆运算。
+        // The two directions are inverses of each other.
+        for (var position = 0d; position <= 8; position += 0.125)
+        {
+            var width = MarqueeFollowPolicy.ResolveWidthAt(prefixWidths, 8, position);
+            Assert.AreEqual(position, MarqueeFollowPolicy.ResolvePositionAtWidth(prefixWidths, 8, width), 0.001);
+        }
+
+        // 宽度越界：夹到 [0, 已测字符数]。
+        // Out-of-range widths clamp into [0, measured characters].
+        Assert.AreEqual(8, MarqueeFollowPolicy.ResolvePositionAtWidth(prefixWidths, 8, 500), 0.001);
+        Assert.AreEqual(4, MarqueeFollowPolicy.ResolvePositionAtWidth(prefixWidths, 4, 500), 0.001);
+        Assert.AreEqual(0, MarqueeFollowPolicy.ResolvePositionAtWidth(null, 8, 30), 0.001);
     }
 
     [TestMethod]
@@ -244,8 +335,7 @@ public sealed class MarqueePolicyTests
         // 跟随：起点只向前对齐到元素边界，因此既不拆字也不后退，并且只在起点上限处停下。
         // Following: the start only snaps forward to an element boundary, so it neither splits nor moves backwards, and it stops only at
         // the start limit.
-        const int visible = 3;
-        var limit = MarqueeFollowPolicy.ResolveMaximumStart(content.Length, visible);
+        var limit = content.Length - 1;
         var start = 0;
         for (var step = 0; step < content.Length + 5; step++)
         {

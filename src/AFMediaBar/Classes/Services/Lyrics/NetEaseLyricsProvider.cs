@@ -27,8 +27,11 @@ public sealed class NetEaseLyricsProvider : ILyricsProvider
             return null;
         }
 
-        var result = await NetEaseLyricFetcher.FetchAsync(_api, request.NetEaseSongId, cancellationToken);
-        cancellationToken.ThrowIfCancellationRequested();
-        return NetEaseLyricFetcher.BuildResult(SourceName, result, request);
+        return await NetEaseLyricFetcher.FetchAndBuildAsync(
+            _api,
+            request.NetEaseSongId,
+            SourceName,
+            request,
+            cancellationToken);
     }
 }

@@ -1080,12 +1080,6 @@ namespace AFMediaBar.Components
                 // Show current lyric line in title slot when lyrics are available (advances with snapshot position)
                 UpdateLyricLine(snapshot);
 
-                // 文字内容一确定就重跑一次跑马灯：更长的标题该不该滚动，只由这一段文字与当前可用宽度决定，
-                // 不该等下一次几何或鼠标事件才被判断。
-                // The marquee is re-applied as soon as the text is settled: whether a longer title has to scroll depends only on this
-                // text and the width currently available, and must not wait for the next geometry or mouse event.
-                ApplyMarqueeLayout(Math.Max(0, SongInfoStackPanel.Width));
-
                 // 完整歌曲信息并入整条媒体栏共用的那个提示：媒体文字区不再自持一个提示，
                 // 否则悬停文字时会盖住滚轮提示，而两者恰恰是同一处需要的两条信息。
                 // The full song info joins the single tooltip shared by the whole bar: the text area no longer carries one of its own,
@@ -1131,6 +1125,12 @@ namespace AFMediaBar.Components
                 }
 
                 ApplyLyricPresentation();
+                // 文字内容一确定就重跑一次跑马灯，而且必须在**所有**文字写入之后：更长的标题该不该滚动只由这一段文字与当前可用宽度决定，
+                // 而歌词呈现会把整行原文写进歌词两行、顶掉跑马灯的窗口——那时不同步恢复，屏幕上的歌词就会跳回行首。
+                // The marquee is re-applied once the text is settled, and it has to run after **every** text write: whether a longer title has
+                // to scroll depends only on this text and the width currently available, while the lyric presentation writes the whole line
+                // into both lyric rows and replaces the marquee window, so without an immediate restore the lyrics snap back to the line's head.
+                ApplyMarqueeLayout(Math.Max(0, SongInfoStackPanel.Width));
                 SongArtistContainer.Visibility = !_isSmallTaskbar && !_isVertical && !string.IsNullOrEmpty(_actualArtist)
                     ? Visibility.Visible
                     : Visibility.Collapsed;

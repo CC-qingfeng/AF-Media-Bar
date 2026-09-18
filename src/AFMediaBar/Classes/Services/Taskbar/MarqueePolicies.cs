@@ -177,23 +177,36 @@ public static class MarqueeRotationPolicy
 }
 
 /// <summary>
-/// 跟随式跑马灯：把窗口位置解成"亮区恰好留在可见区内"，唱到哪就滚到哪。
+/// 跟随式跑马灯：按**宽度**把窗口位置解成"亮区停在容器的固定位置"，唱到哪就滚到哪。
 ///
 /// 为什么不用轮转：轮转是循环移位，已唱段在窗口里会落在接缝两侧、变成一段跨界的弧，而裁剪矩形只能表达一段连续区间，
 /// 于是要么擦亮错位要么漏掉一段。跟随式只向后丢弃已经唱过的字、永不回头，已唱段因此在窗口里**始终是前缀**，
 /// 擦亮就是"从字形起点裁到已唱位置"。
-/// Follow marquee: the window position is solved so the reveal stays inside the visible region, which makes the line scroll to wherever
-/// the singing has got to.
+///
+/// 为什么位置要按宽度求解：按"窗口内还能放下几个字"求解会形成反馈——能放下的字数取决于窗口位置，而窗口位置又取决于这个字数，
+/// 两者互相追赶，混排内容（窄的拉丁字与宽的汉字）上表现为窗口来回跳（歌词越长、宽度差异越多越明显）。
+/// 按宽度求解时位置只取决于"亮区已经有多宽"，因此**对亮区单调**：唱到哪就滚到哪，永远不会回退。
+/// Follow marquee: solves the window position by **width** so the reveal rests at a fixed spot in the container, which makes the line
+/// scroll to wherever the singing has got to.
 ///
 /// Why not rotation: rotation is a cyclic shift, which turns the sung run into an arc that crosses the seam, and a clip rectangle can
 /// only express one contiguous span — the reveal would either sit on the wrong characters or drop a piece. The follow mode only ever
 /// discards characters that are already sung and never wraps, so the sung run stays a **prefix** of the window and the reveal is simply
 /// "clip from the first glyph to the sung position".
+///
+/// Why the position is solved by width: solving it from "how many characters still fit" is a feedback loop — that count depends on the
+/// window position and the window position depends on the count, so the two chase each other and the window jumps back and forth on
+/// mixed content, which is worse the longer the line and the more its glyph widths differ. Solving by width depends only on how wide the
+/// sung run already is, so the position is **monotone in the reveal**: the line scrolls to wherever the singing has got to and never
+/// moves backwards.
 /// </summary>
 public static class MarqueeFollowPolicy
 {
-    /// <summary>擦亮边界距右边界保留的比例：边界进入这个范围内才继续左移，读者因此始终能看到接下来要唱的字。 / Share of the visible width kept clear at the right edge; the window only shifts once the reveal enters it, so the upcoming characters stay visible.</summary>
+    /// <summary>擦亮边界右侧保留的比例：亮区因此总是停在容器的这个位置，接下来要唱的字一直在右边留出可见宽度。 / Share of the visible width kept clear at the right edge, so the reveal always rests at that position and the upcoming characters stay visible.</summary>
     public const double FollowMarginRatio = 0.2;
+
+    /// <summary>亮区停在容器的哪个位置，等于 1 − <see cref="FollowMarginRatio"/>。/ Where the reveal rests inside the container, which is one minus <see cref="FollowMarginRatio"/>.</summary>
+    public const double RevealEdgeRatio = 1 - FollowMarginRatio;
 
     /// <summary>构造跟随窗口：从 start 个字符之后开始的原文后缀。start 为 0 时就是原文本身。 / Builds the follow window: the content's tail from the given start offset. At zero it is the content itself.</summary>
     /// <param name="content">原文。/ Original content.</param>
@@ -230,91 +243,87 @@ public static class MarqueeFollowPolicy
             : Math.Max(0, MarqueeTextBoundary.SnapBackward(content, current));
     }
 
-    /// <summary>窗口起点允许到达的最大值：窗口至少要留下最后一个可见宽度。 / Largest start the window may reach: the last visible width always stays.</summary>
-    /// <param name="contentLength">原文字符数。/ Content length in characters.</param>
-    /// <param name="visibleCharacters">当前完整可见的字符数。/ Characters currently fully visible.</param>
-    public static int ResolveMaximumStart(int contentLength, int visibleCharacters) =>
-        Math.Max(0, contentLength - Math.Max(1, visibleCharacters));
-
-    /// <summary>擦亮边界需要保留的字符数。/ Characters kept clear ahead of the reveal edge.</summary>
-    /// <param name="visibleCharacters">当前完整可见的字符数。/ Characters currently fully visible.</param>
-    public static int ResolveFollowMargin(int visibleCharacters) =>
-        Math.Max(1, (int)Math.Ceiling(Math.Max(0, visibleCharacters) * FollowMarginRatio));
-
     /// <summary>
-    /// 求解窗口位置：让已唱段落在窗口可见区内，并让亮区与右边界保持一个边距，即"唱到哪滚到哪"。
-    ///
-    /// 关键性质是**已唱段永远不越出可见区**（`sungPosition - position &lt;= visibleCharacters`）：位置按帧求解而不是每步挪一个字，
-    /// 唱得快时窗口就跟得快，因此不会出现"滚动慢于亮区、高亮跑出显示范围"。整行唱完时位置停在上限，尾巴留在可见区内。
-    /// Solves the window position: it keeps the sung run inside the visible region with one margin left clear at the right edge, which is
-    /// what makes the line scroll to wherever the singing has got to.
-    ///
-    /// The property that matters is that the sung run **never leaves the visible region**
-    /// (`sungPosition - position &lt;= visibleCharacters`). The position is solved every frame instead of shifting one character per step, so
-    /// a fast line scrolls just as fast and the reveal can no longer run outside the window. Once the whole line is sung the position
-    /// rests at its limit and the tail stays visible.
+    /// 已唱段需要从原文里丢弃多少宽度：亮区因此停在容器的 <see cref="RevealEdgeRatio"/> 处，唱到哪就滚到哪；
+    /// 亮区还没到那个位置时给出 0（窗口停在原文开头）。
+    /// How much width has to be dropped from the content's head so that the reveal rests at <see cref="RevealEdgeRatio"/> of the
+    /// container; zero while the reveal has not reached that position yet, which leaves the window at the content's head.
     /// </summary>
-    /// <param name="sungPosition">原文中已经唱到的位置（字符，可含小数）。/ Sung position in the content, in characters and possibly fractional.</param>
-    /// <param name="contentLength">原文字符数。/ Content length in characters.</param>
-    /// <param name="visibleCharacters">当前完整可见的字符数。/ Characters currently fully visible.</param>
-    public static double ResolvePosition(double sungPosition, int contentLength, int visibleCharacters)
+    /// <param name="sungWidth">已唱段的宽度（DIP）。/ Width of the sung run in DIP.</param>
+    /// <param name="availableWidth">容器宽度（DIP）。/ Container width in DIP.</param>
+    public static double ResolveDroppedWidth(double sungWidth, double availableWidth)
     {
-        if (contentLength <= 0 || !double.IsFinite(sungPosition))
+        if (!double.IsFinite(sungWidth) || !double.IsFinite(availableWidth) || availableWidth <= 0)
             return 0;
 
-        var visible = Math.Max(1, visibleCharacters);
-        var margin = ResolveFollowMargin(visible);
-        var limit = ResolveMaximumStart(contentLength, visible);
-        return Math.Clamp(sungPosition - (visible - margin), 0, limit);
+        return Math.Max(0, sungWidth - RevealEdgeRatio * availableWidth);
     }
 
     /// <summary>
-    /// 在窗口前缀宽度表里找出"完整可见"的字符数：某个字符的前缀宽度不超过可见宽度时它才算完整可见。
-    /// 二分查找，因此可以每步调用一次而不需要缓存。
-    /// Finds how many characters are fully visible in a window prefix-width table: a character counts only while its prefix width stays
-    /// within the visible width. The search is binary so it can run once per step without caching.
+    /// 前缀宽度表里某个（可含小数的）字符位置对应的宽度，在相邻两个前缀之间线性插值；位置越界时夹到已测范围内。
+    /// 插值让"亮区已经有多宽"与窗口位置都连续变化，不会在字与字之间跳。
+    /// Width at a possibly fractional character position in a prefix-width table, interpolated between two neighbouring prefixes and
+    /// clamped into the measured range. The interpolation keeps both the sung width and the window position continuous instead of
+    /// jumping between characters.
     /// </summary>
-    /// <param name="prefixWidths">窗口前缀宽度表，长度是窗口字符数加一，第一项为 0。/ Window prefix widths, one longer than the window, starting at zero.</param>
-    /// <param name="visibleWidth">可见宽度（容器宽度，DIP）。/ Visible width in DIP, which is the container width.</param>
-    public static int ResolveVisibleCharacterCount(double[]? prefixWidths, double visibleWidth)
+    /// <param name="prefixWidths">前缀宽度表，第 i 项是前 i 个字符的宽度。/ Prefix widths, whose i-th entry is the width of the first i characters.</param>
+    /// <param name="measuredCharacters">表中已经测过的字符数（不小于 1）。/ Characters already measured in the table, at least one.</param>
+    /// <param name="position">字符位置（可含小数）。/ Character position, possibly fractional.</param>
+    public static double ResolveWidthAt(double[]? prefixWidths, int measuredCharacters, double position)
     {
-        if (prefixWidths is null || prefixWidths.Length <= 1 || !double.IsFinite(visibleWidth) || visibleWidth <= 0)
+        if (prefixWidths is null || prefixWidths.Length == 0 || !double.IsFinite(position))
             return 0;
 
+        var last = Math.Clamp(measuredCharacters, 0, prefixWidths.Length - 1);
+        if (last <= 0)
+            return prefixWidths[0];
+
+        return Interpolate(prefixWidths, last, Math.Clamp(position, 0, last));
+    }
+
+    /// <summary>
+    /// <see cref="ResolveWidthAt"/> 的反函数：给出某段宽度对应的字符位置，同样在相邻两个前缀之间插值。
+    /// 表按宽度单调递增，因此用二分查找；宽度越界时夹到 [0, 已测字符数]。
+    /// Inverse of <see cref="ResolveWidthAt"/>: the character position whose prefix width is the given width, likewise interpolated
+    /// between two neighbouring prefixes. The table grows monotonically with width, so a binary search finds it; out-of-range widths are
+    /// clamped into [0, measured characters].
+    /// </summary>
+    /// <param name="prefixWidths">前缀宽度表。/ Prefix-width table.</param>
+    /// <param name="measuredCharacters">表中已经测过的字符数（不小于 1）。/ Characters already measured in the table, at least one.</param>
+    /// <param name="width">目标宽度（DIP）。/ Target width in DIP.</param>
+    public static double ResolvePositionAtWidth(double[]? prefixWidths, int measuredCharacters, double width)
+    {
+        if (prefixWidths is null || prefixWidths.Length == 0 || !double.IsFinite(width))
+            return 0;
+
+        var last = Math.Clamp(measuredCharacters, 0, prefixWidths.Length - 1);
+        if (last <= 0 || width <= prefixWidths[0])
+            return 0;
+
+        if (width >= prefixWidths[last])
+            return last;
+
         var low = 0;
-        var high = prefixWidths.Length - 1;
+        var high = last;
         while (low < high)
         {
             var middle = (low + high + 1) / 2;
-            if (prefixWidths[middle] <= visibleWidth)
+            if (prefixWidths[middle] <= width)
                 low = middle;
             else
                 high = middle - 1;
         }
 
-        return low;
+        var next = Math.Min(low + 1, last);
+        return next == low ? low : InterpolatePosition(prefixWidths, low, next, width);
     }
+
+    /// <summary>呈现用的已唱宽度每帧最多追赶多少（相对字号的倍数）：一次上报带来的台阶因此被摊到几帧里，而不是整块文字跳一下。 / How much the presented sung width may catch up per frame, as a multiple of the font size, so a step from one position report is spread over a few frames instead of jumping the whole line.</summary>
+    public const double MaximumRevealAdvanceEm = 1.6;
 
     /// <summary>
-    /// 窗口内已唱段的裁剪宽度，按字符位置在相邻两个前缀之间线性插值：擦亮边界因此与文字一样连续移动，
-    /// 不会在字与字之间跳。索引越界时给出窗口的整段宽度。
-    /// Clip width of the sung run inside the window, interpolated between two neighbouring prefixes by character position, so the reveal
-    /// edge moves as continuously as the text instead of jumping between characters. An out-of-range index yields the window's full width.
+    /// 按擦亮进度换算原文中已唱到的位置（字符，可含小数）。/ Converts the reveal progress into the sung position in the content, in possibly fractional characters.
     /// </summary>
-    /// <param name="prefixWidths">窗口前缀宽度表。/ Window prefix-width table.</param>
-    /// <param name="sungCharacters">窗口内已唱字符位置（可含小数）。/ Sung position inside the window, possibly fractional.</param>
-    public static double ResolveSungWidth(double[]? prefixWidths, double sungCharacters)
-    {
-        if (prefixWidths is null || prefixWidths.Length == 0 || !double.IsFinite(sungCharacters))
-            return 0;
-
-        var clamped = Math.Clamp(sungCharacters, 0, prefixWidths.Length - 1);
-        var index = (int)Math.Floor(clamped);
-        var next = Math.Min(index + 1, prefixWidths.Length - 1);
-        return prefixWidths[index] + (clamped - index) * (prefixWidths[next] - prefixWidths[index]);
-    }
-
-    /// <summary>按擦亮进度换算原文中已唱到的位置（字符，可含小数）。/ Converts the reveal progress into the sung position in the content, in possibly fractional characters.</summary>
     /// <param name="progress">擦亮进度（0–1）。/ Reveal progress, 0–1.</param>
     /// <param name="contentLength">原文字符数。/ Content length in characters.</param>
     public static double ResolveSungPosition(double progress, int contentLength)
@@ -323,5 +332,47 @@ public static class MarqueeFollowPolicy
             return 0;
 
         return Math.Clamp(progress, 0, 1) * contentLength;
+    }
+
+    /// <summary>
+    /// 呈现层使用的已唱宽度：**只前进**，而且每帧最多追赶 <paramref name="maximumAdvance"/>。
+    ///
+    /// 播放位置来自播放器上报的时间轴（`MediaSnapshot.Position` + `LastUpdatedTime`），很多播放器按整秒上报，
+    /// 于是我们外推出来的位置会每秒被"修正"回退一次；如果窗口位置直接跟着它走，整块文字就会跟着往回跳。
+    /// 呈现层因此只承认前进：小的回退等播放位置自己追上，真正的跳转（切换行、跳转播放）由行内容变化触发的重启处理。
+    /// The presented sung width: it only ever moves forward and catches up by at most <paramref name="maximumAdvance"/> per frame.
+    ///
+    /// The playback position comes from the player's reported timeline (`MediaSnapshot.Position` plus `LastUpdatedTime`), and many players
+    /// report whole seconds, so the position we extrapolate is corrected backwards once per second. Driving the window straight from it
+    /// would drag the whole line backwards. The presentation therefore only accepts forward motion: a small regression simply waits for the
+    /// playback position to catch up, and a real jump is handled by the restart that a line change triggers.
+    /// </summary>
+    /// <param name="previousWidth">上一帧呈现的宽度（DIP）。/ Width presented last frame, in DIP.</param>
+    /// <param name="targetWidth">本次读到的宽度（DIP）。/ Width read this time, in DIP.</param>
+    /// <param name="maximumAdvance">本帧允许的最大追赶量（DIP）。/ Largest catch-up allowed this frame, in DIP.</param>
+    public static double ResolveRevealWidth(double previousWidth, double targetWidth, double maximumAdvance)
+    {
+        var previous = double.IsFinite(previousWidth) && previousWidth > 0 ? previousWidth : 0;
+        if (!double.IsFinite(targetWidth) || targetWidth <= previous)
+            return previous;
+
+        var advance = targetWidth - previous;
+        var cap = double.IsFinite(maximumAdvance) && maximumAdvance > 0 ? maximumAdvance : advance;
+        return previous + Math.Min(advance, cap);
+    }
+
+    private static double Interpolate(double[] prefixWidths, int last, double position)
+    {
+        var index = (int)Math.Floor(position);
+        var next = Math.Min(index + 1, last);
+        return next == index
+            ? prefixWidths[index]
+            : prefixWidths[index] + (position - index) * (prefixWidths[next] - prefixWidths[index]);
+    }
+
+    private static double InterpolatePosition(double[] prefixWidths, int low, int next, double width)
+    {
+        var span = prefixWidths[next] - prefixWidths[low];
+        return span <= 0 ? low : low + (width - prefixWidths[low]) / span;
     }
 }

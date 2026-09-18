@@ -147,6 +147,24 @@ public sealed class LyricsTextParserTests
     }
 
     [TestMethod]
+    public void MixedCreditJsonPayloadKeepsLyricsAndDropsCredits()
+    {
+        // 网易云新版端点的逐字载荷：署名 JSON 行 + 逐字行，解析后只应剩下真正的歌词行。
+        // NetEase's new word-level payload mixes credit JSON lines with syllable lines; only lyric lines may survive parsing.
+        var document = LyricsTextParser.Parse(
+            "{\"t\":0,\"c\":[{\"tx\":\"作词: \"},{\"tx\":\"Taylor Swift\"}]}\n" +
+            "{\"t\":30,\"c\":[{\"tx\":\"作曲: \"},{\"tx\":\"Taylor Swift\"}]}\n" +
+            "[120,2910](120,120,0)I (240,420,0)promise (660,150,0)that\n" +
+            "[3450,2520](3450,120,0)I (3570,210,0)know (3780,210,0)that",
+            request: Request());
+
+        Assert.AreEqual(2, document.Lines.Count);
+        Assert.AreEqual("I promise that", document.Lines[0].Text);
+        Assert.AreEqual(3, document.Lines[0].Words.Count);
+        Assert.IsTrue(document.Lines.All(line => !line.Text.Contains("作词") && !line.Text.Contains("作曲")));
+    }
+
+    [TestMethod]
     public void EveryLineFlaggedAsInfoKeepsTheLyrics()
     {
         // 安全阀：整首都像信息行时不过滤，避免启发式误判把歌词清空。

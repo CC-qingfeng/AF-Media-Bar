@@ -37,6 +37,27 @@ public sealed class LyricsFormatDetectorTests
     }
 
     [TestMethod]
+    public void MixedPayloadWithCreditJsonLinesIsStillRecognized()
+    {
+        // 网易云新版端点实测载荷：署名 JSON 行在前，逐字行在后。识别器不得因为开头是 { 就整首放弃。
+        // The real payload from NetEase's new endpoint: credit JSON lines first, syllable lines after them. Detection must not
+        // give up on the whole song merely because the first character is a brace.
+        const string mixed =
+            "{\"t\":0,\"c\":[{\"tx\":\"作词: \"},{\"tx\":\"Taylor Swift\"}]}\n" +
+            "[120,2910](120,120,0)I (240,420,0)promise";
+
+        Assert.AreEqual(LyricsRawTypes.Yrc, LyricsFormatDetector.Detect(mixed));
+    }
+
+    [TestMethod]
+    public void XmlThatIsNotAWrapperStillFallsThroughToLineScanning()
+    {
+        Assert.AreEqual(
+            LyricsRawTypes.Lrc,
+            LyricsFormatDetector.Detect("<not-a-wrapper>\n[00:01.00]第一句歌词"));
+    }
+
+    [TestMethod]
     public void QrcFullXmlIsRecognizedAndUnwrapped()
     {
         const string xml =
