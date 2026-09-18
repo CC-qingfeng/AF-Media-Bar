@@ -41,6 +41,10 @@ internal static class StringsEn
         table.Add("About.Row.Install.Title", "Install the update");
         table.Add("About.Row.OpenFolder.Description", "Opens the folder holding settings.json, where it can be backed up or replaced directly");
         table.Add("About.Row.OpenFolder.Title", "Open the settings folder");
+        table.Add("About.Row.LogFolder.Description", "The log is one file, logs\\app.log, holding the newest 1000 lines; send that file when something breaks");
+        table.Add("About.Row.LogFolder.Title", "Log file");
+        table.Add("Common.Group.Diagnostics", "Diagnostics and logs");
+        table.Add("Search.AppAndAbout.Diagnostics.Description", "Open the log folder (logs\\app.log, the file to send when something breaks)");
         table.Add("About.Row.Portable.Badge", "Portable");
         table.Add("About.Row.Portable.Description", "This is not an installed build, so files cannot be replaced automatically; get the installer from the download page or replace the program files by hand");
         table.Add("About.Row.Portable.Title", "Automatic updates are unavailable");

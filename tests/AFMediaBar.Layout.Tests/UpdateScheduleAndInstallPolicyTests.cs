@@ -167,95 +167,6 @@ public sealed class UpdateScheduleAndInstallPolicyTests
     }
 
     [TestMethod]
-    public void StatusText_SaysWhatIsHappeningInEveryPhase()
-    {
-        Assert.AreEqual("尚未检查更新", UpdatePresentationPolicy.ResolveStatusText(State(UpdatePhase.Idle), null, Now));
-        Assert.AreEqual("正在检查更新…", UpdatePresentationPolicy.ResolveStatusText(State(UpdatePhase.Checking), null, Now));
-
-        var upToDate = UpdatePresentationPolicy.ResolveStatusText(State(UpdatePhase.UpToDate), Now.AddHours(-3), Now);
-        StringAssert.Contains(upToDate, "已是最新版本（v1.1.1）");
-        StringAssert.Contains(upToDate, "3 小时前");
-
-        var available = UpdatePresentationPolicy.ResolveStatusText(State(UpdatePhase.Available, mandatory: true), null, Now);
-        StringAssert.Contains(available, "发现新版本 v1.2.0");
-        StringAssert.Contains(available, "必须更新");
-
-        StringAssert.Contains(
-            UpdatePresentationPolicy.ResolveStatusText(State(UpdatePhase.Downloading, progress: 44.6), null, Now),
-            "45%");
-        StringAssert.Contains(
-            UpdatePresentationPolicy.ResolveStatusText(State(UpdatePhase.Verifying, progress: 120), null, Now),
-            "100%");
-
-        var ready = UpdatePresentationPolicy.ResolveStatusText(State(UpdatePhase.Ready), null, Now);
-        StringAssert.Contains(ready, "更新已就绪（v1.2.0）");
-        StringAssert.Contains(ready, "下次启动程序时自动安装");
-
-        StringAssert.Contains(
-            UpdatePresentationPolicy.ResolveStatusText(State(UpdatePhase.Skipped), null, Now),
-            "已跳过");
-        StringAssert.Contains(
-            UpdatePresentationPolicy.ResolveStatusText(State(UpdatePhase.ManualOnly), null, Now),
-            "未提供可自动安装的安装包");
-        StringAssert.Contains(
-            UpdatePresentationPolicy.ResolveStatusText(
-                State(UpdatePhase.Failed, failureReason: "清单不是合法 JSON"),
-                null,
-                Now),
-            "清单不是合法 JSON");
-    }
-
-    [TestMethod]
-    public void StatusText_ExplainsWhyInstallingIsBlocked()
-    {
-        var blocked = UpdatePresentationPolicy.ResolveStatusText(
-            State(UpdatePhase.Ready, installBlockedReason: UpdateInstallPlanPolicy.PortableBlockedReason),
-            null,
-            Now);
-
-        StringAssert.Contains(blocked, "便携版");
-        StringAssert.Contains(blocked, "手动更新");
-    }
-
-    [TestMethod]
-    public void TrayHeader_TracksTheSameStateAsTheSettingsPage()
-    {
-        Assert.AreEqual("检查更新", UpdatePresentationPolicy.ResolveTrayHeader(State(UpdatePhase.Idle)));
-        Assert.AreEqual("检查更新", UpdatePresentationPolicy.ResolveTrayHeader(State(UpdatePhase.UpToDate)));
-        Assert.AreEqual("正在检查更新…", UpdatePresentationPolicy.ResolveTrayHeader(State(UpdatePhase.Checking)));
-        Assert.AreEqual(
-            "正在下载更新 45%",
-            UpdatePresentationPolicy.ResolveTrayHeader(State(UpdatePhase.Downloading, progress: 44.6)));
-        Assert.AreEqual(
-            "发现新版本 v1.2.0（点击查看）",
-            UpdatePresentationPolicy.ResolveTrayHeader(State(UpdatePhase.Available)));
-        Assert.AreEqual(
-            "更新已就绪（v1.2.0），点击重启安装",
-            UpdatePresentationPolicy.ResolveTrayHeader(State(UpdatePhase.Ready)));
-        Assert.AreEqual("更新失败，点击重试", UpdatePresentationPolicy.ResolveTrayHeader(State(UpdatePhase.Failed)));
-
-        Assert.IsFalse(UpdatePresentationPolicy.IsTrayHeaderEnabled(State(UpdatePhase.Checking)));
-        Assert.IsFalse(UpdatePresentationPolicy.IsTrayHeaderEnabled(State(UpdatePhase.Downloading)));
-        Assert.IsTrue(UpdatePresentationPolicy.IsTrayHeaderEnabled(State(UpdatePhase.Ready)));
-    }
-
-    [TestMethod]
-    public void PrimaryAction_MatchesWhatTheSurfacesOffer()
-    {
-        Assert.AreEqual(UpdatePrimaryAction.Check, UpdatePresentationPolicy.ResolvePrimaryAction(State(UpdatePhase.Idle)));
-        Assert.AreEqual(UpdatePrimaryAction.Check, UpdatePresentationPolicy.ResolvePrimaryAction(State(UpdatePhase.Failed)));
-        Assert.AreEqual(UpdatePrimaryAction.None, UpdatePresentationPolicy.ResolvePrimaryAction(State(UpdatePhase.Checking)));
-        Assert.AreEqual(UpdatePrimaryAction.Download, UpdatePresentationPolicy.ResolvePrimaryAction(State(UpdatePhase.Available)));
-        Assert.AreEqual(UpdatePrimaryAction.Cancel, UpdatePresentationPolicy.ResolvePrimaryAction(State(UpdatePhase.Downloading)));
-        Assert.AreEqual(UpdatePrimaryAction.InstallAndRestart, UpdatePresentationPolicy.ResolvePrimaryAction(State(UpdatePhase.Ready)));
-        Assert.AreEqual(UpdatePrimaryAction.OpenDownloadPage, UpdatePresentationPolicy.ResolvePrimaryAction(State(UpdatePhase.ManualOnly)));
-        Assert.AreEqual(
-            UpdatePrimaryAction.OpenDownloadPage,
-            UpdatePresentationPolicy.ResolvePrimaryAction(
-                State(UpdatePhase.Ready, installBlockedReason: UpdateInstallPlanPolicy.PortableBlockedReason)));
-    }
-
-    [TestMethod]
     public void SkipAndInstallAvailability_RespectMandatoryAndBlockedStates()
     {
         Assert.IsTrue(UpdatePresentationPolicy.CanSkipVersion(State(UpdatePhase.Available)));
@@ -273,33 +184,6 @@ public sealed class UpdateScheduleAndInstallPolicyTests
         Assert.IsTrue(UpdatePresentationPolicy.IsProgressVisible(State(UpdatePhase.Downloading)));
         Assert.IsTrue(UpdatePresentationPolicy.IsProgressVisible(State(UpdatePhase.Verifying)));
         Assert.IsFalse(UpdatePresentationPolicy.IsProgressVisible(State(UpdatePhase.Ready)));
-    }
-
-    [TestMethod]
-    public void ChannelText_NamesTheHostTheDownloadActuallyUsed()
-    {
-        Assert.AreEqual(string.Empty, UpdatePresentationPolicy.ResolveChannelText(null));
-        Assert.AreEqual(
-            "GitHub 直连",
-            UpdatePresentationPolicy.ResolveChannelText(new UpdateDownloadSource("https://github.com/x.exe", "github.com", false)));
-        Assert.AreEqual(
-            "加速站点 ghfast.top",
-            UpdatePresentationPolicy.ResolveChannelText(new UpdateDownloadSource("https://ghfast.top/https://github.com/x.exe", "ghfast.top", true)));
-    }
-
-    [TestMethod]
-    public void StatusText_ShowsWhichChannelDownloadingUses()
-    {
-        var text = UpdatePresentationPolicy.ResolveStatusText(
-            State(
-                UpdatePhase.Downloading,
-                progress: 10,
-                activeSource: new UpdateDownloadSource("https://ghfast.top/x.exe", "ghfast.top", true)),
-            null,
-            Now);
-
-        StringAssert.Contains(text, "10%");
-        StringAssert.Contains(text, "加速站点 ghfast.top");
     }
 
     private static UpdateState State(

@@ -41,6 +41,10 @@ internal static class StringsZhHans
         table.Add("About.Row.Install.Title", "安装更新");
         table.Add("About.Row.OpenFolder.Description", "打开 settings.json 所在文件夹，可直接备份或替换");
         table.Add("About.Row.OpenFolder.Title", "打开设置文件夹");
+        table.Add("About.Row.LogFolder.Description", "日志是 logs\\app.log 一个文件，只保留最近 1000 条；出现错误时请把这个文件发出来");
+        table.Add("About.Row.LogFolder.Title", "日志文件");
+        table.Add("Common.Group.Diagnostics", "诊断与日志");
+        table.Add("Search.AppAndAbout.Diagnostics.Description", "打开日志文件夹（logs\\app.log，出现错误时发这个文件）");
         table.Add("About.Row.Portable.Badge", "便携版");
         table.Add("About.Row.Portable.Description", "当前不是安装版本，无法自动替换文件；请从下载页获取安装包或手动替换程序文件");
         table.Add("About.Row.Portable.Title", "自动更新不可用");

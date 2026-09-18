@@ -12,7 +12,16 @@ namespace AFMediaBar.Classes.Services;
 /// <summary>负责用户设置 JSON 的加载、恢复、原子保存和防抖。 / Owns loading, recovery, atomic saving and debouncing of user settings JSON.</summary>
 public sealed class SettingsPersistenceService : IDisposable
 {
-    public const int CurrentSchemaVersion = 15;
+    /// <summary>
+    /// 当前设置文件 schema。**只在"旧文件必须换一种行为"时递增**（改字段含义、删除并替换字段、改默认值语义），
+    /// 纯新增字段不升版本：新字段在声明处带默认值，旧文件缺字段即取该默认值，`Normalize()` 再保证取值合法。
+    /// 迁移在加载时按需执行（`ReadEnvelope` 之后按 `SchemaVersion` 走迁移段），因此一次升级不会让用户在任何时候"手动迁移"。
+    /// Current settings schema. It **only moves when an older file has to behave differently** — a field whose meaning changed, a field removed
+    /// with a replacement, a default whose semantics changed. A purely additive field does not bump it: the field declares its default, an older
+    /// file that lacks it reads that default, and `Normalize()` keeps the value legal. Migration runs lazily while loading (the migration blocks
+    /// after `ReadEnvelope` key off `SchemaVersion`), so nothing ever asks the user to migrate by hand.
+    /// </summary>
+    public const int CurrentSchemaVersion = 14;
     private readonly string _directoryPath;
     private readonly string _settingsPath;
     private readonly string _backupPath;
@@ -100,11 +109,13 @@ public sealed class SettingsPersistenceService : IDisposable
         }
         catch (Exception exception)
         {
+            AppLogService.Current?.Warn("Settings", $"写入我的默认设置失败 / writing user defaults failed: {exception.Message}");
             Debug.WriteLine($"[Settings] Could not write user defaults: {exception.Message}");
             return exception.Message;
         }
 
         SettingsManager.SetUserDefaults(snapshot);
+        AppLogService.Current?.Info("Settings", "已保存「我的默认设置」/ user defaults saved");
         return null;
     }
 
@@ -204,6 +215,10 @@ public sealed class SettingsPersistenceService : IDisposable
         }
 
         SettingsManager.Replace((loaded ?? new AppSettings()).Normalize());
+        AppLogService.Current?.Info(
+            "Settings",
+            $"已加载设置 / settings loaded: schema {_loadedSchemaVersion?.ToString() ?? "none"} → {CurrentSchemaVersion}, " +
+            $"file={(File.Exists(_settingsPath) ? _settingsPath : "<none>")}");
         if (!File.Exists(_settingsPath) || loaded is null || _loadedSchemaVersion < CurrentSchemaVersion)
             SaveCore(SettingsManager.Current);
     }
@@ -395,18 +410,13 @@ public sealed class SettingsPersistenceService : IDisposable
         }
         if (envelope.SchemaVersion <= 14)
         {
-            // Schema 15 给频谱补上内容区尺寸（横轴尺寸），并让第二行歌词的来源顺序可调。旧文件里没有这两个字段，
-            // 反序列化会保留声明处的默认值；这里仍然显式赋值，因为"频谱更高一点"和"第二行默认按翻译优先"都是产品决定，
-            // 而不是"缺字段恰好等于默认值"。
-            // Schema 15 adds the spectrum's content-area size and makes the second lyric line's source order adjustable. Older files have
-            // neither field and deserialization would keep the declared defaults; the assignment is explicit anyway, because "the spectrum is
-            // a little taller" and "the second line prefers the translation" are product decisions rather than the coincidence that a missing
-            // field equals a default.
-            result.SpectrumComponent = result.SpectrumComponent with
-            {
-                ContentHeightDip = SpectrumComponentSettings.DefaultContentHeightDip
-            };
-            result.LyricsSecondaryLine = LyricsSecondaryLineSettings.Default;
+            // Schema 15 起不再为"新增字段"加迁移段：新字段都在声明处给了默认值，旧文件缺字段时反序列化保留该默认值，
+            // 而 `Normalize()` 会把它归一化到合法区间，因此不需要额外的迁移代码。只有"旧文件必须换一种行为"的改动
+            // （改字段含义、删除字段并替换、改默认值语义）才升版本并在这里写迁移。
+            // From schema 15 on, plain new fields no longer get a migration block: every new field declares its default, an older file that
+            // lacks it deserializes to that default, and `Normalize()` clamps it into range, so no migration code is needed. Only a change
+            // that makes an older file behave differently — a field whose meaning changed, a removed field with a replacement, a default whose
+            // semantics changed — bumps the version and gets a block here.
         }
         return result.Normalize();
     }
@@ -430,6 +440,7 @@ public sealed class SettingsPersistenceService : IDisposable
         }
         catch (Exception exception)
         {
+            AppLogService.Current?.Error("Settings", "保存设置失败，内存中的设置保留 / saving settings failed, in-memory settings kept", exception);
             Debug.WriteLine($"[Settings] Save failed; keeping in-memory settings: {exception}");
         }
     }
@@ -440,6 +451,7 @@ public sealed class SettingsPersistenceService : IDisposable
         {
             var target = $"{path}.{reason}-{DateTime.Now:yyyyMMddHHmmssfff}";
             File.Move(path, target, true);
+            AppLogService.Current?.Warn("Settings", $"设置文件不可用，已隔离 / settings file quarantined ({reason}): {target}");
         }
         catch (Exception exception) { Debug.WriteLine($"[Settings] Could not quarantine {path}: {exception.Message}"); }
     }

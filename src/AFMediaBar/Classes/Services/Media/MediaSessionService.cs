@@ -35,6 +35,15 @@ public sealed class MediaSessionService : IDisposable
     private MediaSnapshot _lastSnapshot = MediaSnapshot.Disconnected;
     private bool _isDisposed;
 
+    /// <summary>最近一次写进日志的快照指纹；相同则不再重复记录（时间戳每次轮询都变，否则会刷屏）。/ Signature of the last logged snapshot; an identical one is not logged again, since the timestamp changes on every poll.</summary>
+    private string? _loggedSnapshotSignature;
+
+    /// <summary>最近一次写进日志的播放位置（秒），用于播放中每秒最多记一条进度。/ Playback position of the last logged line, in seconds, used to write at most one progress line per second while playing.</summary>
+    private double _loggedPositionSeconds;
+
+    /// <summary>播放中记录进度所需的最小位置变化（秒）。/ Smallest position change, in seconds, that earns a progress line while playing.</summary>
+    private const double PositionLogStepSeconds = 1;
+
     /// <summary>最新的媒体快照。 / Latest published media snapshot.</summary>
     public MediaSnapshot? CurrentSnapshot { get; private set; }
 
@@ -528,8 +537,70 @@ public sealed class MediaSessionService : IDisposable
 
             _lastSnapshot = snapshot;
             CurrentSnapshot = snapshot;
+            LogSnapshot(snapshot);
             SnapshotChanged?.Invoke(this, snapshot);
         }
+    }
+
+    /// <summary>
+    /// 快照的"有意义变化"指纹：不含时间戳与播放位置。
+    ///
+    /// 播放器每次轮询都会刷新时间轴时间戳（`TimelineUpdatedAt`），因此暂停时快照也会每 240 毫秒重新发布一次；
+    /// 若按发布记录日志，文件与调试输出会被同一行"刷屏"，反而看不清真正发生了什么。轨道、播放状态、控制能力、
+    /// 时长、循环、倍速与歌词来源变化才记一行；播放中另外按每秒最多一行记录进度（只在调试输出里）。
+    /// Fingerprint of a snapshot's meaningful change, without the timestamp or the playback position.
+    ///
+    /// A player refreshes the timeline timestamp (`TimelineUpdatedAt`) on every poll, so even a paused track republishes a snapshot every
+    /// 240 ms; logging per publication would flood the file and the debug output with the same line and hide what actually happened. Only a
+    /// change of track, playback state, control availability, duration, repeat mode, playback rate, or lyric source gets a line, and while
+    /// playing at most one progress line per second, which goes to the debug output only.
+    /// </summary>
+    /// <param name="snapshot">快照。/ The snapshot.</param>
+    private static string BuildLogSignature(MediaSnapshot snapshot) =>
+        $"{snapshot.SourceId}\u001f{snapshot.SourceName}\u001f{snapshot.Title}\u001f{snapshot.Artist}" +
+        $"\u001f{snapshot.IsConnected}\u001f{snapshot.IsPlaying}\u001f{snapshot.Duration:0}" +
+        $"\u001f{snapshot.CanSeek}\u001f{snapshot.CanSkipPrevious}\u001f{snapshot.CanSkipNext}" +
+        $"\u001f{snapshot.RepeatMode}\u001f{snapshot.PlaybackRate:0.##}\u001f{snapshot.Lyrics?.Source}";
+
+    /// <summary>按上面的规则记录一次快照（真正变化才写，播放中每秒最多一条进度）。/ Logs a snapshot by the rule above: only a real change is written, plus at most one progress line per second while playing.</summary>
+    /// <param name="snapshot">快照。/ The snapshot.</param>
+    private void LogSnapshot(MediaSnapshot snapshot)
+    {
+        var log = AppLogService.Current;
+        if (log is null)
+        {
+            return;
+        }
+
+        var signature = BuildLogSignature(snapshot);
+        if (!string.Equals(signature, _loggedSnapshotSignature, StringComparison.Ordinal))
+        {
+            _loggedSnapshotSignature = signature;
+            _loggedPositionSeconds = snapshot.Position;
+            log.Info(
+                "Media",
+                $"快照变化 / snapshot changed: {snapshot.SourceName}({snapshot.SourceId}) " +
+                $"\"{snapshot.Title}\" — \"{snapshot.Artist}\" " +
+                $"connected={snapshot.IsConnected} playing={snapshot.IsPlaying} " +
+                $"pos={snapshot.Position:0.0}/{snapshot.Duration:0.0} rate={snapshot.PlaybackRate:0.##} " +
+                $"lyrics={(snapshot.Lyrics is null ? "none" : snapshot.Lyrics.Source)}");
+            log.Verbose(
+                "Media",
+                $"快照细节 / detail: seek={snapshot.CanSeek} prev={snapshot.CanSkipPrevious} next={snapshot.CanSkipNext} " +
+                $"repeat={snapshot.RepeatMode} timelineAt={snapshot.TimelineUpdatedAt:HH:mm:ss.fff}");
+            return;
+        }
+
+        // 播放中按每秒最多一条记录进度：暂停或卡住时位置不动，因此这里什么都不写——那正是"日志一直刷同一行"的来源。
+        // While playing at most one progress line per second; a paused or stalled track never moves the position, so nothing is written here,
+        // which is exactly what used to flood the log with the same line.
+        if (!snapshot.IsPlaying || Math.Abs(snapshot.Position - _loggedPositionSeconds) < PositionLogStepSeconds)
+        {
+            return;
+        }
+
+        _loggedPositionSeconds = snapshot.Position;
+        log.Verbose("Media", $"进度 / position: {snapshot.Position:0.0}/{snapshot.Duration:0.0}");
     }
 
     private static bool IsPlaying(MediaSession session)

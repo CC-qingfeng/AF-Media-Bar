@@ -56,6 +56,10 @@ namespace AFMediaBar
                 // === 应用生命周期宿主服务 Application Lifecycle Host Service ===
                 services.AddHostedService<ApplicationHostService>();
 
+                // 程序日志：其它服务的构造都会经过它（设置加载、媒体切换、音频应用、更新链路、退出）。
+                // The application log: every other service writes into it (settings loads, media switches, audio applies, the update chain, exit).
+                services.AddSingleton(_ => new AppLogService());
+
                 // === 核心服务层 Core Service Layer ===
                 // 主题管理（深浅色主题切换）Theme management (light/dark theme switching)
                 services.AddSingleton<IThemeService, ThemeService>();
@@ -197,6 +201,14 @@ namespace AFMediaBar
         /// </summary>
         private async void OnStartup(object sender, StartupEventArgs e)
         {
+            // 日志最先建立：它之后的每一步（设置读写、语言、宿主、托盘、更新）都往里写，出问题时整份目录即可上报。
+            // The log comes first: everything after it — settings I/O, language, host, tray, updates — writes into it, so a bug report is just
+            // that directory.
+            var log = Services.GetRequiredService<AppLogService>();
+            AppDomain.CurrentDomain.UnhandledException += OnAppDomainUnhandledException;
+            TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
+            log.LogSessionStart();
+
             var settingsPersistenceService = Services.GetRequiredService<SettingsPersistenceService>();
             settingsPersistenceService.Initialize();
 
@@ -470,9 +482,35 @@ namespace AFMediaBar
         /// </summary>
         private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
         {
-            // 可在此处添加日志记录或错误上报逻辑
-            // Add logging or error reporting logic here
-            // For more info see https://docs.microsoft.com/en-us/dotnet/api/system.windows.application.dispatcherunhandledexception?view=windowsdesktop-6.0
+            // 未处理异常是上报的第一现场：先落盘（含堆栈），再交回 WPF 的默认处理，避免"程序崩了但什么都没有留下"。
+            // An unhandled exception is the first thing a report needs: it is written to disk with its stack first, and only then handed back
+            // to WPF's default handling, so a crash never leaves nothing behind.
+            AppLogService.Current?.CaptureUnhandled("Dispatcher", e.Exception);
+            AppLogService.Current?.Flush(TimeSpan.FromSeconds(1));
+        }
+
+        /// <summary>
+        /// 记录后台线程与未观察任务的异常：它们不会走 Dispatcher，但同样会让程序在半坏状态下运行。
+        /// Records background-thread and unobserved-task exceptions: they never reach the dispatcher but still leave the app half broken.
+        /// </summary>
+        /// <param name="sender">事件来源。/ Event source.</param>
+        /// <param name="e">异常参数。/ Exception arguments.</param>
+        private static void OnAppDomainUnhandledException(object sender, UnhandledExceptionEventArgs e)
+        {
+            if (e.ExceptionObject is Exception exception)
+            {
+                AppLogService.Current?.CaptureUnhandled("AppDomain", exception);
+                AppLogService.Current?.Flush(TimeSpan.FromSeconds(1));
+            }
+        }
+
+        /// <summary>记录未被观察的任务异常。/ Records an unobserved task exception.</summary>
+        /// <param name="sender">事件来源。/ Event source.</param>
+        /// <param name="e">异常参数。/ Exception arguments.</param>
+        private static void OnUnobservedTaskException(object? sender, UnobservedTaskExceptionEventArgs e)
+        {
+            AppLogService.Current?.CaptureUnhandled("Task", e.Exception);
+            e.SetObserved();
         }
 
         #endregion

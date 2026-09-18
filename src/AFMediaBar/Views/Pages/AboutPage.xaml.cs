@@ -20,11 +20,13 @@ namespace AFMediaBar.Views.Pages
         public AboutViewModel ViewModel { get; }
 
         private readonly SettingsPersistenceService _persistence;
+        private readonly AppLogService _log;
 
-        public AboutPage(AboutViewModel viewModel, SettingsPersistenceService persistence)
+        public AboutPage(AboutViewModel viewModel, SettingsPersistenceService persistence, AppLogService log)
         {
             ViewModel = viewModel;
             _persistence = persistence;
+            _log = log;
             DataContext = this;
 
             InitializeComponent();
@@ -34,6 +36,9 @@ namespace AFMediaBar.Views.Pages
         private void OnPageLoaded(object sender, RoutedEventArgs e) => SettingsRevealAnimator.Play(sender as Panel);
 
         private void OpenSettingsFolder_Click(object sender, RoutedEventArgs e) => _persistence.OpenSettingsFolder();
+
+        /// <summary>打开日志目录：日志只有一个文件，出问题时用户把这一份发出来即可。/ Opens the log directory; the log is one file and that one file is what the user sends when something breaks.</summary>
+        private void OpenLogFolder_Click(object sender, RoutedEventArgs e) => _log.OpenFolder();
 
         private async void ResetAllButton_Click(object sender, RoutedEventArgs e)
         {

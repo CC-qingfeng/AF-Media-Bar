@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Linq;
 using AFMediaBar.Classes.Abstractions;
 using AFMediaBar.Classes.Models;
 using AFMediaBar.Classes.Settings;
@@ -91,6 +92,10 @@ public sealed class LyricsService
         var providers = LyricsSourcePolicy.ResolveActive(_providers, settings.LyricsSource);
 
         var startedAt = Stopwatch.GetTimestamp();
+        AppLogService.Current?.Info(
+            "Lyrics",
+            $"取词开始 / retrieving: \"{effectiveRequest.Title}\" — \"{effectiveRequest.Artist}\" " +
+            $"sources=[{string.Join(", ", providers.Select(provider => provider.SourceName))}]");
         foreach (var provider in providers)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -98,16 +103,26 @@ public sealed class LyricsService
             var budget = ResolveRemainingBudget(startedAt);
             if (budget <= TimeSpan.Zero)
             {
+                AppLogService.Current?.Warn("Lyrics", "整链预算用尽 / the total budget ran out");
                 return null;
             }
 
             var result = await TryProviderAsync(provider, effectiveRequest, budget, cancellationToken);
             if (result is not null)
             {
+                AppLogService.Current?.Info(
+                    "Lyrics",
+                    $"取词命中 / hit: {result.Source} {result.Document.SourceFormat}/{result.Document.SyncType} " +
+                    $"lines={result.Document.Lines.Count} ({Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds:0} ms)");
                 return result;
             }
+
+            AppLogService.Current?.Verbose("Lyrics", $"来源未命中 / miss: {provider.SourceName}");
         }
 
+        AppLogService.Current?.Info(
+            "Lyrics",
+            $"全部来源未命中 / no source hit ({Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds:0} ms)");
         return null;
     }
 

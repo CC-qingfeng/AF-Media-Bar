@@ -346,13 +346,20 @@ public static class SettingsSearchIndex
         Create(
             SettingsPageKey.AppAndAbout,
             2,
+            "Common.Group.Diagnostics",
+            "Search.AppAndAbout.Diagnostics.Description",
+            language,
+            ["日志", "log", "logs", "诊断", "diagnostics", "报错", "崩溃", "crash", "上报", "报告", "排查", "打开文件夹", "导出"]),
+        Create(
+            SettingsPageKey.AppAndAbout,
+            3,
             "Common.Group.ProjectInfo",
             "Search.AppAndAbout.ProjectInfo.Description",
             language,
             ["版本", "version", "关于", "about", "github", "反馈", "issue", "star"]),
         Create(
             SettingsPageKey.AppAndAbout,
-            3,
+            4,
             "Common.Group.Sponsors",
             "Search.AppAndAbout.Sponsors.Description",
             language,
