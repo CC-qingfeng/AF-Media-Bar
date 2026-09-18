@@ -390,8 +390,9 @@ internal static class StringsZhHant
         table.Add("Lyrics.Row.InfoLines.Title", "過濾署名行");
         table.Add("Lyrics.Row.MatchStrictness.Description", "依曲名搜尋歌詞時要求的符合程度；越嚴格越不容易配到同名的現場版或翻唱");
         table.Add("Lyrics.Row.MatchStrictness.Title", "搜尋符合嚴格度");
-        table.Add("Lyrics.Row.SecondLine.Description", "選擇下一句歌詞、目前句翻譯或目前句音譯；所選內容缺少時依 翻譯 → 音譯 → 下一句 回退");
-        table.Add("Lyrics.Row.SecondLine.Note", "順序：所選內容 → 翻譯 → 音譯 → 下一句，缺少的來源自動略過");
+        table.Add("Lyrics.Row.SecondLine.Description", "第二行顯示目前句翻譯、目前句音譯或下一句歌詞；順序即優先順序，缺少的來源自動略過");
+        table.Add("Lyrics.Row.SecondLine.Note", "順序即優先順序：排在上面的來源優先使用，沒有內容時往下取");
+        table.Add("Lyrics.Row.SecondLine.OrderRow.Description", "上移即提高優先順序");
         table.Add("Lyrics.Row.SecondLine.Title", "第二行內容");
         table.Add("Lyrics.Row.ShowLyrics.Description", "依播放進度同步顯示目前句；關閉後顯示標題與歌手");
         table.Add("Lyrics.Row.ShowLyrics.Title", "顯示即時歌詞");
@@ -404,6 +405,8 @@ internal static class StringsZhHant
         table.Add("Lyrics.Row.UnsungOpacity.Description", "尚未唱到的文字的不透明度；越低對比越明顯（預設 45%）");
         table.Add("Lyrics.Row.UnsungOpacity.Title", "未唱部分不透明度");
         table.Add("Lyrics.SecondLine.NextLine", "下一句歌詞");
+        table.Add("Lyrics.SecondLine.Reset.Description", "把順序恢復為 翻譯 → 音譯 → 下一句");
+        table.Add("Lyrics.SecondLine.Reset.Title", "恢復預設順序");
         table.Add("Lyrics.SecondLine.Romanization", "目前句音譯");
         table.Add("Lyrics.SecondLine.Translation", "目前句翻譯");
         table.Add("Lyrics.Source.Kugou", "酷狗音樂");
@@ -483,7 +486,10 @@ internal static class StringsZhHant
         table.Add("Media.Spectrum.BandCount.Description", "頻譜柱的數量（9–24）；柱寬固定，柱數越多頻譜越寬");
         table.Add("Media.Spectrum.BandCount.Title", "柱數");
         table.Add("Media.Spectrum.BandCount.Value", "{0} 根");
-        table.Add("Media.Spectrum.Parameters.Description", "柱數、更新頻率與靈敏度");
+        table.Add("Media.Spectrum.ContentHeight.Description", "頻譜的高度（14–34 DIP，垂直於工作列方向）；越高柱子越高，頻譜整體不因此變寬");
+        table.Add("Media.Spectrum.ContentHeight.Title", "頻譜高度");
+        table.Add("Media.Spectrum.ContentHeight.Value", "{0:0} DIP");
+        table.Add("Media.Spectrum.Parameters.Description", "柱數、高度、更新頻率與靈敏度");
         table.Add("Media.Spectrum.Parameters.Title", "頻譜參數");
         table.Add("Media.Spectrum.RefreshRate.Description", "頻譜更新頻率（5–30 Hz）");
         table.Add("Media.Spectrum.RefreshRate.Title", "更新頻率");

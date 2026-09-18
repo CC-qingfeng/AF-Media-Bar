@@ -230,7 +230,7 @@ public sealed class LyricsSettingsTests
         // Presentation settings must not refetch, or dragging the opacity slider would send a request per step.
         Assert.IsFalse(LyricsCacheInvalidationPolicy.ShouldClearCache(nameof(AppSettings.LyricsUnsungOpacityPercent), null));
         Assert.IsFalse(LyricsCacheInvalidationPolicy.ShouldClearCache(nameof(AppSettings.LyricsSyllableHighlightEnabled), null));
-        Assert.IsFalse(LyricsCacheInvalidationPolicy.ShouldClearCache(nameof(AppSettings.LyricsSecondaryLineMode), null));
+        Assert.IsFalse(LyricsCacheInvalidationPolicy.ShouldClearCache(nameof(AppSettings.LyricsSecondaryLine), null));
         Assert.IsFalse(LyricsCacheInvalidationPolicy.ShouldClearCache(nameof(AppSettings.LyricsTextAlignment), null));
         Assert.IsFalse(LyricsCacheInvalidationPolicy.ShouldClearCache(null, SettingsResetScope.Appearance));
     }

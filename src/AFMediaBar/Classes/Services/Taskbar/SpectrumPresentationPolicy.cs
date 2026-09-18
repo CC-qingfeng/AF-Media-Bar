@@ -8,9 +8,9 @@ namespace AFMediaBar.Classes.Services;
 public readonly record struct SpectrumPoint(double X, double Y);
 
 /// <summary>
-/// 任务栏频谱的几何与样式换算。柱宽、柱距和高度都是固定值，因此组件宽度完全由柱数决定——这正是柱数与尺寸相关的那条关系。
-/// Geometry and style math for the taskbar spectrum. Bar width, gap, and height are fixed, so the component width follows
-/// the bar count alone; that is exactly the size relationship the bar count is supposed to express.
+/// 任务栏频谱的几何与样式换算。柱宽、柱距固定，高度由设置给出，因此组件宽度完全由柱数决定——这正是柱数与尺寸相关的那条关系。
+/// Geometry and style math for the taskbar spectrum. Bar width and gap are fixed while the height comes from the settings, so the component
+/// width follows the bar count alone; that is exactly the size relationship the bar count is supposed to express.
 /// </summary>
 public static class SpectrumPresentationPolicy
 {
@@ -22,9 +22,6 @@ public static class SpectrumPresentationPolicy
 
     /// <summary>柱距（柱宽加净间距，DIP）。 / Bar pitch: bar width plus clear gap, in DIP.</summary>
     public const double BarPitchDip = BarWidthDip + BarGapDip;
-
-    /// <summary>频谱内容区的高度（DIP）。 / Height of the spectrum content area in DIP.</summary>
-    public const double ContentHeightDip = 21;
 
     /// <summary>频谱悬停表面在内容区四周的留白（DIP）。 / Padding the spectrum hover surface adds around the content in DIP.</summary>
     public const double SurfacePaddingDip = 1;
@@ -38,19 +35,28 @@ public static class SpectrumPresentationPolicy
     /// <summary>柱状图与对称柱状图的最小柱高（DIP）；静音时只剩这一小段，用于保留槽位。 / Minimum bar height in DIP for the bar styles; only this stub remains while silent, which keeps the slot visible.</summary>
     public const double MinimumBarHeightDip = 3;
 
-    /// <summary>波形在垂直中线上下各自允许的最大振幅（DIP）。 / Maximum amplitude of the waveform above and below its vertical centre, in DIP.</summary>
-    public const double WaveformMaximumHalfHeightDip = (ContentHeightDip - 1) / 2;
-
     /// <summary>波形每两个控制点之间插入的细分段数；频段很少时它决定曲线是否平滑。 / Interpolation segments per control-point gap; with few bands this is what makes the curve read as a waveform.</summary>
     public const int WaveformSegmentsPerGap = 6;
 
+    /// <summary>设置里配置的频谱内容区横轴尺寸（DIP），也就是柱子能达到的最大高度。/ The spectrum content area's cross-axis size from the settings, in DIP, which is the tallest a bar can be.</summary>
+    /// <param name="settings">频谱组件设置。/ Spectrum component settings.</param>
+    public static double ResolveContentHeightDip(SpectrumComponentSettings settings) =>
+        SpectrumComponentSettings.SnapContentHeightDip(settings.ContentHeightDip);
+
+    /// <summary>波形在垂直中线上下各自允许的最大振幅（DIP）。 / Maximum amplitude of the waveform above and below its vertical centre, in DIP.</summary>
+    /// <param name="contentHeightDip">内容区高度（DIP）。/ Content height in DIP.</param>
+    public static double ResolveWaveformHalfHeightDip(double contentHeightDip) =>
+        Math.Max(0, (contentHeightDip - 1) / 2);
+
     /// <summary>像素柱状图每列包含的方块数量。 / Number of blocks in each pixel column.</summary>
-    public static int PixelDotCount { get; } =
-        (int)((ContentHeightDip + PixelDotGapDip) / (PixelDotHeightDip + PixelDotGapDip));
+    /// <param name="contentHeightDip">内容区高度（DIP）。/ Content height in DIP.</param>
+    public static int ResolvePixelDotCount(double contentHeightDip) =>
+        Math.Max(1, (int)((contentHeightDip + PixelDotGapDip) / (PixelDotHeightDip + PixelDotGapDip)));
 
     /// <summary>像素柱状图一列的实际高度（DIP）。 / Actual height of one pixel column in DIP.</summary>
-    public static double PixelColumnHeightDip { get; } =
-        PixelDotCount * (PixelDotHeightDip + PixelDotGapDip) - PixelDotGapDip;
+    /// <param name="contentHeightDip">内容区高度（DIP）。/ Content height in DIP.</param>
+    public static double ResolvePixelColumnHeightDip(double contentHeightDip) =>
+        ResolvePixelDotCount(contentHeightDip) * (PixelDotHeightDip + PixelDotGapDip) - PixelDotGapDip;
 
     /// <summary>频谱内容区的宽度（DIP）；柱数为一时没有柱距。 / Width of the spectrum content area in DIP; a single bar has no pitch to add.</summary>
     /// <param name="bandCount">柱数；越界时先被夹取。/ Bar count; clamped to the persisted range first.</param>
@@ -76,10 +82,12 @@ public static class SpectrumPresentationPolicy
     /// </summary>
     /// <param name="value">采样器给出的归一化音量（0–1）。/ Normalized level from the sampler, 0–1.</param>
     /// <param name="sensitivityPercent">灵敏度百分比。/ Sensitivity in percent.</param>
-    public static double ResolveBarScale(float value, int sensitivityPercent)
+    /// <param name="contentHeightDip">内容区高度（DIP）。/ Content height in DIP.</param>
+    public static double ResolveBarScale(float value, int sensitivityPercent, double contentHeightDip)
     {
         var level = Math.Clamp(value * sensitivityPercent / 100f, 0f, 1f);
-        return (MinimumBarHeightDip + level * (ContentHeightDip - MinimumBarHeightDip)) / ContentHeightDip;
+        var height = Math.Max(MinimumBarHeightDip, contentHeightDip);
+        return (MinimumBarHeightDip + level * (height - MinimumBarHeightDip)) / height;
     }
 
     /// <summary>
@@ -89,20 +97,25 @@ public static class SpectrumPresentationPolicy
     /// </summary>
     /// <param name="value">采样器给出的归一化音量（0–1）。/ Normalized level from the sampler, 0–1.</param>
     /// <param name="sensitivityPercent">灵敏度百分比。/ Sensitivity in percent.</param>
-    public static int ResolveLitPixelCount(float value, int sensitivityPercent)
+    /// <param name="contentHeightDip">内容区高度（DIP）。/ Content height in DIP.</param>
+    public static int ResolveLitPixelCount(float value, int sensitivityPercent, double contentHeightDip)
     {
         var level = Math.Clamp(value * sensitivityPercent / 100f, 0f, 1f);
-        var lit = (int)Math.Round(level * PixelDotCount, MidpointRounding.AwayFromZero);
-        return Math.Clamp(lit, 1, PixelDotCount);
+        var dots = ResolvePixelDotCount(contentHeightDip);
+        var lit = (int)Math.Round(level * dots, MidpointRounding.AwayFromZero);
+        return Math.Clamp(lit, 1, dots);
     }
 
     /// <summary>像素柱状图中第 dotIndex 个方块（自下而上）相对内容区上边界的偏移（DIP）。 / Offset from the content's top edge of the block at the given bottom-up index, in DIP.</summary>
     /// <param name="dotIndex">自下而上、从零开始的方块序号（0 是最下面一块）。/ Zero-based bottom-up block index, 0 being the lowest block.</param>
-    public static double ResolvePixelDotTopDip(int dotIndex)
+    /// <param name="contentHeightDip">内容区高度（DIP）。/ Content height in DIP.</param>
+    public static double ResolvePixelDotTopDip(int dotIndex, double contentHeightDip)
     {
-        var index = Math.Clamp(dotIndex, 0, PixelDotCount - 1);
-        var verticalOffset = (ContentHeightDip - PixelColumnHeightDip) / 2;
-        return verticalOffset + (PixelDotCount - 1 - index) * (PixelDotHeightDip + PixelDotGapDip);
+        var dots = ResolvePixelDotCount(contentHeightDip);
+        var columnHeight = ResolvePixelColumnHeightDip(contentHeightDip);
+        var index = Math.Clamp(dotIndex, 0, dots - 1);
+        var verticalOffset = (contentHeightDip - columnHeight) / 2;
+        return verticalOffset + (dots - 1 - index) * (PixelDotHeightDip + PixelDotGapDip);
     }
 
     /// <summary>
@@ -112,8 +125,9 @@ public static class SpectrumPresentationPolicy
     /// </summary>
     /// <param name="bands">采样器给出的频段值。/ Band values from the sampler.</param>
     /// <param name="sensitivityPercent">灵敏度百分比。/ Sensitivity in percent.</param>
+    /// <param name="contentHeightDip">内容区高度（DIP）。/ Content height in DIP.</param>
     /// <returns>轮廓点；频段少于两个时返回空数组，调用方应隐藏该样式。/ Outline points, or an empty array when fewer than two bands are available; callers hide the style in that case.</returns>
-    public static SpectrumPoint[] CreateWaveformOutline(ReadOnlySpan<float> bands, int sensitivityPercent)
+    public static SpectrumPoint[] CreateWaveformOutline(ReadOnlySpan<float> bands, int sensitivityPercent, double contentHeightDip)
     {
         if (bands.Length < 2)
             return [];
@@ -121,16 +135,17 @@ public static class SpectrumPresentationPolicy
         var count = bands.Length;
         var contentWidth = CalculateContentWidthDip(count);
         var step = contentWidth / (count - 1);
+        var maximumHalfHeight = ResolveWaveformHalfHeightDip(contentHeightDip);
         var halfHeights = new double[count];
         for (var index = 0; index < count; index++)
         {
             var level = Math.Clamp(bands[index] * sensitivityPercent / 100f, 0f, 1f);
-            halfHeights[index] = level * WaveformMaximumHalfHeightDip;
+            halfHeights[index] = level * maximumHalfHeight;
         }
 
-        var upper = Interpolate(halfHeights, step);
+        var upper = Interpolate(halfHeights, step, maximumHalfHeight);
         var outline = new SpectrumPoint[upper.Length * 2];
-        const double centre = ContentHeightDip / 2;
+        var centre = contentHeightDip / 2;
         for (var index = 0; index < upper.Length; index++)
         {
             outline[index] = new SpectrumPoint(upper[index].X, centre - upper[index].Y);
@@ -154,7 +169,7 @@ public static class SpectrumPresentationPolicy
     /// Runs Catmull-Rom interpolation over the half-amplitude control points. With as few as nine bands the raw control
     /// points form a polyline, so this interpolation is what separates the waveform style from the bar styles.
     /// </summary>
-    private static SpectrumPoint[] Interpolate(double[] halfHeights, double step)
+    private static SpectrumPoint[] Interpolate(double[] halfHeights, double step, double maximumHalfHeight)
     {
         var count = halfHeights.Length;
         var segments = WaveformSegmentsPerGap * (count - 1);
@@ -173,11 +188,11 @@ public static class SpectrumPresentationPolicy
                                (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t +
                                (-p0 + 3 * p1 - 3 * p2 + p3) * t * t * t);
                 points[segment * WaveformSegmentsPerGap + stepIndex] =
-                    new SpectrumPoint((segment + t) * step, Math.Clamp(y, 0, WaveformMaximumHalfHeightDip));
+                    new SpectrumPoint((segment + t) * step, Math.Clamp(y, 0, maximumHalfHeight));
             }
         }
 
-        points[segments] = new SpectrumPoint((count - 1) * step, Math.Clamp(halfHeights[count - 1], 0, WaveformMaximumHalfHeightDip));
+        points[segments] = new SpectrumPoint((count - 1) * step, Math.Clamp(halfHeights[count - 1], 0, maximumHalfHeight));
         return points;
     }
 

@@ -3,57 +3,52 @@ using AFMediaBar.Classes.Settings;
 namespace AFMediaBar.Classes.Services.Lyrics;
 
 /// <summary>
-/// 第二行歌词的取词顺序：**首选项优先，其次按固定顺序回退**（翻译 → 音译 → 下一句），全部为空时第二行不显示。
+/// 第二行歌词的取词顺序：**按用户给定的顺序取第一个有内容的来源**，默认顺序是 翻译 → 音译 → 下一句。
 ///
-/// 原来只取首选项：选了"译文"而这一句没有译文时，第二行就空着——而用户手里往往同时有音译或下一句。
-/// 顺序是显示用的固定顺序，首选项由设置决定，因此"优先显示翻译、其次音译、最后下一句"只是把首选项设为翻译。
-/// Priority order of the second lyric line: the **preferred source first, then a fixed fallback chain** (translation, romanization, next
-/// line), with the second line hidden when all of them are empty.
+/// 原来只取一个来源：选了"译文"而这一句没有译文时，第二行就空着——而用户手里往往同时有音译或下一句。
+/// 顺序由歌词页按来源列表那种"逐项上移/下移"的方式调整（`LyricsSecondaryLineSettings.Order`），未列出的来源不会被使用。
+/// Source order of the second lyric line: **the first source with content wins, following the user's order**, whose default is
+/// translation, romanization, next line.
 ///
-/// Previously only the preferred source was read, so choosing "translation" left the second line blank whenever that line had no
-/// translation — even though a romanization or the next line was available. The order is a fixed display order while the preference comes
-/// from the settings, so "prefer the translation, then the romanization, then the next line" is simply the preference set to translation.
+/// Previously only one source was read, so choosing "translation" left the second line blank whenever that line had no translation — even
+/// though a romanization or the next line was available. The order is adjusted on the Lyrics page the same way the source list is, with
+/// per-row move buttons (`LyricsSecondaryLineSettings.Order`), and a source missing from that list is never used.
 /// </summary>
 public static class LyricsSecondaryLinePolicy
 {
-    /// <summary>固定回退顺序：翻译 → 音译 → 下一句。/ The fixed fallback order: translation, romanization, next line.</summary>
-    public static readonly IReadOnlyList<LyricsSecondaryLineMode> FallbackOrder =
+    /// <summary>默认顺序：翻译 → 音译 → 下一句。/ The default order: translation, romanization, next line.</summary>
+    public static readonly IReadOnlyList<LyricsSecondaryLineMode> DefaultOrder =
     [
         LyricsSecondaryLineMode.Translation,
         LyricsSecondaryLineMode.Romanization,
         LyricsSecondaryLineMode.NextLine
     ];
 
+    /// <summary>设置里生效的顺序：未配置（null）时是默认顺序，显式给出的顺序原样使用（空数组表示一个来源都不用）。/ The effective order from the settings: the default order while nothing is configured (null), otherwise the explicit order as given, where an empty array means no source at all.</summary>
+    /// <param name="settings">第二行顺序设置。/ Second-line order settings.</param>
+    public static IReadOnlyList<LyricsSecondaryLineMode> ResolveOrder(LyricsSecondaryLineSettings settings) =>
+        settings.Order ?? DefaultOrder;
+
     /// <summary>
-    /// 按首选项与固定顺序挑出第二行的内容，全部为空时返回空串（调用方据此隐藏第二行，不留空白占位）。
-    /// Picks the second line's content from the preferred source and the fixed order, returning an empty string when all of them are empty so
-    /// that the caller hides the row instead of leaving a blank placeholder.
+    /// 按顺序挑出第二行的内容，全部来源都为空时返回空串（调用方据此隐藏第二行，不留空白占位）。
+    /// Picks the second line's content along the order, returning an empty string when every source is empty so that the caller hides the row
+    /// instead of leaving a blank placeholder.
     /// </summary>
-    /// <param name="preferred">设置里的首选项。/ Preferred source from the settings.</param>
+    /// <param name="settings">第二行顺序设置。/ Second-line order settings.</param>
     /// <param name="nextLine">下一句歌词。/ The next lyric line.</param>
     /// <param name="translation">当前句译文。/ Translation of the active line.</param>
     /// <param name="romanization">当前句音译。/ Romanization of the active line.</param>
     public static string Resolve(
-        LyricsSecondaryLineMode preferred,
+        LyricsSecondaryLineSettings settings,
         string? nextLine,
         string? translation,
         string? romanization)
     {
-        if (Pick(preferred, nextLine, translation, romanization) is { Length: > 0 } value)
+        foreach (var mode in ResolveOrder(settings))
         {
-            return value;
-        }
-
-        foreach (var mode in FallbackOrder)
-        {
-            if (mode == preferred)
+            if (Pick(mode, nextLine, translation, romanization) is { Length: > 0 } value)
             {
-                continue;
-            }
-
-            if (Pick(mode, nextLine, translation, romanization) is { Length: > 0 } fallback)
-            {
-                return fallback;
+                return value;
             }
         }
 

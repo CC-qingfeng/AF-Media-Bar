@@ -258,6 +258,23 @@
                                     </StackPanel>
                                 </components:SettingsRow>
                                 <components:SettingsRow
+                                    Description="{DynamicResource Loc.Media.Spectrum.ContentHeight.Description}"
+                                    Icon="{ui:SymbolIcon ArrowSort24}"
+                                    IsNested="True"
+                                    Style="{StaticResource SpectrumParameterRowStyle}"
+                                    Title="{DynamicResource Loc.Media.Spectrum.ContentHeight.Title}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <Slider
+                                            IsSnapToTickEnabled="True"
+                                            Maximum="{Binding ViewModel.MaximumSpectrumContentHeightDip}"
+                                            Minimum="{Binding ViewModel.MinimumSpectrumContentHeightDip}"
+                                            Style="{StaticResource AfSettingsRowSliderStyle}"
+                                            TickFrequency="{Binding ViewModel.SpectrumContentHeightStepDip}"
+                                            Value="{Binding ViewModel.SpectrumContentHeightDip, Mode=TwoWay}" />
+                                        <TextBlock Style="{StaticResource AfSettingsRowValueStyle}" Text="{Binding ViewModel.SpectrumContentHeightText}" />
+                                    </StackPanel>
+                                </components:SettingsRow>
+                                <components:SettingsRow
                                     Description="{DynamicResource Loc.Media.Spectrum.RefreshRate.Description}"
                                     Icon="{ui:SymbolIcon Timer24}"
                                     IsNested="True"

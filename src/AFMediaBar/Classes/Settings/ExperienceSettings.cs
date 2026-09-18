@@ -211,6 +211,47 @@ public readonly record struct SpectrumComponentSettings(int BandCount, int Refre
     public const int MaximumSensitivityPercent = 400;
 
     /// <summary>
+    /// 频谱内容区的横轴尺寸（横向任务栏就是高度，DIP）。频谱只出现在横向任务栏，因此这个值就是柱子的最大高度；
+    /// 它同时决定悬停表面要留出多少空间（表面在内容四周各留 1 DIP）。
+    /// Cross-axis extent of the spectrum content area, which is the height on a horizontal taskbar, in DIP. The spectrum only appears on
+    /// horizontal taskbars, so this is the tallest a bar can be, and it also decides how much room the hover surface has to leave (the
+    /// surface keeps one DIP of padding around the content).
+    ///
+    /// 该成员以 init 属性存在，旧设置文件缺少该字段时反序列化到声明处的默认值，不需要改动既有构造签名。
+    /// The member is an init property, so an older settings file that lacks the field deserializes to the declared default and the existing
+    /// constructor signature stays intact.
+    /// </summary>
+    public double ContentHeightDip { get; init; } = DefaultContentHeightDip;
+
+    /// <summary>频谱内容区横轴尺寸的下限（DIP）；再矮就只剩几个像素方块，读不出高低。 / Lower bound of the spectrum's cross-axis size in DIP; anything shorter leaves a couple of pixel blocks with no readable level.</summary>
+    public const double MinimumContentHeightDip = 14;
+
+    /// <summary>频谱内容区横轴尺寸的上限（DIP）；再高就会顶到悬停表面与媒体栏的内边界。 / Upper bound in DIP; anything taller would run into the hover surface and the bar's inner edge.</summary>
+    public const double MaximumContentHeightDip = 34;
+
+    /// <summary>频谱内容区横轴尺寸的滑杆步进（DIP）。 / Slider step of the spectrum's cross-axis size in DIP.</summary>
+    public const double ContentHeightStepDip = 2;
+
+    /// <summary>频谱内容区横轴尺寸的默认值（DIP）：比升级前的固定 21 略高，柱子更容易读出高低。 / Default cross-axis size in DIP: a little taller than the fixed 21 used before, which makes the levels easier to read.</summary>
+    public const double DefaultContentHeightDip = 26;
+
+    /// <summary>
+    /// 把任意输入吸附到步长网格并夹进区间。
+    /// Snaps any input onto the step grid and clamps it into range.
+    /// </summary>
+    /// <param name="dip">原始尺寸（DIP）。/ Raw size in DIP.</param>
+    public static double SnapContentHeightDip(double dip)
+    {
+        if (!double.IsFinite(dip))
+        {
+            return DefaultContentHeightDip;
+        }
+
+        var snapped = Math.Round(dip / ContentHeightStepDip, MidpointRounding.AwayFromZero) * ContentHeightStepDip;
+        return Math.Clamp(snapped, MinimumContentHeightDip, MaximumContentHeightDip);
+    }
+
+    /// <summary>
     /// 灵敏度滑杆的步进（百分比）。1–400 之间用 1 步进会给出四百个位置，而听感上的差别远达不到这个分辨率。
     /// Step of the sensitivity slider in percent. Stepping by one across 1–400 would give four hundred positions while the
     /// audible difference is nowhere near that resolution.
@@ -224,7 +265,8 @@ public readonly record struct SpectrumComponentSettings(int BandCount, int Refre
         Math.Clamp(RefreshRateHz, MinimumRefreshRateHz, MaximumRefreshRateHz),
         SnapSensitivityPercent(SensitivityPercent))
     {
-        Style = Enum.IsDefined(Style) ? Style : SpectrumStyle.Bars
+        Style = Enum.IsDefined(Style) ? Style : SpectrumStyle.Bars,
+        ContentHeightDip = SnapContentHeightDip(ContentHeightDip)
     };
 
     /// <summary>

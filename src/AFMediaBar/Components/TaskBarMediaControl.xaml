@@ -282,14 +282,38 @@
                         VerticalAlignment="Center"
                         IsHitTestVisible="False" />
             </Border>
-            <Border x:Name="TaskbarPerformanceSurface"
-                    Panel.ZIndex="4" Width="74" Height="24" Margin="0,0,4,0"
-                    HorizontalAlignment="Right" VerticalAlignment="Center"
-                    CornerRadius="12" Background="#16000000"
-                    Cursor="Arrow" Visibility="Collapsed">
-                <TextBlock x:Name="TaskbarPerformanceText" Text="MEM —" FontSize="11"
-                           FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"
-                           TextTrimming="CharacterEllipsis" IsHitTestVisible="False"/>
+            <!--
+                性能组件与频谱一样有一个自己的悬停表面：悬停时给出同一套高亮（背景 + 顶部细线），
+                表面尺寸与文字区的悬停块保持一致（同一条横轴高度），因此三个组件的 hover 看起来是一排。
+                The performance component gets a hover surface of its own, like the spectrum: hovering shows the same highlight
+                (background plus top hairline), and the surface matches the text region's hover block in the cross-axis extent so
+                the three components read as one row.
+            -->
+            <Border x:Name="TaskbarPerformanceHoverSurface"
+                    Panel.ZIndex="4"
+                    Width="76"
+                    Height="32"
+                    Margin="0,0,4,0"
+                    Padding="1"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Center"
+                    CornerRadius="5"
+                    Background="Transparent"
+                    BorderBrush="Transparent"
+                    BorderThickness="0,1.25,0,0"
+                    Visibility="Collapsed"
+                    Cursor="Arrow"
+                    MouseEnter="TaskbarPerformanceHoverSurface_MouseEnter"
+                    MouseLeave="TaskbarPerformanceHoverSurface_MouseLeave">
+                <Border x:Name="TaskbarPerformanceSurface"
+                        Width="74" Height="24"
+                        HorizontalAlignment="Center" VerticalAlignment="Center"
+                        CornerRadius="12" Background="#16000000"
+                        Cursor="Arrow" Visibility="Collapsed">
+                    <TextBlock x:Name="TaskbarPerformanceText" Text="MEM —" FontSize="11"
+                               FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis" IsHitTestVisible="False"/>
+                </Border>
             </Border>
 
             <!-- 悬停层只覆盖中间文字区域，不替换或重新排列下方静置层。 -->

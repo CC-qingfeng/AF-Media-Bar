@@ -61,6 +61,38 @@ public static class LyricsUnsungOpacity
 }
 
 /// <summary>
+/// 第二行歌词的来源顺序：列表顺序就是优先级，未列出的来源不会被使用。
+/// The second lyric line's source order: the list order is the priority and a source missing from the list is never used.
+///
+/// <c>null</c> 表示从未配置过，此时按 <c>LyricsSecondaryLinePolicy.DefaultOrder</c>（翻译 → 音译 → 下一句）；
+/// 非空数组按给定顺序只用这些来源。与来源列表一样，归一化不去白名单，因此以后新增的来源不会让旧设置文件失效。
+/// <c>null</c> was never configured, which follows <c>LyricsSecondaryLinePolicy.DefaultOrder</c> (translation, romanization, next line);
+/// a non-empty array uses exactly those sources in that order. As with the source list, normalization keeps no allow-list, so a source added
+/// later never invalidates an old settings file.
+/// </summary>
+/// <param name="Order">按优先级排列的第二行来源；null 表示未配置，即使用默认顺序 / Second-line sources in priority order; null means unconfigured, which uses the default order.</param>
+public readonly record struct LyricsSecondaryLineSettings(IReadOnlyList<LyricsSecondaryLineMode>? Order)
+{
+    /// <summary>默认值：从未配置，即按默认顺序（翻译 → 音译 → 下一句）。/ The default: never configured, meaning the default order (translation, romanization, next line).</summary>
+    public static LyricsSecondaryLineSettings Default { get; } = new(null);
+
+    /// <summary>
+    /// 去掉重复项与非法枚举值，保留用户给定的顺序，并保持"未配置"与"显式顺序"的区别。
+    /// Drops duplicates and undefined enum values while keeping the user's order and preserving the difference between "never configured" and an
+    /// explicit order.
+    /// </summary>
+    public LyricsSecondaryLineSettings Normalize() => this with
+    {
+        Order = Order is null
+            ? null
+            : Order
+                .Where(static mode => Enum.IsDefined(mode))
+                .Distinct()
+                .ToArray()
+    };
+}
+
+/// <summary>
 /// 歌词来源偏好：<paramref name="EnabledSourceIds"/> 的顺序就是优先级。
 /// Lyric-source preference: the order of <paramref name="EnabledSourceIds"/> is the priority.
 ///

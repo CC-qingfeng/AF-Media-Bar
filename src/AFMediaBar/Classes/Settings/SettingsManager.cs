@@ -36,11 +36,11 @@ public sealed class AppSettings : INotifyPropertyChanged
     private bool _lyricsEnabled = true;
     private bool _twoLineLyricsEnabled;
     /// <summary>
-    /// 双行歌词第二行的**首选项**；缺失时按固定顺序回退（翻译 → 音译 → 下一句），因此默认取翻译，与"优先显示翻译"一致。
-    /// Preferred source of the second lyric line; a missing source falls back along a fixed order (translation, romanization, next line),
-    /// so the default is the translation, matching "prefer the translation".
+    /// 双行歌词第二行的**来源顺序**：列表顺序即优先级（默认 翻译 → 音译 → 下一句），未列出的来源不会被使用。
+    /// Source order of the second lyric line: the list order is the priority (translation, romanization, next line by default) and a source
+    /// missing from the list is never used.
     /// </summary>
-    private LyricsSecondaryLineMode _lyricsSecondaryLineMode = LyricsSecondaryLineMode.Translation;
+    private LyricsSecondaryLineSettings _lyricsSecondaryLine = LyricsSecondaryLineSettings.Default;
     private bool _taskbarBarEnabled = true;
     private string? _taskbarTargetMonitorDeviceId;
     private TaskbarBarPosition _position = TaskbarBarPosition.Start;
@@ -81,7 +81,7 @@ public sealed class AppSettings : INotifyPropertyChanged
     public TrayWheelBehavior TrayWheelBehavior { get => _trayWheelBehavior; set => Set(ref _trayWheelBehavior, value); }
     public bool LyricsEnabled { get => _lyricsEnabled; set => Set(ref _lyricsEnabled, value); }
     public bool TwoLineLyricsEnabled { get => _twoLineLyricsEnabled; set => Set(ref _twoLineLyricsEnabled, value); }
-    public LyricsSecondaryLineMode LyricsSecondaryLineMode { get => _lyricsSecondaryLineMode; set => Set(ref _lyricsSecondaryLineMode, value); }
+    public LyricsSecondaryLineSettings LyricsSecondaryLine { get => _lyricsSecondaryLine; set => Set(ref _lyricsSecondaryLine, value.Normalize()); }
     public bool TaskbarBarEnabled { get => _taskbarBarEnabled; set => Set(ref _taskbarBarEnabled, value); }
     public string? TaskbarTargetMonitorDeviceId
     {
@@ -161,7 +161,7 @@ public sealed class AppSettings : INotifyPropertyChanged
         var result = Clone();
         result.Appearance = result.Appearance.Normalize();
         if (!Enum.IsDefined(result.TrayWheelBehavior)) result.TrayWheelBehavior = defaults.TrayWheelBehavior;
-        if (!Enum.IsDefined(result.LyricsSecondaryLineMode)) result.LyricsSecondaryLineMode = defaults.LyricsSecondaryLineMode;
+        result.LyricsSecondaryLine = result.LyricsSecondaryLine.Normalize();
         if (!Enum.IsDefined(result.Position)) result.Position = defaults.Position;
         result.WindowMode = WindowMode.Taskbar;
         if (!Enum.IsDefined(result.LayoutOrientationMode)) result.LayoutOrientationMode = defaults.LayoutOrientationMode;
@@ -202,7 +202,7 @@ public sealed class AppSettings : INotifyPropertyChanged
         TrayWheelBehavior = TrayWheelBehavior,
         LyricsEnabled = LyricsEnabled,
         TwoLineLyricsEnabled = TwoLineLyricsEnabled,
-        LyricsSecondaryLineMode = LyricsSecondaryLineMode,
+        LyricsSecondaryLine = LyricsSecondaryLine,
         TaskbarBarEnabled = TaskbarBarEnabled,
         TaskbarTargetMonitorDeviceId = TaskbarTargetMonitorDeviceId,
         Position = Position,
@@ -307,7 +307,7 @@ public static class SettingsManager
     public static void SetTrayWheelBehavior(TrayWheelBehavior behavior) => Current.TrayWheelBehavior = behavior;
     public static void SetLyricsEnabled(bool enabled) => Current.LyricsEnabled = enabled;
     public static void SetTwoLineLyricsEnabled(bool enabled) => Current.TwoLineLyricsEnabled = enabled;
-    public static void SetLyricsSecondaryLineMode(LyricsSecondaryLineMode mode) => Current.LyricsSecondaryLineMode = mode;
+    public static void SetLyricsSecondaryLineSettings(LyricsSecondaryLineSettings settings) => Current.LyricsSecondaryLine = settings;
     public static void SetLyricsTextAlignment(LyricsTextAlignment alignment) => Current.LyricsTextAlignment = alignment;
     public static void SetLyricsSyllableHighlightEnabled(bool enabled) => Current.LyricsSyllableHighlightEnabled = enabled;
     public static void SetLyricsUnsungOpacityPercent(int percent) => Current.LyricsUnsungOpacityPercent = LyricsUnsungOpacity.Normalize(percent);
@@ -385,7 +385,7 @@ public static class SettingsManager
     {
         var next = Current.Clone(); var defaults = Defaults;
         next.LyricsEnabled = defaults.LyricsEnabled; next.TwoLineLyricsEnabled = defaults.TwoLineLyricsEnabled;
-        next.LyricsSecondaryLineMode = defaults.LyricsSecondaryLineMode; next.LyricsTextAlignment = defaults.LyricsTextAlignment;
+        next.LyricsSecondaryLine = defaults.LyricsSecondaryLine; next.LyricsTextAlignment = defaults.LyricsTextAlignment;
         next.LyricsSyllableHighlightEnabled = defaults.LyricsSyllableHighlightEnabled;
         next.LyricsUnsungOpacityPercent = defaults.LyricsUnsungOpacityPercent;
         next.LyricsInfoLineFilterEnabled = defaults.LyricsInfoLineFilterEnabled;
@@ -423,7 +423,7 @@ public static class SettingsManager
             case nameof(AppSettings.TrayWheelBehavior): TrayWheelBehaviorChanged?.Invoke(null, EventArgs.Empty); break;
             case nameof(AppSettings.LyricsEnabled):
             case nameof(AppSettings.TwoLineLyricsEnabled):
-            case nameof(AppSettings.LyricsSecondaryLineMode):
+            case nameof(AppSettings.LyricsSecondaryLine):
             case nameof(AppSettings.LyricsSyllableHighlightEnabled):
             case nameof(AppSettings.LyricsUnsungOpacityPercent):
             case nameof(AppSettings.LyricsInfoLineFilterEnabled):

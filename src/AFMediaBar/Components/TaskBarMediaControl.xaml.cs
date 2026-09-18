@@ -482,7 +482,9 @@ namespace AFMediaBar.Components
         public void ApplyPerformanceText(string text, bool canOpenTaskManager)
         {
             TaskbarPerformanceText.Text = text;
-            TaskbarPerformanceSurface.Cursor = canOpenTaskManager ? Cursors.Hand : Cursors.Arrow;
+            var cursor = canOpenTaskManager ? Cursors.Hand : Cursors.Arrow;
+            TaskbarPerformanceSurface.Cursor = cursor;
+            TaskbarPerformanceHoverSurface.Cursor = cursor;
         }
 
         /// <summary>
@@ -497,8 +499,12 @@ namespace AFMediaBar.Components
         {
             while (source is not null)
             {
-                if (ReferenceEquals(source, TaskbarPerformanceSurface))
+                if (ReferenceEquals(source, TaskbarPerformanceSurface) ||
+                    ReferenceEquals(source, TaskbarPerformanceHoverSurface))
+                {
                     return true;
+                }
+
                 source = VisualTreeHelper.GetParent(source);
             }
 
@@ -653,7 +659,16 @@ namespace AFMediaBar.Components
             var progressVisible = _snapshot.Duration > 0;
             var controls = experience.HoverControls;
             var spectrumVisible = isHorizontalTaskbar && experience.SpectrumVisible && TaskbarExperiencePolicy.ShouldShowSpectrum(_snapshot);
-            TaskbarPerformanceSurface.Visibility = isHorizontalTaskbar && experience.PerformanceVisible ? Visibility.Visible : Visibility.Collapsed;
+            // 性能组件与频谱同样由"外层悬停表面 + 内层外观"组成：显隐、命中测试与 hover 都落在外层，
+            // 否则悬停表面的 1 DIP 留白点不到，hover 也会在光标移到边缘时闪断。
+            // The performance component is built like the spectrum, with an outer hover surface and an inner look: visibility, hit testing, and
+            // hover all belong to the outer one, otherwise the surface's one-DIP padding is not clickable and hover flickers at the edges.
+            var performanceVisible = isHorizontalTaskbar && experience.PerformanceVisible;
+            TaskbarPerformanceSurface.Visibility = performanceVisible ? Visibility.Visible : Visibility.Collapsed;
+            TaskbarPerformanceHoverSurface.Visibility = performanceVisible ? Visibility.Visible : Visibility.Collapsed;
+            TaskbarPerformanceHoverSurface.IsHitTestVisible = performanceVisible;
+            if (!performanceVisible)
+                AnimateComponentHover(TaskbarPerformanceHoverSurface, false);
 
             TaskbarSpectrumHoverSurface.Visibility = spectrumVisible ? Visibility.Visible : Visibility.Collapsed;
             TaskbarSpectrumHoverSurface.IsHitTestVisible = spectrumVisible;
@@ -830,11 +845,24 @@ namespace AFMediaBar.Components
             SongInfoHoverOverlay.Width = textWidth;
             SongInfoHoverOverlay.Height = SongInfoStackPanel.Height;
 
-            TaskbarRestProgress.Margin = new Thickness(textLeft, 0, reservedRight, 1);
+            // 性能组件与频谱的悬停表面取文字区悬停块的横轴尺寸，三个组件的 hover 因此是同一高度，
+            // 而不是各自一个固定值（频谱原来是 32、性能块没有 hover）。频谱内容区比文字区还高时以内容为准，保证画布装得下。
+            // The performance and spectrum hover surfaces take the text hover block's cross-axis size, so the three components share one
+            // hover height instead of each carrying its own fixed value (the spectrum was 32 and the performance block had no hover at all).
+            // A spectrum content area taller than the text block wins, so the canvas always fits.
+            var hoverHeight = Math.Max(
+                ResolveRestHoverHeight(),
+                SpectrumPresentationPolicy.ResolveContentHeightDip(SettingsManager.Current.SpectrumComponent) +
+                SpectrumPresentationPolicy.SurfacePaddingDip * 2);
+            TaskbarSpectrumHoverSurface.Height = hoverHeight;
             TaskbarSpectrumHoverSurface.Width = spectrumWidth;
-            TaskbarPerformanceSurface.Margin = new Thickness(0, 0, TaskbarTrailingMargin, 0);
             TaskbarSpectrumHoverSurface.Margin = new Thickness(0, 0,
                 TaskbarTrailingMargin + (experience.PerformanceVisible ? TaskbarPerformanceWidth + sectionGap : 0), 0);
+            TaskbarPerformanceHoverSurface.Height = hoverHeight;
+            TaskbarPerformanceHoverSurface.Width = TaskbarPerformanceWidth + SpectrumPresentationPolicy.SurfacePaddingDip * 2;
+            TaskbarPerformanceHoverSurface.Margin = new Thickness(0, 0, TaskbarTrailingMargin, 0);
+
+            TaskbarRestProgress.Margin = new Thickness(textLeft, 0, reservedRight, 1);
 
             HoverRevealHost.Margin = new Thickness(textLeft, 1, 0, 1);
             HoverRevealHost.Height = Math.Max(0, MainBorder.Height - 2);
@@ -857,6 +885,22 @@ namespace AFMediaBar.Components
             if (!double.IsFinite(artworkLeft))
                 artworkLeft = 0;
             return artworkLeft + Math.Max(0, SongImageBorder.Width);
+        }
+
+        /// <summary>
+        /// 静置层各组件的 hover 块在横轴（横向任务栏就是高度）上的尺寸：与文字区的悬停块一致，
+        /// 取值失败时退回到整条媒体栏的内高，避免 hover 块塌成一条线。
+        /// Cross-axis extent of the rest layer's hover blocks, which for a horizontal taskbar is the height: it matches the text region's
+        /// hover block and falls back to the bar's inner height when the value is unusable, so a hover block never collapses to a line.
+        /// </summary>
+        private double ResolveRestHoverHeight()
+        {
+            var height = SongInfoStackPanel.Height;
+            if (double.IsFinite(height) && height > 0)
+                return height;
+
+            var barHeight = MainBorder.Height;
+            return double.IsFinite(barHeight) && barHeight > 2 ? barHeight - 2 : 0;
         }
 
         /// <summary>
@@ -1229,11 +1273,11 @@ namespace AFMediaBar.Components
         {
             var settings = SettingsManager.Current;
             var showLyrics = settings.LyricsEnabled && !string.IsNullOrEmpty(_activeLyric);
-            // 第二行按"首选项 → 翻译 → 音译 → 下一句"的顺序取：首选项缺失时不再空着，而是回退到还有内容的来源。
-            // The second line is taken in the order "preferred, translation, romanization, next line": a missing preferred source no longer
-            // leaves the row blank but falls back to a source that still has content.
+            // 第二行按用户在歌词页里排的顺序取第一个有内容的来源（默认 翻译 → 音译 → 下一句）：某个来源缺失时不再空着。
+            // The second line takes the first source with content along the order the user arranged on the Lyrics page (translation,
+            // romanization, next line by default), so a missing source no longer leaves the row blank.
             _secondaryLyric = LyricsSecondaryLinePolicy.Resolve(
-                settings.LyricsSecondaryLineMode,
+                settings.LyricsSecondaryLine,
                 _nextLyric,
                 _translatedLyric,
                 _romanizedLyric);
@@ -1272,7 +1316,7 @@ namespace AFMediaBar.Components
             // 频谱柱数是唯一的例外：它决定频谱组件宽度，因此必须参与指纹，否则改柱数后宿主不会重新发布尺寸。
             // The spectrum bar count is the one exception: it decides the spectrum width, so it belongs in the
             // fingerprint; leaving it out would stop the host from republishing the size after a bar-count change.
-            var fingerprint = $"{orientation}|{visibleText}|{secondaryText}|{artist}|{SongTitle.FontSize:0.##}|{SongArtist.FontSize:0.##}|{SettingsManager.Current.LayoutLengthScalePercent:0.##}|{SettingsManager.Current.LayoutThicknessScalePercent:0.##}|{SettingsManager.Current.LyricsEnabled}|{SettingsManager.Current.TwoLineLyricsEnabled}|{SettingsManager.Current.LyricsSecondaryLineMode}|{SettingsManager.Current.TaskbarExperience}|{SpectrumSurfaceWidth:0.##}|{_snapshot.IsConnected}|{_snapshot.Duration > 0}";
+            var fingerprint = $"{orientation}|{visibleText}|{secondaryText}|{artist}|{SongTitle.FontSize:0.##}|{SongArtist.FontSize:0.##}|{SettingsManager.Current.LayoutLengthScalePercent:0.##}|{SettingsManager.Current.LayoutThicknessScalePercent:0.##}|{SettingsManager.Current.LyricsEnabled}|{SettingsManager.Current.TwoLineLyricsEnabled}|{SettingsManager.Current.LyricsSecondaryLine}|{string.Join(',', LyricsSecondaryLinePolicy.ResolveOrder(SettingsManager.Current.LyricsSecondaryLine))}|{SettingsManager.Current.TaskbarExperience}|{SpectrumSurfaceWidth:0.##}|{SettingsManager.Current.SpectrumComponent.ContentHeightDip:0.##}|{_snapshot.IsConnected}|{_snapshot.Duration > 0}";
 
             // 没有订阅者的请求不会被任何宿主消费，因此不能记入指纹；否则订阅后的首次请求会被去重丢弃，
             // 媒体栏在上一次媒体连接之前一直停留在预设长度。

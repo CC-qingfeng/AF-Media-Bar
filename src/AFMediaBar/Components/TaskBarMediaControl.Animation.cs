@@ -1010,6 +1010,12 @@ public partial class TaskBarMediaControl
     private void TaskbarSpectrumHoverSurface_MouseLeave(object sender, MouseEventArgs e) =>
         AnimateComponentHover(TaskbarSpectrumHoverSurface, false);
 
+    private void TaskbarPerformanceHoverSurface_MouseEnter(object sender, MouseEventArgs e) =>
+        AnimateComponentHover(TaskbarPerformanceHoverSurface, true);
+
+    private void TaskbarPerformanceHoverSurface_MouseLeave(object sender, MouseEventArgs e) =>
+        AnimateComponentHover(TaskbarPerformanceHoverSurface, false);
+
     private void SongInfoStackPanel_MouseEnter(object sender, MouseEventArgs e)
     {
         if (!CanUseTaskbarComponentHover())

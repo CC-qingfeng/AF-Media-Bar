@@ -36,7 +36,11 @@ public sealed class SettingsPersistenceServiceTests
             TrayWheelBehavior = TrayWheelBehavior.Disabled,
             LyricsEnabled = false,
             TwoLineLyricsEnabled = true,
-            LyricsSecondaryLineMode = LyricsSecondaryLineMode.Translation,
+            LyricsSecondaryLine = new LyricsSecondaryLineSettings(
+            [
+                LyricsSecondaryLineMode.Romanization,
+                LyricsSecondaryLineMode.Translation
+            ]),
             TaskbarBarEnabled = false,
             TaskbarTargetMonitorDeviceId = @"\\.\DISPLAY2",
             Position = TaskbarBarPosition.End,
@@ -107,7 +111,9 @@ public sealed class SettingsPersistenceServiceTests
         reader.Initialize();
 
         Assert.AreEqual(TrayWheelBehavior.Disabled, SettingsManager.Current.TrayWheelBehavior);
-        Assert.AreEqual(LyricsSecondaryLineMode.Translation, SettingsManager.Current.LyricsSecondaryLineMode);
+        CollectionAssert.AreEqual(
+            new[] { LyricsSecondaryLineMode.Romanization, LyricsSecondaryLineMode.Translation },
+            SettingsManager.Current.LyricsSecondaryLine.Order!.ToArray());
         Assert.AreEqual(WindowMode.Taskbar, SettingsManager.Current.WindowMode);
         Assert.AreEqual(DynamicIslandEdge.Right, SettingsManager.Current.DynamicIslandEdge);
         Assert.AreEqual(700, SettingsManager.Current.Appearance.FontWeight);

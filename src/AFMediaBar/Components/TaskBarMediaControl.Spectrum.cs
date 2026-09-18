@@ -28,6 +28,9 @@ public partial class TaskBarMediaControl
     private System.Windows.Shapes.Path? _spectrumWaveform;
     private PolyLineSegment? _spectrumWaveformSegment;
     private int _appliedSpectrumBandCount = -1;
+
+    /// <summary>最近一次重建视觉树时使用的频谱内容区横轴尺寸（DIP）；它变了就必须重建柱子的高度。 / Cross-axis size of the spectrum content used by the last rebuild, in DIP; a change means the bars have to be rebuilt.</summary>
+    private double _appliedSpectrumContentHeight;
     private SpectrumStyle? _appliedSpectrumStyle;
     private Color? _spectrumForegroundColor;
     private Brush? _spectrumForegroundBrush;
@@ -107,11 +110,17 @@ public partial class TaskBarMediaControl
     internal void ConfigureSpectrum()
     {
         var settings = SettingsManager.Current.SpectrumComponent.Normalize();
-        if (_appliedSpectrumStyle == settings.Style && _appliedSpectrumBandCount == settings.BandCount)
+        var contentHeight = SpectrumPresentationPolicy.ResolveContentHeightDip(settings);
+        if (_appliedSpectrumStyle == settings.Style &&
+            _appliedSpectrumBandCount == settings.BandCount &&
+            Math.Abs(_appliedSpectrumContentHeight - contentHeight) < 0.01)
+        {
             return;
+        }
 
         _appliedSpectrumStyle = settings.Style;
         _appliedSpectrumBandCount = settings.BandCount;
+        _appliedSpectrumContentHeight = contentHeight;
         _spectrumBars.Clear();
         _spectrumPixelColumns.Clear();
         _spectrumWaveform = null;
@@ -126,7 +135,10 @@ public partial class TaskBarMediaControl
         Array.Clear(_displayedSpectrum, 0, _displayedSpectrum.Length);
         TaskbarSpectrum.Children.Clear();
         TaskbarSpectrum.Width = SpectrumPresentationPolicy.CalculateContentWidthDip(settings.BandCount);
-        TaskbarSpectrum.Height = SpectrumPresentationPolicy.ContentHeightDip;
+        // 横轴尺寸由设置决定；几何只保证它装得进悬停表面（表面高度取文字区悬停块与"内容 + 两侧留白"的较大者）。
+        // The cross-axis size comes from the settings; the geometry only makes sure it fits inside the hover surface, whose height is the
+        // larger of the text hover block and the content plus its padding.
+        TaskbarSpectrum.Height = contentHeight;
 
         switch (settings.Style)
         {
@@ -141,14 +153,15 @@ public partial class TaskBarMediaControl
                 BuildSpectrumWaveformGeometry(
                     SpectrumPresentationPolicy.CreateWaveformOutline(
                         _displayedSpectrum.AsSpan(0, settings.BandCount),
-                        settings.SensitivityPercent),
+                        settings.SensitivityPercent,
+                        contentHeight),
                     settings);
                 break;
             case SpectrumStyle.PixelBars:
-                BuildSpectrumPixelColumns(settings.BandCount);
+                BuildSpectrumPixelColumns(settings.BandCount, contentHeight);
                 break;
             default:
-                BuildSpectrumBars(settings.BandCount, settings.Style);
+                BuildSpectrumBars(settings.BandCount, settings.Style, contentHeight);
                 break;
         }
 
@@ -305,9 +318,9 @@ public partial class TaskBarMediaControl
         Unloaded += (_, _) => StopSpectrumFrameTimer();
     }
 
-    private void BuildSpectrumBars(int bandCount, SpectrumStyle style)
+    private void BuildSpectrumBars(int bandCount, SpectrumStyle style, double contentHeight)
     {
-        var initialScale = SpectrumPresentationPolicy.MinimumBarHeightDip / SpectrumPresentationPolicy.ContentHeightDip;
+        var initialScale = SpectrumPresentationPolicy.MinimumBarHeightDip / Math.Max(1, contentHeight);
         var symmetric = SpectrumPresentationPolicy.IsSymmetric(style);
         var barStyle = (Style)FindResource("TaskbarSpectrumBar");
         var foreground = ResolveSpectrumBrush();
@@ -319,7 +332,7 @@ public partial class TaskBarMediaControl
                 Style = barStyle,
                 Background = foreground,
                 Width = SpectrumPresentationPolicy.BarWidthDip,
-                Height = SpectrumPresentationPolicy.ContentHeightDip,
+                Height = contentHeight,
                 // 对称柱状图以垂直中点为原点，因此音量升高时同时向上下延伸；贴底柱状图仍从底边向上长。
                 // The symmetric style scales about the vertical centre so a louder band grows both up and down, while the
                 // bottom-anchored style keeps growing from the bottom edge.
@@ -334,14 +347,15 @@ public partial class TaskBarMediaControl
         }
     }
 
-    private void BuildSpectrumPixelColumns(int bandCount)
+    private void BuildSpectrumPixelColumns(int bandCount, double contentHeight)
     {
         var pixelStyle = (Style)FindResource("TaskbarSpectrumPixel");
         var foreground = ResolveSpectrumBrush();
+        var dotCount = SpectrumPresentationPolicy.ResolvePixelDotCount(contentHeight);
         for (var index = 0; index < bandCount; index++)
         {
-            var column = new List<Border>(SpectrumPresentationPolicy.PixelDotCount);
-            for (var dotIndex = 0; dotIndex < SpectrumPresentationPolicy.PixelDotCount; dotIndex++)
+            var column = new List<Border>(dotCount);
+            for (var dotIndex = 0; dotIndex < dotCount; dotIndex++)
             {
                 var dot = new Border
                 {
@@ -353,7 +367,7 @@ public partial class TaskBarMediaControl
                     IsHitTestVisible = false
                 };
                 Canvas.SetLeft(dot, SpectrumPresentationPolicy.ResolveBarLeftDip(index));
-                Canvas.SetTop(dot, SpectrumPresentationPolicy.ResolvePixelDotTopDip(dotIndex));
+                Canvas.SetTop(dot, SpectrumPresentationPolicy.ResolvePixelDotTopDip(dotIndex, contentHeight));
                 TaskbarSpectrum.Children.Add(dot);
                 column.Add(dot);
             }
@@ -369,7 +383,10 @@ public partial class TaskBarMediaControl
         {
             var (_, scale) = _spectrumBars[index];
             var value = index < bands.Length ? bands[index] : 0;
-            var targetScale = SpectrumPresentationPolicy.ResolveBarScale(value, settings.SensitivityPercent);
+            var targetScale = SpectrumPresentationPolicy.ResolveBarScale(
+                value,
+                settings.SensitivityPercent,
+                SpectrumPresentationPolicy.ResolveContentHeightDip(settings));
             if (!motion.UseContinuousMotion)
             {
                 scale.BeginAnimation(ScaleTransform.ScaleYProperty, null);
@@ -400,7 +417,10 @@ public partial class TaskBarMediaControl
         for (var index = 0; index < _spectrumPixelColumns.Count; index++)
         {
             var value = index < _appliedSpectrumBandCount ? _displayedSpectrum[index] : 0;
-            var lit = SpectrumPresentationPolicy.ResolveLitPixelCount(value, settings.SensitivityPercent);
+            var lit = SpectrumPresentationPolicy.ResolveLitPixelCount(
+                value,
+                settings.SensitivityPercent,
+                SpectrumPresentationPolicy.ResolveContentHeightDip(settings));
             var column = _spectrumPixelColumns[index];
             for (var dotIndex = 0; dotIndex < column.Count; dotIndex++)
             {
@@ -425,7 +445,8 @@ public partial class TaskBarMediaControl
 
         var outline = SpectrumPresentationPolicy.CreateWaveformOutline(
             _displayedSpectrum.AsSpan(0, _appliedSpectrumBandCount),
-            settings.SensitivityPercent);
+            settings.SensitivityPercent,
+            SpectrumPresentationPolicy.ResolveContentHeightDip(settings));
         if (outline.Length == 0)
         {
             _spectrumWaveform.Data = null;

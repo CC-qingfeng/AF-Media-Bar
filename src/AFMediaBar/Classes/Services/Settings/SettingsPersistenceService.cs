@@ -12,7 +12,7 @@ namespace AFMediaBar.Classes.Services;
 /// <summary>负责用户设置 JSON 的加载、恢复、原子保存和防抖。 / Owns loading, recovery, atomic saving and debouncing of user settings JSON.</summary>
 public sealed class SettingsPersistenceService : IDisposable
 {
-    public const int CurrentSchemaVersion = 14;
+    public const int CurrentSchemaVersion = 15;
     private readonly string _directoryPath;
     private readonly string _settingsPath;
     private readonly string _backupPath;
@@ -393,6 +393,21 @@ public sealed class SettingsPersistenceService : IDisposable
             result.LyricsMatchStrictness = LyricsMatchStrictness.Balanced;
             result.LyricsSource = LyricsSourceSettings.Default;
         }
+        if (envelope.SchemaVersion <= 14)
+        {
+            // Schema 15 给频谱补上内容区尺寸（横轴尺寸），并让第二行歌词的来源顺序可调。旧文件里没有这两个字段，
+            // 反序列化会保留声明处的默认值；这里仍然显式赋值，因为"频谱更高一点"和"第二行默认按翻译优先"都是产品决定，
+            // 而不是"缺字段恰好等于默认值"。
+            // Schema 15 adds the spectrum's content-area size and makes the second lyric line's source order adjustable. Older files have
+            // neither field and deserialization would keep the declared defaults; the assignment is explicit anyway, because "the spectrum is
+            // a little taller" and "the second line prefers the translation" are product decisions rather than the coincidence that a missing
+            // field equals a default.
+            result.SpectrumComponent = result.SpectrumComponent with
+            {
+                ContentHeightDip = SpectrumComponentSettings.DefaultContentHeightDip
+            };
+            result.LyricsSecondaryLine = LyricsSecondaryLineSettings.Default;
+        }
         return result.Normalize();
     }
 
@@ -465,8 +480,7 @@ public sealed class SettingsPersistenceService : IDisposable
         private static TEnum DefaultValue()
         {
             object value = typeof(TEnum) == typeof(TrayWheelBehavior) ? TrayWheelBehavior.SwitchOutputDevice :
-                typeof(TEnum) == typeof(LyricsSecondaryLineMode) ? LyricsSecondaryLineMode.Translation :
-                typeof(TEnum) == typeof(TaskbarBarPosition) ? TaskbarBarPosition.Start :
+                typeof(TEnum) == typeof(LyricsSecondaryLineMode) ? LyricsSecondaryLineMode.Translation :                typeof(TEnum) == typeof(TaskbarBarPosition) ? TaskbarBarPosition.Start :
                 typeof(TEnum) == typeof(LayoutOrientationMode) ? LayoutOrientationMode.Auto :
                 typeof(TEnum) == typeof(DynamicIslandBackgroundMode) ? DynamicIslandBackgroundMode.SystemTheme :
                 typeof(TEnum) == typeof(TrackChangeNotificationPosition) ? TrackChangeNotificationPosition.BottomLeft :

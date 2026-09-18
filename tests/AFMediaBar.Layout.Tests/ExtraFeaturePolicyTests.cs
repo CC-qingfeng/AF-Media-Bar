@@ -101,32 +101,47 @@ public sealed class ExtraFeaturePolicyTests
     [TestMethod]
     public void SpectrumBarAndPixelLevelsKeepAVisibleStubWhenSilent()
     {
-        var silent = SpectrumPresentationPolicy.ResolveBarScale(0, 100);
-        var loudest = SpectrumPresentationPolicy.ResolveBarScale(1, 100);
-        Assert.AreEqual(SpectrumPresentationPolicy.MinimumBarHeightDip / SpectrumPresentationPolicy.ContentHeightDip, silent, 0.0001);
+        var height = SpectrumComponentSettings.DefaultContentHeightDip;
+        var silent = SpectrumPresentationPolicy.ResolveBarScale(0, 100, height);
+        var loudest = SpectrumPresentationPolicy.ResolveBarScale(1, 100, height);
+        Assert.AreEqual(SpectrumPresentationPolicy.MinimumBarHeightDip / height, silent, 0.0001);
         Assert.AreEqual(1, loudest, 0.0001);
-        Assert.IsTrue(SpectrumPresentationPolicy.ResolveBarScale(0.5f, 400) >= SpectrumPresentationPolicy.ResolveBarScale(0.5f, 100));
+        Assert.IsTrue(
+            SpectrumPresentationPolicy.ResolveBarScale(0.5f, 400, height) >=
+            SpectrumPresentationPolicy.ResolveBarScale(0.5f, 100, height));
 
-        Assert.AreEqual(1, SpectrumPresentationPolicy.ResolveLitPixelCount(0, 100));
-        Assert.AreEqual(SpectrumPresentationPolicy.PixelDotCount, SpectrumPresentationPolicy.ResolveLitPixelCount(1, 100));
-        Assert.IsTrue(SpectrumPresentationPolicy.PixelColumnHeightDip <= SpectrumPresentationPolicy.ContentHeightDip);
-        var topPadding = (SpectrumPresentationPolicy.ContentHeightDip - SpectrumPresentationPolicy.PixelColumnHeightDip) / 2;
+        var dots = SpectrumPresentationPolicy.ResolvePixelDotCount(height);
+        var columnHeight = SpectrumPresentationPolicy.ResolvePixelColumnHeightDip(height);
+        Assert.AreEqual(1, SpectrumPresentationPolicy.ResolveLitPixelCount(0, 100, height));
+        Assert.AreEqual(dots, SpectrumPresentationPolicy.ResolveLitPixelCount(1, 100, height));
+        Assert.IsTrue(columnHeight <= height);
+        var topPadding = (height - columnHeight) / 2;
         Assert.AreEqual(
             topPadding,
-            SpectrumPresentationPolicy.ResolvePixelDotTopDip(SpectrumPresentationPolicy.PixelDotCount - 1),
+            SpectrumPresentationPolicy.ResolvePixelDotTopDip(dots - 1, height),
             0.001,
             "一列像素必须垂直居中：最上方方块的留白等于整列居中后的上下偏移。");
         Assert.AreEqual(
-            SpectrumPresentationPolicy.ContentHeightDip - topPadding,
-            SpectrumPresentationPolicy.ResolvePixelDotTopDip(0) + SpectrumPresentationPolicy.PixelDotHeightDip,
+            height - topPadding,
+            SpectrumPresentationPolicy.ResolvePixelDotTopDip(0, height) + SpectrumPresentationPolicy.PixelDotHeightDip,
             0.001);
+
+        // 高度是设置项：更高的内容区给出更多方块与更高的柱子，而宽度仍然只由柱数决定。
+        // The height is a setting: a taller content area yields more blocks and taller bars while the width still follows the bar count alone.
+        var taller = SpectrumComponentSettings.MaximumContentHeightDip;
+        Assert.IsTrue(SpectrumPresentationPolicy.ResolvePixelDotCount(taller) > dots);
+        Assert.IsTrue(SpectrumPresentationPolicy.ResolvePixelColumnHeightDip(taller) > columnHeight);
+        Assert.AreEqual(
+            SpectrumPresentationPolicy.CalculateContentWidthDip(12),
+            SpectrumPresentationPolicy.CalculateContentWidthDip(12));
     }
 
     [TestMethod]
     public void WaveformOutlineIsClosedAndSymmetricAboutTheCentre()
     {
+        var height = SpectrumComponentSettings.DefaultContentHeightDip;
         var bands = new[] { 0f, 0.25f, 0.5f, 1f, 0.75f, 0.2f, 0.9f, 0.1f, 0.4f };
-        var outline = SpectrumPresentationPolicy.CreateWaveformOutline(bands, 100);
+        var outline = SpectrumPresentationPolicy.CreateWaveformOutline(bands, 100, height);
 
         Assert.IsTrue(outline.Length > bands.Length * 2, "波形必须在控制点之间插入细分点。");
         Assert.AreEqual(0, outline[0].X, 0.001);
@@ -137,7 +152,7 @@ public sealed class ExtraFeaturePolicyTests
             "上缘必须从左边界一直画到右边界。");
         foreach (var point in outline)
         {
-            Assert.IsTrue(point.Y >= 0 && point.Y <= SpectrumPresentationPolicy.ContentHeightDip);
+            Assert.IsTrue(point.Y >= 0 && point.Y <= height);
         }
 
         // 上缘自左向右、下缘镜像回左：任意序号的点与其镜像点必须关于中线严格对称。
@@ -149,13 +164,13 @@ public sealed class ExtraFeaturePolicyTests
             var lower = outline[half + (half - 1 - index)];
             Assert.AreEqual(outline[index].X, lower.X, 0.001);
             Assert.AreEqual(
-                SpectrumPresentationPolicy.ContentHeightDip,
+                height,
                 outline[index].Y + lower.Y,
                 0.001,
                 "波形上下两半必须关于垂直中线对称。");
         }
 
-        Assert.AreEqual(0, SpectrumPresentationPolicy.CreateWaveformOutline([0.5f], 100).Length);
+        Assert.AreEqual(0, SpectrumPresentationPolicy.CreateWaveformOutline([0.5f], 100, height).Length);
         Assert.IsTrue(SpectrumPresentationPolicy.IsSymmetric(SpectrumStyle.Waveform));
         Assert.IsTrue(SpectrumPresentationPolicy.IsSymmetric(SpectrumStyle.MirroredBars));
         Assert.IsFalse(SpectrumPresentationPolicy.IsSymmetric(SpectrumStyle.Bars));
@@ -168,7 +183,7 @@ public sealed class ExtraFeaturePolicyTests
             var samples = new float[bandCount];
             Assert.AreEqual(
                 SpectrumPresentationPolicy.CalculateWaveformPointCount(bandCount),
-                SpectrumPresentationPolicy.CreateWaveformOutline(samples, 100).Length);
+                SpectrumPresentationPolicy.CreateWaveformOutline(samples, 100, height).Length);
         }
     }
 

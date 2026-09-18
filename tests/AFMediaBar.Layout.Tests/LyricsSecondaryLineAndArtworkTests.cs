@@ -14,46 +14,59 @@ namespace AFMediaBar.Layout.Tests;
 public sealed class LyricsSecondaryLineAndArtworkTests
 {
     /// <summary>
-    /// 首选项有内容时就用它，不因为其他来源也有内容而改变。
-    /// The preferred source wins when it has content, regardless of the other sources.
+    /// 顺序即优先级：排在最前面的来源只要有内容就用它，无论其他来源有没有内容。
+    /// The order is the priority: the source listed first is used whenever it has content, regardless of the others.
     /// </summary>
     [TestMethod]
-    public void PreferredSourceWinsWhenItHasContent()
+    public void TheFirstSourceWithContentWins()
     {
-        Assert.AreEqual(
-            "下一句",
-            LyricsSecondaryLinePolicy.Resolve(LyricsSecondaryLineMode.NextLine, "下一句", "译文", "yinyi"));
-        Assert.AreEqual(
-            "译文",
-            LyricsSecondaryLinePolicy.Resolve(LyricsSecondaryLineMode.Translation, "下一句", "译文", "yinyi"));
-        Assert.AreEqual(
-            "yinyi",
-            LyricsSecondaryLinePolicy.Resolve(LyricsSecondaryLineMode.Romanization, "下一句", "译文", "yinyi"));
+        var next = new LyricsSecondaryLineSettings([LyricsSecondaryLineMode.NextLine]);
+        var translation = new LyricsSecondaryLineSettings([LyricsSecondaryLineMode.Translation]);
+        var romanization = new LyricsSecondaryLineSettings([LyricsSecondaryLineMode.Romanization]);
+
+        Assert.AreEqual("下一句", LyricsSecondaryLinePolicy.Resolve(next, "下一句", "译文", "yinyi"));
+        Assert.AreEqual("译文", LyricsSecondaryLinePolicy.Resolve(translation, "下一句", "译文", "yinyi"));
+        Assert.AreEqual("yinyi", LyricsSecondaryLinePolicy.Resolve(romanization, "下一句", "译文", "yinyi"));
     }
 
     /// <summary>
-    /// 首选项缺失时按固定顺序回退：翻译 → 音译 → 下一句。这是"优先显示翻译，其次音译，最后下一句"的实际行为。
-    /// A missing preference falls back along the fixed order: translation, romanization, next line. This is what "prefer the translation, then
-    /// the romanization, then the next line" actually does.
+    /// 某个来源没有内容时按列表顺序继续往下取：默认顺序是 翻译 → 音译 → 下一句，用户排的顺序优先。
+    /// A source without content falls through to the next one in the list: the default order is translation, romanization, next line, and the order
+    /// the user arranged wins.
     /// </summary>
     [TestMethod]
-    public void MissingPreferenceFallsBackAlongTheFixedOrder()
+    public void MissingSourcesFallThroughInOrder()
     {
-        // 首选翻译但这一句没有译文：先退到音译。
-        // The preference is the translation while this line has none: the romanization comes next.
-        Assert.AreEqual(
-            "yinyi",
-            LyricsSecondaryLinePolicy.Resolve(LyricsSecondaryLineMode.Translation, "下一句", null, "yinyi"));
-        Assert.AreEqual(
-            "下一句",
-            LyricsSecondaryLinePolicy.Resolve(LyricsSecondaryLineMode.Translation, "下一句", null, null));
-        Assert.AreEqual(
-            "译文",
-            LyricsSecondaryLinePolicy.Resolve(LyricsSecondaryLineMode.Romanization, "下一句", "译文", null));
-        Assert.AreEqual(
-            "下一句",
-            LyricsSecondaryLinePolicy.Resolve(LyricsSecondaryLineMode.NextLine, "下一句", null, null));
+        var order = new LyricsSecondaryLineSettings(
+        [
+            LyricsSecondaryLineMode.Translation,
+            LyricsSecondaryLineMode.Romanization,
+            LyricsSecondaryLineMode.NextLine
+        ]);
 
+        // 首选翻译但这一句没有译文：先退到音译。
+        // The list starts with the translation while this line has none: the romanization comes next.
+        Assert.AreEqual("yinyi", LyricsSecondaryLinePolicy.Resolve(order, "下一句", null, "yinyi"));
+        Assert.AreEqual("下一句", LyricsSecondaryLinePolicy.Resolve(order, "下一句", null, null));
+
+        // 用户把"下一句"排到最前：它优先，即使有译文。
+        // The user put the next line first: it wins even though a translation exists.
+        var nextFirst = new LyricsSecondaryLineSettings(
+        [
+            LyricsSecondaryLineMode.NextLine,
+            LyricsSecondaryLineMode.Translation,
+            LyricsSecondaryLineMode.Romanization
+        ]);
+        Assert.AreEqual("下一句", LyricsSecondaryLinePolicy.Resolve(nextFirst, "下一句", "译文", "yinyi"));
+
+        // 未列出的来源不会被使用：只留音译时，即使有译文也只显示音译。
+        // A source missing from the list is never used: with only the romanization listed, a translation is ignored.
+        var onlyRomanization = new LyricsSecondaryLineSettings([LyricsSecondaryLineMode.Romanization]);
+        Assert.AreEqual("yinyi", LyricsSecondaryLinePolicy.Resolve(onlyRomanization, "下一句", "译文", "yinyi"));
+        Assert.AreEqual(string.Empty, LyricsSecondaryLinePolicy.Resolve(onlyRomanization, "下一句", "译文", null));
+
+        // 未配置（null）时使用默认顺序。
+        // Nothing configured (null) means the default order.
         CollectionAssert.AreEqual(
             new[]
             {
@@ -61,7 +74,16 @@ public sealed class LyricsSecondaryLineAndArtworkTests
                 LyricsSecondaryLineMode.Romanization,
                 LyricsSecondaryLineMode.NextLine
             },
-            LyricsSecondaryLinePolicy.FallbackOrder.ToArray());
+            LyricsSecondaryLinePolicy.ResolveOrder(LyricsSecondaryLineSettings.Default).ToArray());
+        Assert.AreEqual(
+            "译文",
+            LyricsSecondaryLinePolicy.Resolve(LyricsSecondaryLineSettings.Default, "下一句", "译文", null));
+
+        // 显式的空数组表示一个来源都不用：第二行不显示，不会悄悄退回默认顺序。
+        // An explicit empty array means no source at all: the second line stays hidden instead of silently reverting to the default order.
+        var none = new LyricsSecondaryLineSettings([]);
+        Assert.AreEqual(0, LyricsSecondaryLinePolicy.ResolveOrder(none).Count);
+        Assert.AreEqual(string.Empty, LyricsSecondaryLinePolicy.Resolve(none, "下一句", "译文", "yinyi"));
     }
 
     /// <summary>
@@ -71,13 +93,12 @@ public sealed class LyricsSecondaryLineAndArtworkTests
     [TestMethod]
     public void EmptySourcesHideTheSecondLine()
     {
-        Assert.AreEqual(string.Empty, LyricsSecondaryLinePolicy.Resolve(LyricsSecondaryLineMode.Translation, null, null, null));
-        Assert.AreEqual(string.Empty, LyricsSecondaryLinePolicy.Resolve(LyricsSecondaryLineMode.Translation, "  ", "", " "));
+        var order = LyricsSecondaryLineSettings.Default;
+        Assert.AreEqual(string.Empty, LyricsSecondaryLinePolicy.Resolve(order, null, null, null));
+        Assert.AreEqual(string.Empty, LyricsSecondaryLinePolicy.Resolve(order, "  ", "", " "));
         // 空白不算内容，因此会继续回退到真的有内容的来源。
         // Whitespace is not content, so the fallback continues to a source that really has some.
-        Assert.AreEqual(
-            "下一句",
-            LyricsSecondaryLinePolicy.Resolve(LyricsSecondaryLineMode.Translation, "下一句", "   ", null));
+        Assert.AreEqual("下一句", LyricsSecondaryLinePolicy.Resolve(order, "下一句", "   ", null));
     }
 
     /// <summary>

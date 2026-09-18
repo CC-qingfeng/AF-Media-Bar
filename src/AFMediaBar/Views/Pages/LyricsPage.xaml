@@ -165,21 +165,54 @@
                                     Icon="{ui:SymbolIcon TextBulletListSquare24}"
                                     IsNested="True"
                                     Title="{DynamicResource Loc.Lyrics.Row.SecondLine.Title}">
-                                    <!--
-                                        顺序即优先级：所选内容优先，其次是固定回退顺序（翻译 → 音译 → 下一句）。
-                                        下拉框只挑选首选来源，回退顺序由 `LyricsSecondaryLinePolicy.FallbackOrder` 决定。
-                                        The order is the priority: the chosen source first, then the fixed fallback order (translation,
-                                        romanization, next line). The selector only picks the preferred source; the fallback order lives in
-                                        `LyricsSecondaryLinePolicy.FallbackOrder`.
-                                    -->
-                                    <ComboBox
-                                        MinWidth="160"
-                                        SelectedValue="{Binding ViewModel.SecondaryLineMode, Mode=TwoWay}"
-                                        SelectedValuePath="Tag">
-                                        <ComboBoxItem Content="{DynamicResource Loc.Lyrics.SecondLine.Translation}" Tag="{x:Static settings:LyricsSecondaryLineMode.Translation}" />
-                                        <ComboBoxItem Content="{DynamicResource Loc.Lyrics.SecondLine.Romanization}" Tag="{x:Static settings:LyricsSecondaryLineMode.Romanization}" />
-                                        <ComboBoxItem Content="{DynamicResource Loc.Lyrics.SecondLine.NextLine}" Tag="{x:Static settings:LyricsSecondaryLineMode.NextLine}" />
-                                    </ComboBox>
+                                    <TextBlock
+                                        MaxWidth="260"
+                                        Style="{StaticResource AfSettingsRowDescriptionStyle}"
+                                        Text="{Binding ViewModel.SecondaryLineOrderText}"
+                                        TextWrapping="Wrap" />
+                                </components:SettingsRow>
+
+                                <!--
+                                    顺序即优先级，与来源列表同一套写法：一行一种来源，自带上下移按钮。
+                                    The order is the priority, written exactly like the source list: one source per row with its own move buttons.
+                                -->
+                                <ItemsControl Margin="0,0,0,4" ItemsSource="{Binding ViewModel.SecondaryLineEntries}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <components:SettingsRow
+                                                Description="{DynamicResource Loc.Lyrics.Row.SecondLine.OrderRow.Description}"
+                                                IsNested="True"
+                                                Title="{Binding DisplayName}">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <ui:Button
+                                                        Command="{Binding DataContext.ViewModel.MoveSecondaryLineUpCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                        CommandParameter="{Binding}"
+                                                        Icon="{ui:SymbolIcon ArrowUp24}"
+                                                        Style="{StaticResource AfSettingsIconButtonStyle}"
+                                                        ToolTip="{DynamicResource Loc.Lyrics.Sources.MoveUp}" />
+                                                    <ui:Button
+                                                        Margin="4,0,0,0"
+                                                        Command="{Binding DataContext.ViewModel.MoveSecondaryLineDownCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                        CommandParameter="{Binding}"
+                                                        Icon="{ui:SymbolIcon ArrowDown24}"
+                                                        Style="{StaticResource AfSettingsIconButtonStyle}"
+                                                        ToolTip="{DynamicResource Loc.Lyrics.Sources.MoveDown}" />
+                                                </StackPanel>
+                                            </components:SettingsRow>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <components:SettingsRow
+                                    Description="{DynamicResource Loc.Lyrics.SecondLine.Reset.Description}"
+                                    Icon="{ui:SymbolIcon ArrowReset24}"
+                                    IsNested="True"
+                                    Title="{DynamicResource Loc.Lyrics.SecondLine.Reset.Title}">
+                                    <ui:Button
+                                        Command="{Binding ViewModel.ResetSecondaryLineOrderCommand}"
+                                        Content="{DynamicResource Loc.Lyrics.Sources.Reset.Action}"
+                                        Icon="{ui:SymbolIcon ArrowReset24}"
+                                        Style="{StaticResource AfSettingsButtonStyle}" />
                                 </components:SettingsRow>
                             </StackPanel>
                         </ui:CardExpander>

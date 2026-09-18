@@ -390,8 +390,9 @@ internal static class StringsEn
         table.Add("Lyrics.Row.InfoLines.Title", "Filter credit lines");
         table.Add("Lyrics.Row.MatchStrictness.Description", "How closely a lyric search by title has to match; the stricter it is, the less likely a same-named live version or cover is accepted");
         table.Add("Lyrics.Row.MatchStrictness.Title", "Search match strictness");
-        table.Add("Lyrics.Row.SecondLine.Description", "Chooses the next lyric line, the translation, or the romanization of the current line; a missing choice falls back to translation, romanization, then the next line");
-        table.Add("Lyrics.Row.SecondLine.Note", "Order: the chosen source, then translation, romanization, and the next line; missing sources are skipped");
+        table.Add("Lyrics.Row.SecondLine.Description", "The second line shows the translation, the romanization, or the next lyric line; the order is the priority and a missing source is skipped");
+        table.Add("Lyrics.Row.SecondLine.Note", "The order is the priority: the source listed first is used first, and an empty one falls through to the next");
+        table.Add("Lyrics.Row.SecondLine.OrderRow.Description", "Moving a row up raises its priority");
         table.Add("Lyrics.Row.SecondLine.Title", "Second-line content");
         table.Add("Lyrics.Row.ShowLyrics.Description", "Syncs the current line to playback progress; when off, the title and artist are shown");
         table.Add("Lyrics.Row.ShowLyrics.Title", "Show live lyrics");
@@ -404,6 +405,8 @@ internal static class StringsEn
         table.Add("Lyrics.Row.UnsungOpacity.Description", "Opacity of the text that has not been sung yet; lower means a stronger contrast (45% by default)");
         table.Add("Lyrics.Row.UnsungOpacity.Title", "Unsung-part opacity");
         table.Add("Lyrics.SecondLine.NextLine", "Next lyric line");
+        table.Add("Lyrics.SecondLine.Reset.Description", "Restores the order to translation, romanization, next line");
+        table.Add("Lyrics.SecondLine.Reset.Title", "Restore the default order");
         table.Add("Lyrics.SecondLine.Romanization", "Romanization of the current line");
         table.Add("Lyrics.SecondLine.Translation", "Translation of the current line");
         table.Add("Lyrics.Source.Kugou", "Kugou Music");
@@ -483,7 +486,10 @@ internal static class StringsEn
         table.Add("Media.Spectrum.BandCount.Description", "Number of spectrum bars (9–24); the bar width is fixed, so more bars make the spectrum wider");
         table.Add("Media.Spectrum.BandCount.Title", "Bar count");
         table.Add("Media.Spectrum.BandCount.Value", "{0} bars");
-        table.Add("Media.Spectrum.Parameters.Description", "Bar count, refresh rate, and sensitivity");
+        table.Add("Media.Spectrum.ContentHeight.Description", "Height of the spectrum (14–34 DIP, the direction perpendicular to the taskbar); taller bars do not make the spectrum wider");
+        table.Add("Media.Spectrum.ContentHeight.Title", "Spectrum height");
+        table.Add("Media.Spectrum.ContentHeight.Value", "{0:0} DIP");
+        table.Add("Media.Spectrum.Parameters.Description", "Bar count, height, refresh rate, and sensitivity");
         table.Add("Media.Spectrum.Parameters.Title", "Spectrum parameters");
         table.Add("Media.Spectrum.RefreshRate.Description", "How often the spectrum refreshes (5–30 Hz)");
         table.Add("Media.Spectrum.RefreshRate.Title", "Refresh rate");

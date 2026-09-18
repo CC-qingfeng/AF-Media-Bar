@@ -31,11 +31,22 @@ public partial class LyricsViewModel : ObservableObject
         SettingsManager.SettingsChanged += OnSettingsChanged;
         _localization.LanguageChanged += OnLanguageChanged;
         RefreshSourceEntries();
+        RefreshSecondaryLineEntries();
     }
 
     public bool LyricsEnabled { get => SettingsManager.Current.LyricsEnabled; set { SettingsManager.SetLyricsEnabled(value); RaiseAll(); } }
     public bool TwoLineLyricsEnabled { get => SettingsManager.Current.TwoLineLyricsEnabled; set { SettingsManager.SetTwoLineLyricsEnabled(value); RaiseAll(); } }
-    public LyricsSecondaryLineMode SecondaryLineMode { get => SettingsManager.Current.LyricsSecondaryLineMode; set { SettingsManager.SetLyricsSecondaryLineMode(value); OnPropertyChanged(); } }
+    /// <summary>第二行顺序的可读描述（"翻译 → 音译 → 下一句"），与列表内容同步更新。/ A readable description of the second-line order ("translation, romanization, next line"), kept in step with the list.</summary>
+    public string SecondaryLineOrderText => string.Join(
+        " → ",
+        SecondaryLineEntries.Select(entry => entry.DisplayName));
+
+    /// <summary>
+    /// 第二行歌词的来源顺序（列表顺序即优先级）。界面用带上下移按钮的列表调整它，与来源列表同一套写法。
+    /// Source order of the second lyric line, where the list order is the priority. The interface adjusts it with a list carrying per-row move
+    /// buttons, exactly like the source list.
+    /// </summary>
+    public ObservableCollection<LyricsSecondaryLineSettingItem> SecondaryLineEntries { get; } = [];
     public LyricsTextAlignment TextAlignment { get => SettingsManager.Current.LyricsTextAlignment; set { SettingsManager.SetLyricsTextAlignment(value); OnPropertyChanged(); } }
 
     /// <summary>是否启用逐字擦亮。/ Whether syllable highlighting is enabled.</summary>
@@ -94,6 +105,7 @@ public partial class LyricsViewModel : ObservableObject
         if (e.ResetScope is SettingsResetScope.Lyrics or SettingsResetScope.All)
         {
             RefreshSourceEntries();
+            RefreshSecondaryLineEntries();
             RaiseAll();
             return;
         }
@@ -102,14 +114,23 @@ public partial class LyricsViewModel : ObservableObject
         {
             RefreshSourceEntries();
         }
+
+        if (e.PropertyName == nameof(AppSettings.LyricsSecondaryLine))
+        {
+            RefreshSecondaryLineEntries();
+        }
     }
 
-    private void OnLanguageChanged(object? sender, EventArgs e) => RefreshSourceEntries();
+    private void OnLanguageChanged(object? sender, EventArgs e)
+    {
+        RefreshSourceEntries();
+        RefreshSecondaryLineEntries();
+    }
 
     private void RaiseAll()
     {
         OnPropertyChanged(nameof(LyricsEnabled)); OnPropertyChanged(nameof(TwoLineLyricsEnabled));
-        OnPropertyChanged(nameof(SecondaryLineMode)); OnPropertyChanged(nameof(TextAlignment));
+        OnPropertyChanged(nameof(TextAlignment));
         OnPropertyChanged(nameof(SyllableHighlightEnabled)); OnPropertyChanged(nameof(UnsungOpacityPercent));
         OnPropertyChanged(nameof(UnsungOpacityText)); OnPropertyChanged(nameof(InfoLineFilterEnabled));
         OnPropertyChanged(nameof(MatchStrictness));
@@ -270,5 +291,93 @@ public partial class LyricsViewModel : ObservableObject
         }
 
         SaveSourceEntries();
+    }
+
+    /// <summary>
+    /// 重建第二行歌词的顺序列表：始终包含三种来源（顺序为用户给定的顺序，其余按默认顺序补在后面）。
+    /// Rebuilds the second lyric line's order list: it always contains all three sources, the user's order first and the remaining ones in the
+    /// default order after them.
+    /// </summary>
+    private void RefreshSecondaryLineEntries()
+    {
+        var order = new List<LyricsSecondaryLineMode>(LyricsSecondaryLinePolicy.DefaultOrder.Count);
+        foreach (var mode in LyricsSecondaryLinePolicy.ResolveOrder(SettingsManager.Current.LyricsSecondaryLine))
+        {
+            if (!order.Contains(mode))
+            {
+                order.Add(mode);
+            }
+        }
+
+        foreach (var mode in LyricsSecondaryLinePolicy.DefaultOrder)
+        {
+            if (!order.Contains(mode))
+            {
+                order.Add(mode);
+            }
+        }
+
+        SecondaryLineEntries.Clear();
+        foreach (var mode in order)
+        {
+            SecondaryLineEntries.Add(new LyricsSecondaryLineSettingItem(mode));
+        }
+
+        OnPropertyChanged(nameof(SecondaryLineEntries));
+        OnPropertyChanged(nameof(SecondaryLineOrderText));
+    }
+
+    /// <summary>把列表顺序写回设置：恰好等于默认顺序时写回"未配置"，与来源列表同一处理。/ Writes the list order back into the settings, storing an exact default order as "never configured", the same handling as the source list.</summary>
+    private void SaveSecondaryLineEntries()
+    {
+        var ordered = SecondaryLineEntries.Select(entry => entry.Mode).ToArray();
+        var isDefaultOrder = ordered.Length == LyricsSecondaryLinePolicy.DefaultOrder.Count &&
+                             ordered.SequenceEqual(LyricsSecondaryLinePolicy.DefaultOrder);
+        SettingsManager.SetLyricsSecondaryLineSettings(new LyricsSecondaryLineSettings(isDefaultOrder ? null : ordered));
+    }
+
+    private static string SecondaryLineLabelKey(LyricsSecondaryLineMode mode) =>
+        LyricsSecondaryLineSettingItem.ResolveLabelKey(mode);
+
+    [RelayCommand]
+    private void MoveSecondaryLineUp(LyricsSecondaryLineSettingItem? item) => MoveSecondaryLine(item, -1);
+
+    [RelayCommand]
+    private void MoveSecondaryLineDown(LyricsSecondaryLineSettingItem? item) => MoveSecondaryLine(item, 1);
+
+    private void MoveSecondaryLine(LyricsSecondaryLineSettingItem? item, int offset)
+    {
+        if (item is null)
+        {
+            return;
+        }
+
+        var index = SecondaryLineEntries.IndexOf(item);
+        var target = index + offset;
+        if (index < 0 || target < 0 || target >= SecondaryLineEntries.Count)
+        {
+            return;
+        }
+
+        SecondaryLineEntries.Move(index, target);
+        SaveSecondaryLineEntries();
+    }
+
+    [RelayCommand]
+    private void ResetSecondaryLineOrder()
+    {
+        var ordered = SecondaryLineEntries
+            .OrderBy(entry => LyricsSecondaryLinePolicy.DefaultOrder.ToList().IndexOf(entry.Mode))
+            .ToArray();
+        for (var i = 0; i < ordered.Length; i++)
+        {
+            var current = SecondaryLineEntries.IndexOf(ordered[i]);
+            if (current != i)
+            {
+                SecondaryLineEntries.Move(current, i);
+            }
+        }
+
+        SaveSecondaryLineEntries();
     }
 }

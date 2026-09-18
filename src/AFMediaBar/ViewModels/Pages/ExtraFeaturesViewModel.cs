@@ -116,6 +116,35 @@ public partial class ExtraFeaturesViewModel : ObservableObject
         set { SettingsManager.SetSpectrumComponentSettings(SettingsManager.Current.SpectrumComponent with { Style = value }); OnPropertyChanged(); }
     }
 
+    /// <summary>
+    /// 频谱内容区的横轴尺寸（横向任务栏就是高度）。它只影响柱子能长多高，宽度仍由柱数决定。
+    /// Cross-axis size of the spectrum content area, which is the height on a horizontal taskbar. It only decides how tall the bars can grow;
+    /// the width still follows the bar count.
+    /// </summary>
+    public double SpectrumContentHeightDip
+    {
+        get => SpectrumComponentSettings.SnapContentHeightDip(SettingsManager.Current.SpectrumComponent.ContentHeightDip);
+        set
+        {
+            var dip = SpectrumComponentSettings.SnapContentHeightDip(value);
+            SettingsManager.SetSpectrumComponentSettings(SettingsManager.Current.SpectrumComponent with { ContentHeightDip = dip });
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(SpectrumContentHeightText));
+        }
+    }
+
+    /// <summary>频谱尺寸滑杆旁的读数。/ The reading next to the spectrum-size slider.</summary>
+    public string SpectrumContentHeightText => Translations.Format("Media.Spectrum.ContentHeight.Value", SpectrumContentHeightDip);
+
+    /// <summary>频率尺寸滑杆的下限，来自持久化常量而不是界面字面量。 / Lower bound of the spectrum-size slider, taken from the persistence constant rather than a UI literal.</summary>
+    public double MinimumSpectrumContentHeightDip => SpectrumComponentSettings.MinimumContentHeightDip;
+
+    /// <inheritdoc cref="MinimumSpectrumContentHeightDip" />
+    public double MaximumSpectrumContentHeightDip => SpectrumComponentSettings.MaximumContentHeightDip;
+
+    /// <inheritdoc cref="MinimumSpectrumContentHeightDip" />
+    public double SpectrumContentHeightStepDip => SpectrumComponentSettings.ContentHeightStepDip;
+
     /// <summary>柱数滑杆的下限，来自持久化常量而不是界面字面量。 / Lower bound of the bar-count slider, taken from the persistence constant rather than a UI literal.</summary>
     public int MinimumSpectrumBandCount => SpectrumComponentSettings.MinimumBandCount;
 
