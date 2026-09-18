@@ -48,11 +48,16 @@ public sealed class GlobalInteractionRouter
                 }
 
                 // 结果里带上切歌之后的曲名：提示要回答的是"刚才发生了什么"，只写"下一首"等于把用户已经知道的事说了一遍。
+                // 切歌是异步的：播放器要过一会儿才发布新会话，因此这里先给出当时读到的曲名，并把结果标记为"曲名可能变化"，
+                // 由提示的轮询在标题真正更新后改写——否则提示会一直显示切歌**之前**的那首。
                 // The result carries the title after the skip: the tooltip answers "what just happened", and saying only "next" would
-                // restate what the user already knows.
+                // restate what the user already knows. A skip is asynchronous — the player publishes the new session a moment later — so the
+                // title read here is provisional and the result is marked as "the title may still change", letting the tooltip's poll rewrite
+                // it once the new track arrives. Otherwise the tooltip keeps showing the track from *before* the skip.
                 return new WheelTooltipResult(
                     WheelTooltipPolicy.BuildSkipActionName(delta),
-                    ResolveCurrentTitle());
+                    ResolveCurrentTitle(),
+                    DetailFollowsMedia: true);
 
             case WheelAction.SwitchMediaSource:
                 return CycleMediaSource(delta > 0 ? -steps : steps);
@@ -69,6 +74,9 @@ public sealed class GlobalInteractionRouter
                 return new WheelTooltipResult(Translations.Get("Common.OutputDevice"), StripLabel(detail));
             }
 
+            // 不绑定：什么都不做，也不写结果——"滚了但没反应"配上提示里的"已禁用"就是明确的答案。
+            // Not bound: nothing happens and no result is written; "the wheel did nothing" plus "disabled" in the tooltip is the answer.
+            case WheelAction.Disabled:
             default:
                 return null;
         }
@@ -121,7 +129,12 @@ public sealed class GlobalInteractionRouter
 /// <summary>一次滚轮手势的结果：动作名与结果细节，供提示文案拼装。/ Result of one wheel gesture: the action name and its detail, for the tooltip to compose.</summary>
 /// <param name="ActionName">动作的显示名（例如「下一首」）。/ Display name of the action, such as "next".</param>
 /// <param name="Detail">结果细节（曲名、媒体名、设备名或音量）；读不到时为 null。/ Result detail (title, media name, device name, or volume), or null when unreadable.</param>
-public readonly record struct WheelTooltipResult(string ActionName, string? Detail);
+/// <param name="DetailFollowsMedia">
+/// 细节是否还会随媒体变化：切歌是异步的，提示因此要在轮询里重新读一次曲名，否则会一直显示切歌之前的那首。
+/// Whether the detail still follows the media: a skip is asynchronous, so the tooltip re-reads the title on every poll instead of keeping the
+/// track from before the skip.
+/// </param>
+public readonly record struct WheelTooltipResult(string ActionName, string? Detail, bool DetailFollowsMedia = false);
 
 /// <summary>无 UI 依赖的全局滚轮映射。 / UI-independent global wheel mapping.</summary>
 public static class GlobalWheelGesturePolicy

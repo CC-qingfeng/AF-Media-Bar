@@ -4,25 +4,31 @@ using System.Globalization;
 namespace AFMediaBar.Classes.Services;
 
 /// <summary>
-/// 跑马灯的节奏常量。位置按**字符**计量、按**帧**推进：位置是连续的小数，窗口字符串只在整数位置跨过时改写，
-/// 小数部分由渲染变换补上，因此滚动是连续的，而不是一个字一个字地跳。
-/// Marquee timing constants. The position is measured in characters and advanced frame by frame: it is a continuous fraction, the
-/// window string is rewritten only when the integer position crosses, and the fraction is drawn with a render transform, so the
-/// scroll is continuous instead of jumping one character at a time.
+/// 跑马灯的节奏常量。位置按**像素**推进、按帧结算：速度恒定（DIP/秒），每帧的字符增量 = 像素增量 ÷ 当前开头字符的步进宽度。
+///
+/// 用像素而不是"每个字停留多久"来定速，是因为字宽不等：按字推进时宽字走得快、窄字走得慢，每跨过一个字符边界速度就突变一次，
+/// 看起来就是"一个字一个字地蹦"。按像素推进时屏幕上的移动速度恒定，只有**窗口字符串改写**的频率随字宽变化（那是不可见的）。
+/// Marquee timing. The position advances in **pixels**, settled once per frame: the speed is constant (DIP per second) and the per-frame
+/// character delta is the pixel delta divided by the advance of the character currently at the window's head.
+///
+/// The speed is defined in pixels rather than as a per-character dwell time because character widths differ: advancing per character makes wide
+/// characters move fast and narrow ones slow, so the speed jumps at every character boundary and the text reads as hopping one character at a
+/// time. Advancing per pixel keeps the on-screen speed constant, and only the rate at which the window string is rewritten follows the glyph
+/// widths, which is invisible.
 /// </summary>
 public static class MarqueeTiming
 {
     /// <summary>推进的帧间隔。/ Frame interval of the advance.</summary>
     public static readonly TimeSpan FrameInterval = TimeSpan.FromMilliseconds(16);
 
-    /// <summary>一个字符的停留时间：约每秒 4.5 个字，汉字读得下来，两行歌词也不会互相抢眼睛。 / Time one character takes: about 4.5 characters per second, which stays readable for CJK text without the two lyric rows competing for the eye.</summary>
-    public static readonly TimeSpan CharacterDuration = TimeSpan.FromMilliseconds(220);
+    /// <summary>恒定的滚动速度（DIP/秒）。取 60 与升级前的观感接近（约每秒 4.5 个汉字），但不再随字宽忽快忽慢。 / Constant scroll speed in DIP per second. Sixty matches the previous feel — about 4.5 CJK characters per second — without the speed changing with glyph width.</summary>
+    public const double ScrollSpeedDipPerSecond = 60;
 
-    /// <summary>每帧推进的字符数。/ Characters advanced per frame.</summary>
-    public static double CharactersPerFrame => FrameInterval.TotalMilliseconds / CharacterDuration.TotalMilliseconds;
+    /// <summary>每帧推进的距离（DIP）。/ Distance advanced per frame, in DIP.</summary>
+    public static double DipPerFrame => ScrollSpeedDipPerSecond * FrameInterval.TotalMilliseconds / 1000;
 
-    /// <summary>开始推进前保持原位的字符数，让开头的字先读完。 / Characters the text stays put before advancing, so the beginning can be read first.</summary>
-    public const double LeadInCharacters = 3;
+    /// <summary>开始推进前的停留时间，让开头的字先读完。 / How long the text stays put before advancing, so the beginning can be read first.</summary>
+    public static readonly TimeSpan LeadInDuration = TimeSpan.FromMilliseconds(660);
 }
 
 /// <summary>
@@ -174,6 +180,11 @@ public static class MarqueeRotationPolicy
     /// <summary>窗口长度（原文加间隔）的字符数。/ Character count of the window, which is the content plus the separator.</summary>
     /// <param name="contentLength">原文字符数。/ Content length in characters.</param>
     public static int ResolveWindowLength(int contentLength) => contentLength <= 0 ? 0 : contentLength + Separator.Length;
+
+    /// <summary>轮转窗口对应的整段文字（原文加间隔）；前缀宽度表按这段文字测，偏移因此可以直接当索引用。/ The whole text a rotation window is built from, content plus separator; the prefix-width table is measured on it, so the offset is directly an index into it.</summary>
+    /// <param name="content">原文。/ Original content.</param>
+    public static string BuildSource(string? content) =>
+        string.IsNullOrEmpty(content) ? string.Empty : content + Separator;
 }
 
 /// <summary>

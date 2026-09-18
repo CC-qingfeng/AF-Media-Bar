@@ -341,6 +341,7 @@ internal static class StringsZhHant
         table.Add("Interaction.Row.TrayPrimaryWheel.Description", "僅在指標位於托盤圖示上時生效");
         table.Add("Interaction.SharedModifier.Callout", "使用滑鼠左鍵或右鍵作為按鍵時，滾輪後產生的點擊或功能表會被抑制，避免誤觸。");
         table.Add("Interaction.SharedModifier.Group.Description", "按住該按鍵再捲動滾輪，觸發「組合滾輪」");
+        table.Add("Interaction.Disabled", "停用");
         table.Add("Interaction.TrayAction.OpenAudioControl", "開啟音訊控制功能表");
         table.Add("Interaction.TrayAction.OpenContextMenu", "開啟右鍵功能表");
         table.Add("Interaction.TrayAction.OpenCurrentAppVolumeMenu", "開啟目前應用程式音量功能表");

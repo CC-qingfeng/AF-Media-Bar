@@ -167,10 +167,10 @@ AF Media Bar is not commercially code-signed, so Windows SmartScreen may show an
 | Action | Result |
 | --- | --- |
 | Hover over the bar | With media connected, artwork, text, and the playing spectrum use independent legacy hover feedback; opening controls directly blurs/dims the original text while buttons remain crisp; when Hover is disabled, a text-region pull handle still opens Full |
-| Click artwork | Play/pause by default, or bind it to activate the current media app or open the full layer |
-| Click title or lyric | Activate the current media app by default, or bind it to play/pause or open the full layer |
+| Click artwork | Play/pause by default, or bind it to activate the current media app, open the full layer, or nothing at all |
+| Click title or lyric | Activate the current media app by default, or bind it to play/pause, open the full layer, or nothing at all |
 | Open the Lyrics page | Toggle live lyrics, secondary content, and alignment |
-| Scroll up/down over the media area | Bind plain and modified wheel gestures to previous/next, media-source cycling, output-device cycling, or current-media volume; defaults are previous/next and Shift + source cycling |
+| Scroll up/down over the media area | Bind plain and modified wheel gestures to previous/next, media-source cycling, output-device cycling, current-media volume, or nothing at all; defaults are previous/next and Shift + source cycling, and the tooltip after a scroll shows the result (the title follows the new track once it arrives) |
 | Right-click the bar and choose “Switch media source” | Switch between available media sessions |
 | Enable Track-change notification under Media &amp; Notifications | Show the current track only after an observable track change begins playing; configure placement, duration, fullscreen policy, and fixed/foreground display targeting |
 | Choose the taskbar target display under Display Modes | Close an open Full panel and rebuild the taskbar host through its safe reload path; a disconnected target temporarily falls back to the primary display without discarding the preference |

@@ -230,17 +230,29 @@ public sealed class MarqueePolicyTests
     }
 
     /// <summary>
-    /// 位置按帧推进：每帧的字符数由帧间隔与单字停留时间决定，且远小于一个字（否则又回到"一个字一个字地跳"）。
-    /// The position advances per frame: the per-frame character count follows from the frame interval and the per-character duration and is
-    /// far below one character, which is what keeps the scroll from jumping a character at a time.
+    /// 位置按帧、按**像素**推进：速度是常量（DIP/秒），每帧的字符增量 = 像素增量 ÷ 当前字宽。
+    /// 用像素定速是为了让屏幕上的速度恒定——按字定速时宽字走得快、窄字走得慢，每跨一个字符边界速度就变一次，看起来就是一个字一个字地蹦。
+    /// The position advances per frame and in **pixels**: the speed is a constant in DIP per second and the per-frame character delta is the pixel
+    /// delta divided by the current character's width. Pixels are what keeps the on-screen speed constant — a per-character speed makes wide
+    /// characters move fast and narrow ones slow, changing the speed at every character boundary and reading as hopping one character at a time.
     /// </summary>
     [TestMethod]
-    public void PositionAdvancesInSmallContinuousSteps()
+    public void PositionAdvancesAtAConstantPixelSpeed()
     {
-        const double perFrame = 16d / 220d;
-        Assert.AreEqual(perFrame, MarqueeTiming.CharactersPerFrame, 0.0001);
-        Assert.IsTrue(MarqueeTiming.CharactersPerFrame < 0.1, "每帧推进必须远小于一个字 / a frame must advance far less than a character");
-        Assert.IsTrue(MarqueeTiming.CharactersPerFrame > 0, "每帧推进必须大于零 / a frame has to advance something");
+        Assert.AreEqual(16, MarqueeTiming.FrameInterval.TotalMilliseconds, 0.001);
+        Assert.AreEqual(60, MarqueeTiming.ScrollSpeedDipPerSecond, 0.001);
+        // 60 DIP/秒 × 16 毫秒 ≈ 每帧 0.96 DIP：一个 13 DIP 的汉字因此约 13.5 帧走完，屏幕上是连续移动。
+        // Sixty DIP per second over sixteen milliseconds is about 0.96 DIP per frame, so a thirteen-DIP character takes about 13.5 frames and the
+        // movement looks continuous.
+        Assert.AreEqual(0.96, MarqueeTiming.DipPerFrame, 0.001);
+
+        // 同样的像素增量在宽字上对应更小的字符增量，因此两者的屏幕速度一致。
+        // The same pixel delta covers fewer characters on a wide glyph, which is what makes the on-screen speed identical.
+        const double wide = 26;
+        const double narrow = 6;
+        Assert.AreEqual(MarqueeTiming.DipPerFrame / wide, MarqueeTiming.DipPerFrame / wide, 0.0001);
+        Assert.IsTrue(MarqueeTiming.DipPerFrame / wide < MarqueeTiming.DipPerFrame / narrow);
+        Assert.IsTrue(MarqueeTiming.LeadInDuration > TimeSpan.Zero);
     }
 
     /// <summary>

@@ -135,10 +135,9 @@ public partial class TaskBarMediaControl
             // A value of minus one means "no window written yet", so the next frame always rewrites the window text instead of leaving the
             // previous line's window on screen.
             state.WindowStart = -1;
-            state.Phase = 0;
             state.OffsetDip = 0;
             state.RevealWidth = 0;
-            state.LeadIn = MarqueeTiming.LeadInCharacters;
+            state.LeadIn = MarqueeTiming.LeadInDuration;
         }
 
         state.AvailableWidth = available;
@@ -148,7 +147,6 @@ public partial class TaskBarMediaControl
             state.Advancing = false;
             state.Position = 0;
             state.WindowStart = -1;
-            state.Phase = 0;
             state.OffsetDip = 0;
             state.RevealWidth = 0;
             state.Window = state.Base;
@@ -226,47 +224,52 @@ public partial class TaskBarMediaControl
                 (int)Math.Floor(state.Position),
                 Math.Max(0, state.Base.Length - 1))
             : MarqueeRotationPolicy.ResolveWindowStart(state.Base, (int)Math.Floor(state.Position));
-        // 起点可以落在理想位置**之后**（对齐到文本元素边界时），因此小数位移是有符号的：起点在理想位置之后要向右补回一点，
-        // 否则那一相位会跳一个字。
-        // The start may land after the ideal position when it snapped to a text-element boundary, so the fractional offset is signed: a
-        // start past the ideal position has to be compensated towards the right, or that phase would jump by one character.
-        state.Phase = state.Position - state.WindowStart;
+        if (!state.Following)
+        {
+            UpdateRotationOffset(state);
+        }
+
         WriteMarqueeWindow(state);
     }
 
     /// <summary>
-    /// 懒测原文的前缀宽度表并返回"已经测到第几个字符"：位置与裁剪宽度都按**宽度**换算，因此需要"前 i 个字符有多宽"。
-    /// 表按需向前长（唱到哪测到哪，均摊下来每唱一个字测一次），换行或改字号时整表重测并从头开始。
-    /// Lazily measures the content's prefix-width table and returns how many characters have been measured. Both the position and the clip
-    /// width are solved by width, which needs "how wide are the first i characters". The table grows on demand, so the cost is amortised to
-    /// roughly one measurement per sung character, and a new line or a font change restarts it.
+    /// 懒测一段文字的前缀宽度表并返回"已经测到第几个字符"，表按需向前长。
+    ///
+    /// 轮转式按 <c>原文 + 接缝</c> 测（偏移即索引），跟随式按原文测（已唱位置即索引）；两者都从同一张表读出行进速度、
+    /// 小数位移与裁剪宽度，因此三者永远一致。换文字、换字号或换字重时整表重测。
+    /// Lazily measures the prefix-width table of one text and returns how many characters have been measured, growing on demand.
+    ///
+    /// The rotation mode measures `content + separator` so the offset is the index, while the follow mode measures the content so the sung
+    /// position is the index. Both read the travel speed, the fractional offset, and the clip width from that one table, which keeps the three
+    /// consistent. A different text, font size, or font weight re-measures everything.
     /// </summary>
     /// <param name="state">该元素的推进状态。/ Advance state of that element.</param>
+    /// <param name="text">要测量的文字。/ The text to measure.</param>
     /// <param name="requiredCharacters">本次至少需要的字符数。/ Characters needed by this step at the very least.</param>
-    private static int EnsurePrefixWidths(MarqueeTextState state, int requiredCharacters)
+    private static int EnsurePrefixWidths(MarqueeTextState state, string text, int requiredCharacters)
     {
         var element = state.Element;
-        var contentLength = state.Base.Length;
+        var textLength = text.Length;
         var valid = state.PrefixWidths is { } cached &&
-                    cached.Length == contentLength + 1 &&
-                    string.Equals(state.PrefixContent, state.Base, StringComparison.Ordinal) &&
+                    cached.Length == textLength + 1 &&
+                    string.Equals(state.PrefixContent, text, StringComparison.Ordinal) &&
                     Math.Abs(state.PrefixFontSize - element.FontSize) < 0.01 &&
                     state.PrefixFontWeight == element.FontWeight &&
                     Equals(state.PrefixFontFamily, element.FontFamily);
         if (!valid)
         {
-            state.PrefixWidths = new double[contentLength + 1];
+            state.PrefixWidths = new double[textLength + 1];
             state.PrefixMeasuredCharacters = 0;
-            state.PrefixContent = state.Base;
+            state.PrefixContent = text;
             state.PrefixFontSize = element.FontSize;
             state.PrefixFontWeight = element.FontWeight;
             state.PrefixFontFamily = element.FontFamily;
         }
 
         var widths = state.PrefixWidths!;
-        var target = Math.Clamp(requiredCharacters, state.PrefixMeasuredCharacters, contentLength);
+        var target = Math.Clamp(requiredCharacters, state.PrefixMeasuredCharacters, textLength);
         for (var index = state.PrefixMeasuredCharacters + 1; index <= target; index++)
-            widths[index] = MeasureTextWidthExact(state.Base[..index], element);
+            widths[index] = MeasureTextWidthExact(text[..index], element);
 
         state.PrefixMeasuredCharacters = target;
         return target;
@@ -285,13 +288,7 @@ public partial class TaskBarMediaControl
         var window = state.Following
             ? MarqueeFollowPolicy.BuildWindow(state.Base, state.WindowStart)
             : MarqueeRotationPolicy.BuildWindow(state.Base, state.WindowStart);
-        if (!string.Equals(state.Window, window, StringComparison.Ordinal))
-        {
-            state.Window = window;
-            // 开头那个字符的步进宽度就是小数位移的换算基准：位置的小数部分代表"这个字已经移出多少"。
-            // The head character's advance is what converts the fractional offset: the fraction is how much of it has already left.
-            state.HeadCharacterWidth = ResolveHeadCharacterAdvance(window, element);
-        }
+        state.Window = window;
 
         if (!string.Equals(element.Text, state.Window, StringComparison.Ordinal))
             element.Text = state.Window;
@@ -323,44 +320,19 @@ public partial class TaskBarMediaControl
     }
 
     /// <summary>
-    /// 窗口开头那个字符的**步进宽度**：用"整窗宽度减去掉头之后的宽度"求得，因此它与下一个字之间的字距调整也算在内。
-    /// 单独测一个字形得到的是孤立宽度，字距调整会让窗口轮转的那一刻差出不到一个像素——那正是"顿"的来源。
-    /// Advance width of the window's head character: it is the window's width minus the width without its head, which therefore includes
-    /// the kerning towards the next character. Measuring the glyph in isolation gives its standalone width, and the kerning difference
-    /// makes the wrap moment land off by a fraction of a pixel, which is exactly what reads as a stutter.
-    /// </summary>
-    /// <param name="window">当前窗口文字。/ Current window text.</param>
-    /// <param name="element">文本元素（取字号与字族）。/ Text element, for the font size and family.</param>
-    private static double ResolveHeadCharacterAdvance(string window, TextBlock element)
-    {
-        if (string.IsNullOrEmpty(window))
-            return 0;
-
-        var head = MarqueeTextBoundary.FirstElement(window);
-        if (head.Length >= window.Length)
-            return MeasureTextWidthExact(window, element);
-
-        var advance = MeasureTextWidthExact(window, element) - MeasureTextWidthExact(window[head.Length..], element);
-        return advance > 0 ? advance : MeasureTextWidthExact(head, element);
-    }
-
-    /// <summary>
-    /// 把窗口的小数位置写进渲染变换：窗口字符串只在整数位置跨过时改写，小数部分因此由连续的位移补上——
-    /// 滚动是连续的，而不是一个字一个字地跳。歌词两层各有一个变换实例，每帧写同一个位移，亮区因此与字形一起移动。
-    /// Writes the window's fractional position into the render transform: the window string is rewritten only when the integer position
-    /// crosses, so the fraction is drawn as a continuous translation, which is what makes the scroll smooth instead of jumping one
-    /// character at a time. Each lyric layer has its own transform instance, written with the same offset every frame, so the reveal moves
-    /// with the glyphs.
+    /// 把位置的小数部分写进渲染变换：窗口字符串只在整数位置跨过时改写，小数部分由连续的位移补上，滚动因此是连续的。
+    /// 位移与行进速度同出前缀宽度表（`OffsetDip`），因此"这个字已经移出多少"与"这个字有多宽"永远一致，跨字符边界不会跳。
+    /// 歌词两层各有一个变换实例，每帧写同一个位移，亮区因此与字形一起移动。
+    /// Writes the fractional part of the position into the render transform: the window string is rewritten only when the integer position
+    /// crosses, and the fraction becomes a continuous translation, which is what makes the scroll smooth. The offset and the travel speed come
+    /// from the same prefix-width table (`OffsetDip`), so "how much of this character has left" always matches "how wide this character is" and
+    /// nothing jumps at a character boundary. Each lyric layer has its own transform instance, written with the same offset every frame, so the
+    /// reveal moves with the glyphs.
     /// </summary>
     /// <param name="state">该元素的推进状态。/ Advance state of that element.</param>
     private static void ApplyMarqueeOffset(MarqueeTextState state)
     {
-        // 跟随式直接给出位移（按宽度换算，与裁剪宽度同源），轮转式由位置的小数部分换算。
-        // The follow mode states its offset directly, solved from widths and therefore consistent with the clip width, while the rotation mode
-        // converts the fractional part of its position.
-        var offset = state.Advancing
-            ? state.Following ? state.OffsetDip : -state.Phase * state.HeadCharacterWidth
-            : 0;
+        var offset = state.Advancing ? state.OffsetDip : 0;
         if (!double.IsFinite(offset))
             offset = 0;
 
@@ -454,9 +426,14 @@ public partial class TaskBarMediaControl
             // 起读停留只属于轮转式：跟随式的位置由亮区决定，等一拍会让亮区先跑出窗口。
             // The lead-in pause belongs to the rotation mode only: a follow window's position is decided by the reveal, and waiting a beat
             // would let the reveal leave the window first.
-            if (!state.Following && state.LeadIn > 0)
+            if (!state.Following && state.LeadIn > TimeSpan.Zero)
             {
-                state.LeadIn = Math.Max(0, state.LeadIn - MarqueeTiming.CharactersPerFrame);
+                state.LeadIn -= MarqueeTiming.FrameInterval;
+                if (state.LeadIn < TimeSpan.Zero)
+                {
+                    state.LeadIn = TimeSpan.Zero;
+                }
+
                 continue;
             }
 
@@ -466,24 +443,80 @@ public partial class TaskBarMediaControl
                 continue;
             }
 
-            state.Position = WrapPosition(state.Position + MarqueeTiming.CharactersPerFrame, state.WindowLength);
-            var windowStart = MarqueeRotationPolicy.ResolveWindowStart(state.Base, (int)Math.Floor(state.Position));
-            state.Phase = state.Position - windowStart;
-            if (windowStart != state.WindowStart || !ShowsMarqueeWindow(state))
-            {
-                // 整数位置跨过，或应用改写了文字：改写窗口字符串（并重新测一次开头字符的宽度）。
-                // The integer position crossed, or the application rewrote the text: rewrite the window string and re-measure the head
-                // character's width.
-                state.WindowStart = windowStart;
-                WriteMarqueeWindow(state);
-                continue;
-            }
-
-            ApplyMarqueeOffset(state);
+            AdvanceRotation(state);
         }
 
         if (!anyAdvancing)
             _marqueeTimer.Stop();
+    }
+
+    /// <summary>
+    /// 轮转式的一帧：**按像素定速**推进。
+    ///
+    /// 每帧的字符增量 = 每帧像素 ÷ 当前开头字符的步进宽度，因此屏幕上的移动速度恒定；若改成"每个字固定停留多久"，
+    /// 宽字就会走得快、窄字走得慢，每跨一个字符边界速度突变一次，看起来就是"一个字一个字地蹦"。
+    /// 窗口字符串只在整数位置跨过时改写，小数部分由前缀宽度表换算成位移，与行进速度同出一张表。
+    /// One rotation frame, advancing at a **constant pixel speed**.
+    ///
+    /// The per-frame character delta is the per-frame pixel distance divided by the advance of the character at the window's head, which keeps the
+    /// on-screen speed constant. A fixed dwell time per character would instead make wide characters move fast and narrow ones slow, so the speed
+    /// would jump at every character boundary and the text would read as hopping one character at a time. The window string is rewritten only when
+    /// the integer position crosses, and the fractional part becomes a translation read from the same prefix-width table as the travel speed.
+    /// </summary>
+    /// <param name="state">该元素的推进状态。/ Advance state of that element.</param>
+    private static void AdvanceRotation(MarqueeTextState state)
+    {
+        var source = MarqueeRotationPolicy.BuildSource(state.Base);
+        if (source.Length == 0 || state.WindowLength <= 0)
+        {
+            return;
+        }
+
+        // 只需要测到"当前开头字符"再加一个：表随轮转向前长，均摊每跨一个字符测一次。
+        // Only the current head character plus one has to be measured: the table grows with the rotation, amortised to one measurement per
+        // character crossed.
+        var head = MarqueeRotationPolicy.NormalizeOffset((int)Math.Floor(state.Position), state.WindowLength);
+        var measured = EnsurePrefixWidths(state, source, Math.Min(source.Length, head + 2));
+        var widths = state.PrefixWidths;
+        var headAdvance = MarqueeFollowPolicy.ResolveWidthAt(widths, measured, head + 1) -
+                          MarqueeFollowPolicy.ResolveWidthAt(widths, measured, head);
+        var step = headAdvance > 0.01 ? MarqueeTiming.DipPerFrame / headAdvance : 0;
+        state.Position = WrapPosition(state.Position + step, state.WindowLength);
+        var windowStart = MarqueeRotationPolicy.ResolveWindowStart(state.Base, (int)Math.Floor(state.Position));
+        if (windowStart != state.WindowStart || !ShowsMarqueeWindow(state))
+        {
+            // 整数位置跨过，或应用改写了文字：改写窗口字符串。
+            // The integer position crossed, or the application rewrote the text: rewrite the window string.
+            state.WindowStart = windowStart;
+            UpdateRotationOffset(state);
+            WriteMarqueeWindow(state);
+            return;
+        }
+
+        UpdateRotationOffset(state);
+        ApplyMarqueeOffset(state);
+    }
+
+    /// <summary>
+    /// 轮转式的位移：位置的小数部分在"当前开头字符"这一段里已经走过多宽。速度与位移同出一张前缀宽度表，
+    /// 因此跨字符边界时位移正好接上（差值为零），不会出现肉眼可见的跳动。
+    /// The rotation offset: how much of the head character's advance the fractional position has already covered. The speed and the offset come
+    /// from the same prefix-width table, so the offset lines up exactly across a character boundary with no visible jump.
+    /// </summary>
+    /// <param name="state">该元素的推进状态。/ Advance state of that element.</param>
+    private static void UpdateRotationOffset(MarqueeTextState state)
+    {
+        var source = MarqueeRotationPolicy.BuildSource(state.Base);
+        if (source.Length == 0)
+        {
+            state.OffsetDip = 0;
+            return;
+        }
+
+        var required = Math.Min(source.Length, Math.Max(state.WindowStart, (int)Math.Floor(state.Position)) + 2);
+        var measured = EnsurePrefixWidths(state, source, required);
+        state.OffsetDip = -(MarqueeFollowPolicy.ResolveWidthAt(state.PrefixWidths, measured, state.Position) -
+                            MarqueeFollowPolicy.ResolveWidthAt(state.PrefixWidths, measured, state.WindowStart));
     }
 
     /// <summary>
@@ -509,7 +542,7 @@ public partial class TaskBarMediaControl
         // 只需要测到"已经唱到的那一个字"：表随演唱向前长，均摊每唱一个字测一次。
         // Only the characters sung so far have to be measured: the table grows with the singing, which amortises to one measurement per
         // sung character.
-        var measured = EnsurePrefixWidths(state, (int)Math.Ceiling(sung) + 1);
+        var measured = EnsurePrefixWidths(state, state.Base, (int)Math.Ceiling(sung) + 1);
         var widths = state.PrefixWidths;
 
         // 播放位置来自播放器上报的时间轴，很多播放器按整秒上报，于是外推值每秒会被修正回退一次。
@@ -561,10 +594,9 @@ public partial class TaskBarMediaControl
             state.Key = string.Empty;
             state.Position = 0;
             state.WindowStart = -1;
-            state.Phase = 0;
             state.OffsetDip = 0;
             state.RevealWidth = 0;
-            state.LeadIn = MarqueeTiming.LeadInCharacters;
+            state.LeadIn = MarqueeTiming.LeadInDuration;
             state.Advancing = false;
             state.Following = false;
             state.Window = state.Base;
@@ -659,20 +691,14 @@ public partial class TaskBarMediaControl
         /// <summary>连续位置（字符）：轮转式按窗口长度回绕，跟随式是原文里的起点。/ Continuous position in characters: wrapped by the window length in the rotation mode and the content start in the follow mode.</summary>
         public double Position { get; set; }
 
-        /// <summary>当前窗口字符串对应的整数位置。/ Integer position behind the current window string.</summary>
-        public int WindowStart { get; set; }
-
-        /// <summary>位置的小数部分，由渲染变换承担。/ Fractional part of the position, carried by the render transform.</summary>
-        public double Phase { get; set; }
-
-        /// <summary>窗口开头字符的宽度（DIP），用于把小数位置换算成位移。/ Width of the window's head character in DIP, which converts the fractional position into a translation.</summary>
-        public double HeadCharacterWidth { get; set; }
+        /// <summary>当前窗口字符串对应的整数位置；-1 表示"还没有写过窗口"。/ Integer position behind the current window string, where minus one means no window written yet.</summary>
+        public int WindowStart { get; set; } = -1;
 
         /// <summary>轮转式窗口的字符数（原文加间隔）。/ Rotation window length in characters: content plus separator.</summary>
         public int WindowLength { get; set; }
 
-        /// <summary>起读停留剩余的字符数。/ Remaining lead-in in characters.</summary>
-        public double LeadIn { get; set; } = MarqueeTiming.LeadInCharacters;
+        /// <summary>起读停留的剩余时间（只对轮转式有效）。/ Remaining lead-in time, which only the rotation mode uses.</summary>
+        public TimeSpan LeadIn { get; set; } = MarqueeTiming.LeadInDuration;
 
         /// <summary>该元素当前是否正在推进。/ Whether that element is currently advancing.</summary>
         public bool Advancing { get; set; }

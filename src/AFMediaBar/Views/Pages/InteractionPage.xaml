@@ -95,6 +95,7 @@
                                 <ComboBoxItem Content="{DynamicResource Loc.Common.PlayPause}" Tag="{x:Static settings:PlayerClickAction.TogglePlayPause}" />
                                 <ComboBoxItem Content="{DynamicResource Loc.Common.ActivateSourceApplication}" Tag="{x:Static settings:PlayerClickAction.ActivateSource}" />
                                 <ComboBoxItem Content="{DynamicResource Loc.Common.OpenFullPanel}" Tag="{x:Static settings:PlayerClickAction.OpenFullPanel}" />
+                                <ComboBoxItem Content="{DynamicResource Loc.Interaction.Disabled}" Tag="{x:Static settings:PlayerClickAction.Disabled}" />
                             </ComboBox>
                         </components:SettingsRow>
 
@@ -108,6 +109,7 @@
                                 <ComboBoxItem Content="{DynamicResource Loc.Common.ActivateSourceApplication}" Tag="{x:Static settings:PlayerClickAction.ActivateSource}" />
                                 <ComboBoxItem Content="{DynamicResource Loc.Common.PlayPause}" Tag="{x:Static settings:PlayerClickAction.TogglePlayPause}" />
                                 <ComboBoxItem Content="{DynamicResource Loc.Common.OpenFullPanel}" Tag="{x:Static settings:PlayerClickAction.OpenFullPanel}" />
+                                <ComboBoxItem Content="{DynamicResource Loc.Interaction.Disabled}" Tag="{x:Static settings:PlayerClickAction.Disabled}" />
                             </ComboBox>
                         </components:SettingsRow>
 
@@ -123,6 +125,7 @@
                                 <ComboBoxItem Content="{DynamicResource Loc.Common.SwitchOutputDevice}" Tag="{x:Static settings:WheelAction.OutputDevice}" />
                                 <ComboBoxItem Content="{DynamicResource Loc.Common.AdjustCurrentMediaVolume}" Tag="{x:Static settings:WheelAction.CurrentApplicationVolume}" />
                                 <ComboBoxItem Content="{DynamicResource Loc.Common.SwitchPlayer}" Tag="{x:Static settings:WheelAction.SwitchMediaSource}" />
+                                <ComboBoxItem Content="{DynamicResource Loc.Interaction.Disabled}" Tag="{x:Static settings:WheelAction.Disabled}" />
                             </ComboBox>
                         </components:SettingsRow>
 
@@ -138,6 +141,7 @@
                                 <ComboBoxItem Content="{DynamicResource Loc.Common.AdjustCurrentMediaVolume}" Tag="{x:Static settings:WheelAction.CurrentApplicationVolume}" />
                                 <ComboBoxItem Content="{DynamicResource Loc.Common.SwitchOutputDevice}" Tag="{x:Static settings:WheelAction.OutputDevice}" />
                                 <ComboBoxItem Content="{DynamicResource Loc.Common.PreviousNextTrack}" Tag="{x:Static settings:WheelAction.PreviousNext}" />
+                                <ComboBoxItem Content="{DynamicResource Loc.Interaction.Disabled}" Tag="{x:Static settings:WheelAction.Disabled}" />
                             </ComboBox>
                         </components:SettingsRow>
                     </StackPanel>

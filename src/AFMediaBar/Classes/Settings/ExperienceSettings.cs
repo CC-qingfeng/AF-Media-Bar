@@ -17,7 +17,10 @@ public enum WheelAction
     PreviousNext = 0,
     CurrentApplicationVolume = 1,
     OutputDevice = 2,
-    SwitchMediaSource = 3
+    SwitchMediaSource = 3,
+
+    /// <summary>不绑定：滚轮在媒体栏上不做任何事（提示仍会说明"已禁用"）。成员值参与序列化，因此只能追加。 / Not bound: the wheel does nothing over the media bar, while the tooltip still states that it is disabled. Member values take part in serialization, so this may only be appended.</summary>
+    Disabled = 4
 }
 
 /// <summary>旧组合滚轮鼠标按键，仅保留用于读取早期设置。 / Legacy mouse chord retained only for reading older settings.</summary>
@@ -49,7 +52,10 @@ public enum PlayerClickAction
     ActivateSource = 1,
 
     /// <summary>打开完整层。 / Opens the full layer.</summary>
-    OpenFullPanel = 2
+    OpenFullPanel = 2,
+
+    /// <summary>不绑定：点击该区域不做任何事。成员值参与序列化，因此只能追加。 / Not bound: clicking that region does nothing. Member values take part in serialization, so this may only be appended.</summary>
+    Disabled = 3
 }
 
 /// <summary>普通滚轮映射切换到组合映射时使用的共享修饰键。 / Shared modifier that switches plain wheel input to its chord mapping.</summary>

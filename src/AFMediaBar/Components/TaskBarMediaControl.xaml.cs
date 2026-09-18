@@ -174,6 +174,9 @@ namespace AFMediaBar.Components
         private readonly ToolTip _wheelTooltip;
         private WheelGestureSlot? _appliedWheelSlot;
         private bool _wheelResultShown;
+
+        /// <summary>最近一次写入提示的滚轮结果；曲名随媒体变化的结果靠它重新读一次。/ The last wheel result written into the tooltip, used to re-read a title that follows the media.</summary>
+        private WheelTooltipResult? _wheelResult;
         private string _songInfoTooltip = string.Empty;
         private MediaSnapshot _snapshot = MediaSnapshot.Disconnected;
         private bool _isTaskbarHoverVisible;
@@ -321,7 +324,32 @@ namespace AFMediaBar.Components
         {
             _appliedWheelSlot = ChordWheelHeld ? WheelGestureSlot.Chord : WheelGestureSlot.Primary;
             _wheelResultShown = true;
+            _wheelResult = result;
             SetWheelTooltipText(WheelTooltipPolicy.BuildResult(result.ActionName, result.Detail));
+        }
+
+        /// <summary>
+        /// 曲名会随后续快照变化的结果（切歌）在轮询里重新读一次：切歌是异步的，滚动的那一刻会话还没换，
+        /// 因此提示要先显示当时的结果，等新会话到达后再改写成真正的曲名。
+        /// A result whose title follows later snapshots — a skip — is re-read on every poll: the skip is asynchronous and the session has not
+        /// switched yet when the wheel is turned, so the tooltip shows the result right away and rewrites it with the real title once the new
+        /// session arrives.
+        /// </summary>
+        private void RefreshWheelResultDetail()
+        {
+            if (_wheelResult is not { DetailFollowsMedia: true } result)
+            {
+                return;
+            }
+
+            var title = string.IsNullOrWhiteSpace(_snapshot.Title) ? null : _snapshot.Title;
+            if (string.Equals(result.Detail, title, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _wheelResult = result with { Detail = title };
+            SetWheelTooltipText(WheelTooltipPolicy.BuildResult(result.ActionName, title));
         }
 
         /// <summary>
@@ -420,6 +448,7 @@ namespace AFMediaBar.Components
                 return;
             }
 
+            RefreshWheelResultDetail();
             RefreshWheelTooltip();
             // 组合键按住期间每一次轮询都重申气泡：指针不动时不会有鼠标事件，而按下鼠标键本身会把气泡关掉。
             // Every poll tick re-asserts the bubble while the chord is held: a stationary pointer produces no mouse events, and pressing
@@ -777,6 +806,17 @@ namespace AFMediaBar.Components
             }
 
             RaiseDesiredSizeChanged();
+
+            // 跑马灯 MUST 放在本方法所有文字写入之后重跑：上面按内容布局写的标题会把正在滚动的窗口顶掉，而
+            // ApplyTaskbarSectionGeometry（以及它内部的跑马灯配置）发生在那之前，于是屏幕上会先留下原文开头，
+            // 直到下一帧推进才跳回窗口的位置——指针移入文字区（悬停进入也调用本方法）或每次快照轮询都会这样闪一下。
+            // The marquee must be re-applied after every text write in this method: the title written above for the content layout
+            // replaces the scrolling window, while ApplyTaskbarSectionGeometry — including the marquee configuration inside it — runs
+            // before that. The head of the content would then stay on screen until the next advance frame snaps back to the window's
+            // position, which is one visible jump each time the pointer enters the text area (hover entry calls this method too) and on
+            // every snapshot poll.
+            if (isHorizontalTaskbar)
+                ApplyMarqueeLayout(Math.Max(0, SongInfoStackPanel.Width));
         }
 
         /// <summary>
@@ -1434,6 +1474,10 @@ namespace AFMediaBar.Components
                     break;
                 case PlayerClickAction.OpenFullPanel:
                     RequestOpenFullPanel();
+                    break;
+                case PlayerClickAction.Disabled:
+                    // 不绑定：点击该区域什么都不做（命中仍然被吃掉，因为这一块本来就是媒体动作区）。
+                    // Not bound: clicking that region does nothing, while the hit stays consumed because the region is a media action area.
                     break;
                 default:
                     ActivateSourceRequested?.Invoke(this, EventArgs.Empty);

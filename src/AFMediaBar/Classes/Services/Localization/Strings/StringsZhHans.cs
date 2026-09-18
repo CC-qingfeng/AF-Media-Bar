@@ -341,6 +341,7 @@ internal static class StringsZhHans
         table.Add("Interaction.Row.TrayPrimaryWheel.Description", "仅在指针位于托盘图标上时生效");
         table.Add("Interaction.SharedModifier.Callout", "使用鼠标左键或右键作为按键时，滚轮后产生的点击或菜单会被抑制，避免误触。");
         table.Add("Interaction.SharedModifier.Group.Description", "按住该按键再滚动滚轮，触发「组合滚轮」");
+        table.Add("Interaction.Disabled", "禁用");
         table.Add("Interaction.TrayAction.OpenAudioControl", "打开音频控制菜单");
         table.Add("Interaction.TrayAction.OpenContextMenu", "打开右键菜单");
         table.Add("Interaction.TrayAction.OpenCurrentAppVolumeMenu", "打开当前应用音量菜单");

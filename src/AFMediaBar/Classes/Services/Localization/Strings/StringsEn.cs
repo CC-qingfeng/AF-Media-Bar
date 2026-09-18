@@ -341,6 +341,7 @@ internal static class StringsEn
         table.Add("Interaction.Row.TrayPrimaryWheel.Description", "Applies only while the pointer is over the tray icon");
         table.Add("Interaction.SharedModifier.Callout", "When the left or right mouse button is the modifier, the click or menu produced after a wheel gesture is suppressed to avoid an accidental action.");
         table.Add("Interaction.SharedModifier.Group.Description", "Hold this modifier while scrolling the wheel to trigger the chord wheel");
+        table.Add("Interaction.Disabled", "disabled");
         table.Add("Interaction.TrayAction.OpenAudioControl", "Open the audio control menu");
         table.Add("Interaction.TrayAction.OpenContextMenu", "Open the context menu");
         table.Add("Interaction.TrayAction.OpenCurrentAppVolumeMenu", "Open the current application volume menu");
