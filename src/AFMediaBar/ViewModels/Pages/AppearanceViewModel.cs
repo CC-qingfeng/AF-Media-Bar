@@ -2,6 +2,7 @@ using AFMediaBar.Classes.Settings;
 using AFMediaBar.Classes.Models.Layout;
 using AFMediaBar.Classes.Services;
 using AFMediaBar.Classes.Services.Localization;
+using AFMediaBar.Classes.Utils;
 using AFMediaBar.Resources;
 
 namespace AFMediaBar.ViewModels.Pages;
@@ -19,6 +20,9 @@ public partial class AppearanceViewModel : ObservableObject
     private PlayerForegroundMode _playerForegroundMode;
     private ApplicationThemeMode _applicationThemeMode;
     private ApplicationBackdropMode _backdropMode;
+    private AccentColorMode _accentColorMode;
+    private string _accentColorHex;
+    private int _backdropTintOpacityPercent;
     private bool _isRefreshing;
 
     /// <summary>
@@ -44,6 +48,9 @@ public partial class AppearanceViewModel : ObservableObject
         _playerForegroundMode = appearance.PlayerForegroundMode;
         _applicationThemeMode = appearance.ApplicationThemeMode;
         _backdropMode = appearance.BackdropMode;
+        _accentColorMode = appearance.AccentColorMode;
+        _accentColorHex = appearance.AccentColor;
+        _backdropTintOpacityPercent = appearance.ResolveBackdropTintOpacityPercent();
         SettingsManager.SettingsChanged += OnSettingsChanged;
         _localization.LanguageChanged += OnLanguageChanged;
     }
@@ -129,6 +136,66 @@ public partial class AppearanceViewModel : ObservableObject
         }
     }
 
+    /// <summary>强调色来源：跟随系统或使用自选色。写入即发布设置。/ Accent source: follow the system or use a custom colour. Writing publishes the setting.</summary>
+    public AccentColorMode AccentColorMode
+    {
+        get => _accentColorMode;
+        set
+        {
+            if (SetProperty(ref _accentColorMode, value))
+            {
+                OnPropertyChanged(nameof(IsCustomAccent));
+                Publish();
+            }
+        }
+    }
+
+    /// <summary>是否正在使用自选强调色，供色板与十六进制输入框决定显隐。/ Whether a custom accent is in use, which the swatch strip and the hexadecimal box follow.</summary>
+    public bool IsCustomAccent => _accentColorMode == AccentColorMode.Custom;
+
+    /// <summary>
+    /// 自选强调色的十六进制文本。
+    ///
+    /// 文本随时可以处于"打了一半"的状态，因此这里保留原文而只在能解析时发布设置：
+    /// 每敲一个字符就写一次设置会让中途的非法值（例如 <c>#12</c>）把强调色刷掉，界面随即闪回默认色。
+    /// Hexadecimal text of the custom accent.
+    ///
+    /// The text can be half-typed at any moment, so the raw text is kept and the setting is published only when it parses:
+    /// writing on every keystroke would let an intermediate invalid value such as <c>#12</c> wipe the accent, and the interface
+    /// would flash back to the default colour.
+    /// </summary>
+    public string AccentColorHex
+    {
+        get => _accentColorHex;
+        set
+        {
+            if (!SetProperty(ref _accentColorHex, value ?? string.Empty))
+                return;
+
+            if (_isRefreshing || !ColorHex.TryParse(_accentColorHex, out _))
+                return;
+
+            Publish();
+        }
+    }
+
+    /// <summary>材质底色浓度（0–100）。写入即发布设置，供滑杆双向绑定。/ Material tint concentration (0-100). Writing publishes the setting for a two-way slider.</summary>
+    public int BackdropTintOpacityPercent
+    {
+        get => _backdropTintOpacityPercent;
+        set
+        {
+            value = Math.Clamp(
+                value,
+                AppearanceSettings.MinimumBackdropTintOpacityPercent,
+                AppearanceSettings.MaximumBackdropTintOpacityPercent);
+            if (SetProperty(ref _backdropTintOpacityPercent, value))
+            {
+                Publish();
+            }
+        }
+    }
+
     /// <summary>
     /// 静置层媒体文字（标题、歌手、歌词）的字号缩放百分比。该值存在任务栏体验设置里，但按界面归属由本页承载：
     /// 「恢复本页默认设置」因此会连同它一起复位。
@@ -177,6 +244,21 @@ public partial class AppearanceViewModel : ObservableObject
     [RelayCommand]
     private void SetBackdropMode(ApplicationBackdropMode mode) => BackdropMode = mode;
 
+    /// <summary>
+    /// 从色板取一个强调色：写入文本并切到"自定义"，因此点一下色块就等于"用这个颜色"。
+    /// Picks an accent from the swatch strip: it writes the text and switches to "custom", so tapping a swatch means "use this".
+    /// </summary>
+    /// <param name="hex">色板上的十六进制颜色文本。/ Hexadecimal colour text of the swatch.</param>
+    [RelayCommand]
+    private void SetAccentColor(string? hex)
+    {
+        if (!ColorHex.TryParse(hex, out var color))
+            return;
+
+        AccentColorMode = AccentColorMode.Custom;
+        AccentColorHex = ColorHex.Format(color);
+    }
+
     private void Publish() => SettingsManager.SetAppearanceSettings(new AppearanceSettings(
         LatinFont,
         CjkFont,
@@ -184,7 +266,10 @@ public partial class AppearanceViewModel : ObservableObject
         PlayerForegroundMode,
         false,
         ApplicationThemeMode,
-        BackdropMode));
+        BackdropMode,
+        AccentColorMode,
+        AccentColorHex,
+        BackdropTintOpacityPercent));
 
     public void ResetAppearance() => SettingsManager.ResetAppearance();
 
@@ -207,6 +292,9 @@ public partial class AppearanceViewModel : ObservableObject
             PlayerForegroundMode = appearance.PlayerForegroundMode;
             ApplicationThemeMode = appearance.ApplicationThemeMode;
             BackdropMode = appearance.BackdropMode;
+            AccentColorMode = appearance.AccentColorMode;
+            AccentColorHex = appearance.AccentColor;
+            BackdropTintOpacityPercent = appearance.ResolveBackdropTintOpacityPercent();
             MediaFontSizePercent = SettingsManager.Current.TaskbarExperience.Normalize().MediaFontSizePercent;
         }
         finally { _isRefreshing = false; }

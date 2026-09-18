@@ -73,9 +73,16 @@ internal static class StringsZhHans
         table.Add("About.Status.StartupFailed", "无法修改启动项：{0}");
 
         // ---- Appearance ----
+        table.Add("Appearance.Accent.Custom", "自定义");
+        table.Add("Appearance.Accent.FollowSystem", "跟随系统");
+        table.Add("Appearance.Accent.HexLabel", "色值");
+        table.Add("Appearance.Accent.Hint", "主题色会用到所有强调色的位置：设置页的选中态、开关、滑杆、两类进度条、媒体栏与浮层的高亮，以及完整层的强调段。选「自定义」只影响本程序，Windows 的个性化设置不会被修改；高对比度下仍然使用系统高亮色。");
+        table.Add("Appearance.Accent.PaletteLabel", "选择主题色");
         table.Add("Appearance.Backdrop.Acrylic", "亚克力（Acrylic）");
         table.Add("Appearance.Backdrop.Mica", "云母（Mica）");
+        table.Add("Appearance.Backdrop.MicaAlt", "云母 Alt（Mica Alt）");
         table.Add("Appearance.Backdrop.Solid", "纯色");
+        table.Add("Appearance.BackdropTint.Hint", "只在材质由本程序绘制时生效：Windows 10 上的窗口，以及永不获取焦点的曲目通知（系统材质要求窗口处于前台，通知从不激活，因此它的模糊由本程序绘制）。Windows 11 的云母与亚克力由系统绘制，不受此值影响。值越低越通透，过高则接近纯色。");
         table.Add("Appearance.CjkFont.FollowSystem", "跟随系统");
         table.Add("Appearance.Header.Subtitle", "字体、主题、窗口背景与媒体栏文字");
         table.Add("Appearance.Motion.Detail.Full", "保留展开、反馈和频谱过渡");
@@ -87,8 +94,12 @@ internal static class StringsZhHans
         table.Add("Appearance.Preview.DarkWallpaper", "深色壁纸");
         table.Add("Appearance.Preview.Hint", "自动模式的结果取决于任务栏那一块的实际颜色，因此两块预览为示意；强制模式在两块上使用同一种文字颜色。");
         table.Add("Appearance.Preview.LightWallpaper", "浅色壁纸");
+        table.Add("Appearance.Row.Accent.Description", "默认跟随系统；自定义只改本程序，不改 Windows 设置");
+        table.Add("Appearance.Row.Accent.Title", "主题色");
         table.Add("Appearance.Row.Backdrop.Description", "统一设置窗口、托盘弹窗与右键菜单的背衬");
         table.Add("Appearance.Row.Backdrop.Title", "窗口背景材质");
+        table.Add("Appearance.Row.BackdropTint.Description", "应用自己绘制的材质底色浓度（30%–100%）");
+        table.Add("Appearance.Row.BackdropTint.Title", "材质浓度");
         table.Add("Appearance.Row.CjkFont.Description", "汉字使用的字体");
         table.Add("Appearance.Row.CjkFont.Title", "中文字体");
         table.Add("Appearance.Row.FontWeight.Description", "设置窗口、媒体栏与通知共用的文字粗细");

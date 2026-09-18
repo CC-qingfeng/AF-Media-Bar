@@ -373,13 +373,43 @@ public sealed class LayoutSizeCalculatorTests
     {
         Assert.AreEqual(
             ApplicationBackdropMode.FluentSolid,
-            WindowBackdropPolicy.Resolve(ApplicationBackdropMode.Mica, highContrast: false, supportsMica: false));
+            WindowBackdropPolicy.Resolve(ApplicationBackdropMode.Mica, highContrast: false, supportsMica: false, supportsMicaAlt: false));
         Assert.AreEqual(
             ApplicationBackdropMode.FluentSolid,
-            WindowBackdropPolicy.Resolve(ApplicationBackdropMode.Acrylic, highContrast: true, supportsMica: true));
+            WindowBackdropPolicy.Resolve(ApplicationBackdropMode.Acrylic, highContrast: true, supportsMica: true, supportsMicaAlt: true));
         Assert.AreEqual(
             ApplicationBackdropMode.Acrylic,
-            WindowBackdropPolicy.Resolve(ApplicationBackdropMode.Acrylic, highContrast: false, supportsMica: false));
+            WindowBackdropPolicy.Resolve(ApplicationBackdropMode.Acrylic, highContrast: false, supportsMica: false, supportsMicaAlt: false));
+        // 云母 Alt 拿不到时退到云母而不是纯色；连云母都没有（Windows 10）才退到纯色。
+        // Mica Alt falls back to Mica when unavailable, and to solid only when Mica is unavailable too (Windows 10).
+        Assert.AreEqual(
+            ApplicationBackdropMode.Mica,
+            WindowBackdropPolicy.Resolve(ApplicationBackdropMode.MicaAlt, highContrast: false, supportsMica: true, supportsMicaAlt: false));
+        Assert.AreEqual(
+            ApplicationBackdropMode.FluentSolid,
+            WindowBackdropPolicy.Resolve(ApplicationBackdropMode.MicaAlt, highContrast: false, supportsMica: false, supportsMicaAlt: false));
+        Assert.AreEqual(
+            ApplicationBackdropMode.MicaAlt,
+            WindowBackdropPolicy.Resolve(ApplicationBackdropMode.MicaAlt, highContrast: false, supportsMica: true, supportsMicaAlt: true));
+    }
+
+    [TestMethod]
+    public void WindowBackdropTintFollowsConcentrationAndTheme()
+    {
+        // 浓度直接映射成 alpha：默认 60% ≈ 0x99，上限 100% = 不透明，且深色主题用深底、浅色主题用浅底。
+        // The concentration maps straight onto alpha: the 60% default is about 0x99, the 100% bound is opaque, and a dark theme
+        // gets a dark base while a light theme gets a light one.
+        Assert.AreEqual(unchecked((int)0x99202020), WindowBackdropPolicy.ResolveLegacyTint(dark: true, AppearanceSettings.DefaultBackdropTintOpacityPercent));
+        Assert.AreEqual(unchecked((int)0xFF202020), WindowBackdropPolicy.ResolveLegacyTint(dark: true, 100));
+        Assert.AreEqual(unchecked((int)0x99F9F9F9), WindowBackdropPolicy.ResolveLegacyTint(dark: false, AppearanceSettings.DefaultBackdropTintOpacityPercent));
+        // 越界值按滑杆区间夹取，而不是写进一个无法呈现的 alpha。
+        // Out-of-range values are clamped to the slider's range instead of producing an unrenderable alpha.
+        Assert.AreEqual(
+            unchecked((int)0xFF202020),
+            WindowBackdropPolicy.ResolveLegacyTint(dark: true, 400));
+        Assert.AreEqual(
+            WindowBackdropPolicy.ResolveLegacyTint(dark: true, AppearanceSettings.MinimumBackdropTintOpacityPercent),
+            WindowBackdropPolicy.ResolveLegacyTint(dark: true, -50));
     }
 
     [TestMethod]

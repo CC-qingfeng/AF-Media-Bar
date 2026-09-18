@@ -1,5 +1,7 @@
 using System.Windows;
 using System.Windows.Media;
+using AFMediaBar.Classes.Settings;
+using AFMediaBar.Classes.Utils;
 
 namespace AFMediaBar.Classes.Services;
 
@@ -21,6 +23,45 @@ public static class AccentColorPolicy
     /// <summary>悬停与按下档相对原始强调色的混合比例。/ Mix ratio of the hover and pressed shades against the raw accent.</summary>
     private const double HoverMix = 0.12;
     private const double PressedMix = 0.16;
+
+    /// <summary>
+    /// 外观页上直接可点的强调色预设。取值覆盖色轮的主要区段而不是 Windows 个性化里的那一组，
+    /// 因为系统调色板的颜色会随系统版本与主题变化，写死它反而会让"预设"与用户看到的不一致。
+    /// Accent presets offered as swatches on the appearance page. They cover the main sectors of the colour wheel rather than the
+    /// set Windows personalisation shows, because the system palette varies with the Windows build and theme, which would make
+    /// written-down presets disagree with what the user sees there.
+    /// </summary>
+    public static IReadOnlyList<Color> Presets { get; } =
+    [
+        Color.FromRgb(0x00, 0x78, 0xD4),
+        Color.FromRgb(0x00, 0x99, 0xBC),
+        Color.FromRgb(0x10, 0x7C, 0x10),
+        Color.FromRgb(0x87, 0x64, 0x00),
+        Color.FromRgb(0xC4, 0x2B, 0x1C),
+        Color.FromRgb(0xE3, 0x00, 0x8C),
+        Color.FromRgb(0x88, 0x17, 0x98),
+        Color.FromRgb(0x7C, 0x3A, 0xED),
+        Color.FromRgb(0x4A, 0x54, 0x5E),
+        Color.FromRgb(0x76, 0x76, 0x76)
+    ];
+
+    /// <summary>
+    /// 解析本次要用的原始强调色：选"自定义"且文本可解析时用用户色，其余情况一律跟随系统。
+    /// 无法解析自选色时 MUST 回退系统色而不是让调色板变成空值——那会把每一个强调色画刷变成透明。
+    /// Resolves the raw accent for this pass: the user's colour when "custom" is selected and its text parses, the system accent
+    /// otherwise. An unparsable custom colour MUST fall back to the system one instead of feeding an empty value into the palette,
+    /// which would turn every accent brush transparent.
+    /// </summary>
+    /// <param name="systemAccent">系统原始强调色。/ Raw system accent.</param>
+    /// <param name="mode">设置里的强调色来源。/ Accent source from the settings.</param>
+    /// <param name="customHex">设置里保存的自选色文本。/ Custom colour text stored in the settings.</param>
+    public static Color ResolveRequested(Color systemAccent, AccentColorMode mode, string? customHex)
+    {
+        if (mode == AccentColorMode.Custom && ColorHex.TryParse(customHex, out var custom))
+            return custom;
+
+        return systemAccent;
+    }
 
     /// <summary>
     /// 由系统强调色、主题明暗与高对比度状态生成调色板。

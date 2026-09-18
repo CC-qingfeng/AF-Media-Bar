@@ -73,9 +73,16 @@ internal static class StringsEn
         table.Add("About.Status.StartupFailed", "Could not change the startup entry: {0}");
 
         // ---- Appearance ----
+        table.Add("Appearance.Accent.Custom", "Custom");
+        table.Add("Appearance.Accent.FollowSystem", "Follow the system");
+        table.Add("Appearance.Accent.HexLabel", "Value");
+        table.Add("Appearance.Accent.Hint", "The accent is used everywhere an accent colour appears: selection states and toggles in the settings, sliders, both progress bars, the media bar and flyout highlights, and the accent section of the full layer. Choosing Custom only affects this application; the Windows personalisation setting is not modified. High contrast still uses the system highlight colour.");
+        table.Add("Appearance.Accent.PaletteLabel", "Pick an accent");
         table.Add("Appearance.Backdrop.Acrylic", "Acrylic");
         table.Add("Appearance.Backdrop.Mica", "Mica");
+        table.Add("Appearance.Backdrop.MicaAlt", "Mica Alt");
         table.Add("Appearance.Backdrop.Solid", "Solid");
+        table.Add("Appearance.BackdropTint.Hint", "Only applies where the application paints the material itself: windows on Windows 10, and the track notification, which never takes focus (the system materials need a foreground window, and a notification never activates, so its blur is painted by the application). Mica and Acrylic on Windows 11 are painted by the system and ignore this value. Lower is more transparent; very high values approach a solid surface.");
         table.Add("Appearance.CjkFont.FollowSystem", "Follow the system");
         table.Add("Appearance.Header.Subtitle", "Fonts, theme, window backdrop, and media-bar text");
         table.Add("Appearance.Motion.Detail.Full", "Keeps expansion, feedback, and spectrum transitions");
@@ -87,8 +94,12 @@ internal static class StringsEn
         table.Add("Appearance.Preview.DarkWallpaper", "Dark wallpaper");
         table.Add("Appearance.Preview.Hint", "The automatic result depends on the actual color behind the taskbar, so both previews are indicative; the forced modes use one text color on both.");
         table.Add("Appearance.Preview.LightWallpaper", "Light wallpaper");
+        table.Add("Appearance.Row.Accent.Description", "Follows the system by default; a custom accent only changes this application");
+        table.Add("Appearance.Row.Accent.Title", "Accent colour");
         table.Add("Appearance.Row.Backdrop.Description", "Sets one backing for the settings window, tray pop-ups, and context menus");
         table.Add("Appearance.Row.Backdrop.Title", "Window backdrop material");
+        table.Add("Appearance.Row.BackdropTint.Description", "Tint concentration of the material the application paints itself (30%-100%)");
+        table.Add("Appearance.Row.BackdropTint.Title", "Material concentration");
         table.Add("Appearance.Row.CjkFont.Description", "The font used for Han characters");
         table.Add("Appearance.Row.CjkFont.Title", "CJK font");
         table.Add("Appearance.Row.FontWeight.Description", "The text weight shared by the settings window, the media bar, and notifications");

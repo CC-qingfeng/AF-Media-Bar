@@ -186,6 +186,58 @@ public sealed class SettingsPersistenceServiceTests
     }
 
     [TestMethod]
+    public void AppearanceAccentAndMaterialFieldsNormalizeWithoutASchemaMigration()
+    {
+        // 这三项是纯新增字段：旧文件里没有它们，因此反序列化后必须是文档化的默认值（跟随系统、默认色、浓度 60%），
+        // 而写坏的值必须在 `Normalize()` 里被夹回合法区间，不靠"缺字段恰好等于 0"这种巧合——浓度尤其危险：
+        // 缺字段给的是 null，若按 0 处理会被夹到下限 30%，用户升级后会看到与默认观感不同的窗口。
+        // These three fields are purely additive: an older file has none of them, so they must deserialize to the documented
+        // defaults (follow the system, the default colour, 60% concentration), and corrupt values must be clamped back into range
+        // rather than resting on the coincidence that a missing field equals zero. The concentration is the dangerous one: a
+        // missing field hands over null, and treating that as 0 would clamp to the 30% floor, so an upgrade would show a different
+        // window appearance than the documented default.
+        Directory.CreateDirectory(_directory);
+        File.WriteAllText(
+            Path.Combine(_directory, "settings.json"),
+            "{\"schemaVersion\":14,\"settings\":{\"appearance\":{\"latinFont\":\"SegoeUi\",\"cjkFont\":\"SystemDefault\",\"fontWeight\":700,\"playerForegroundMode\":\"Automatic\",\"enhancedReadability\":false,\"applicationThemeMode\":\"Dark\",\"backdropMode\":\"Acrylic\"}}}");
+        using var service = new SettingsPersistenceService(_directory);
+        service.Initialize();
+
+        var loaded = SettingsManager.Current.Appearance.Normalize();
+        Assert.AreEqual(ApplicationBackdropMode.Acrylic, loaded.BackdropMode);
+        Assert.AreEqual(700, loaded.FontWeight);
+        Assert.AreEqual(AccentColorMode.System, loaded.AccentColorMode);
+        Assert.AreEqual(AppearanceSettings.DefaultAccentColorHex, loaded.AccentColor);
+        Assert.AreEqual(
+            AppearanceSettings.DefaultBackdropTintOpacityPercent,
+            loaded.ResolveBackdropTintOpacityPercent());
+
+        var corrupt = (AppearanceSettings.Default with
+        {
+            AccentColor = "not-a-colour",
+            BackdropTintOpacityPercent = 900
+        }).Normalize();
+        Assert.AreEqual(AppearanceSettings.DefaultAccentColorHex, corrupt.AccentColor);
+        Assert.AreEqual(
+            AppearanceSettings.MaximumBackdropTintOpacityPercent,
+            corrupt.ResolveBackdropTintOpacityPercent());
+
+        // 自选色按规范写法回写：大小写与是否带 # 都会被统一，避免同一颜色在文件里出现两种写法。
+        // A custom colour is written back in its canonical form: case and the leading # are unified, so one colour never appears
+        // in two spellings in the file.
+        var custom = (AppearanceSettings.Default with
+        {
+            AccentColorMode = AccentColorMode.Custom,
+            AccentColor = "7c3aed",
+            BackdropTintOpacityPercent = 1
+        }).Normalize();
+        Assert.AreEqual("#7C3AED", custom.AccentColor);
+        Assert.AreEqual(
+            AppearanceSettings.MinimumBackdropTintOpacityPercent,
+            custom.ResolveBackdropTintOpacityPercent());
+    }
+
+    [TestMethod]
     public void CorruptMainRecoversBackupAndQuarantinesMain()
     {
         Directory.CreateDirectory(_directory);

@@ -704,4 +704,50 @@
         <Setter Property="Padding" Value="0" />
     </Style>
 
+    <!--
+        强调色色块：外观页的色板用它。模板里不使用 WPF-UI 的按钮外观，因为色块的整块面积就是颜色本身；
+        颜色由使用处就地写进 Background（局部值优先于样式触发器），因此悬停与按下的反馈只能落在模板自己的
+        边框画刷与缩放到属性上——那两项不写局部值就不会被覆盖。
+        Accent swatch, used by the appearance page's palette. The template does not use the WPF-UI button look, because the whole
+        area of a swatch is the colour itself. The colour is written into Background at the point of use (a local value outranks
+        style triggers), so hover and press feedback can only live on the template's own border brush and scale — neither of which
+        is overwritten as long as no local value is set for them.
+    -->
+    <Style x:Key="AfSettingsColorSwatchStyle" TargetType="{x:Type Button}">
+        <Setter Property="Width" Value="26" />
+        <Setter Property="Height" Value="26" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type Button}">
+                    <Border
+                        x:Name="SwatchSurface"
+                        Background="{TemplateBinding Background}"
+                        BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                        BorderThickness="1"
+                        CornerRadius="5"
+                        RenderTransformOrigin="0.5,0.5">
+                        <Border.RenderTransform>
+                            <ScaleTransform ScaleX="1" ScaleY="1" />
+                        </Border.RenderTransform>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="SwatchSurface" Property="BorderBrush" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="SwatchSurface" Property="RenderTransform">
+                                <Setter.Value>
+                                    <ScaleTransform ScaleX="0.88" ScaleY="0.88" />
+                                </Setter.Value>
+                            </Setter>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
 </ResourceDictionary>

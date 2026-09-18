@@ -256,10 +256,12 @@ public sealed class WindowAppearanceService : IDisposable
             return;
         }
 
+        var appearance = SettingsManager.Current.Appearance.Normalize();
         var mode = WindowBackdropPolicy.Resolve(
-            SettingsManager.Current.Appearance.BackdropMode,
+            appearance.BackdropMode,
             SystemParameters.HighContrast,
-            OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000));
+            OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000),
+            OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22621));
         if (!MotionPolicy.ResolveCurrent().UseDecorativeEffects)
             mode = ApplicationBackdropMode.FluentSolid;
         var dark = ApplicationThemeManager.GetAppTheme() == ApplicationTheme.Dark;
@@ -275,10 +277,11 @@ public sealed class WindowAppearanceService : IDisposable
         {
             window.Background = Brushes.Transparent;
             source.CompositionTarget.BackgroundColor = Colors.Transparent;
+            var tint = WindowBackdropPolicy.ResolveLegacyTint(dark, appearance.ResolveBackdropTintOpacityPercent());
             if (_nonActivatingTransientWindows.Contains(window))
-                _nativeBackdropAdapter.ApplyNonActivatingBackdrop(source.Handle, mode, dark);
+                _nativeBackdropAdapter.ApplyNonActivatingBackdrop(source.Handle, mode, tint);
             else
-                _nativeBackdropAdapter.ApplyBackdrop(source.Handle, mode, dark);
+                _nativeBackdropAdapter.ApplyBackdrop(source.Handle, mode, tint);
             _nativeBackdropAdapter.SetNonClientColors(source.Handle, transparent: true);
         }
 

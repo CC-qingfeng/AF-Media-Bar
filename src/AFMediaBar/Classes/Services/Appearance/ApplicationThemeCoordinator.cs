@@ -130,16 +130,30 @@ public sealed class ApplicationThemeCoordinator : IDisposable
 
     private void PublishAccentCore(AppearanceSettings appearance, ApplicationTheme theme, Color systemAccent)
     {
-        // 先让 WPF-UI 按系统强调色重刷它自己的资源，再读取它的结果：这样"我们的画刷"和"库内控件"必然同色，
+        // 原始强调色有两种来源：跟随系统，或用户在设置里选定的自选色。自选色无法从系统读到，因此 HERE 就是它的唯一入口。
+        // The raw accent has two sources: the system, or the colour the user picked in the settings. A custom colour cannot be
+        // read from the system, so this is its one and only entry point.
+        var requestedAccent = AccentColorPolicy.ResolveRequested(systemAccent, appearance.AccentColorMode, appearance.AccentColor);
+        var customAccent = appearance.AccentColorMode == AccentColorMode.Custom;
+
+        // 先让 WPF-UI 按本次的原始强调色重刷它自己的资源，再读取结果：这样"我们的画刷"和"库内控件"必然同色，
         // 也不会再出现库内控件是新色、我们的滑杆还是旧色（或反过来）的分裂。
-        // Let WPF-UI refresh its own resources from the system accent first and then read its result: our brushes and the
+        // Let WPF-UI refresh its own resources from this pass's raw accent first and then read its result: our brushes and the
         // library's controls are then guaranteed to be the same color instead of one being fresh and the other stale.
-        ApplicationAccentColorManager.ApplySystemAccent();
-        systemAccent = ResolveSystemAccent();
+        if (customAccent)
+        {
+            ApplyCustomAccent(requestedAccent, theme);
+        }
+        else
+        {
+            ApplicationAccentColorManager.ApplySystemAccent();
+            systemAccent = ResolveSystemAccent();
+            requestedAccent = systemAccent;
+        }
 
         var dark = theme == ApplicationTheme.Dark ||
                    (theme == ApplicationTheme.HighContrast && SystemParameters.HighContrast);
-        var palette = AccentColorPolicy.Build(systemAccent, dark, SystemParameters.HighContrast);
+        var palette = AccentColorPolicy.Build(requestedAccent, dark, SystemParameters.HighContrast);
 
         // 强调色、主题与外观设置都没变时不做任何重应用：DWM 与系统偏好消息会出现成串重复事件。
         // 外观设置参与判断是必须的：字体只通过这一条资源回调生效。
@@ -159,14 +173,37 @@ public sealed class ApplicationThemeCoordinator : IDisposable
         // 主题应用与强调色应用必须一起发生：WPF-UI 只在主题应用时重建主题字典，
         // 库内控件（开关的基础态、窗口边框、导航选中态）才会重新解析强调色。只调用 ApplySystemAccent 时，
         // 那些控件的悬停/按下态会读到新色而基础态停在旧色（实测：悬停一下开关才显示正确颜色）。
+        //
+        // 但主题应用 MUST NOT 顺带改强调色（`updateAccent: false`）：实测 `updateAccent: true` 会把刚写进去的自选色刷回系统色
+        // （#7C3AED → #5378B1），而 `false` 时自选色与它派生出的 Primary/Secondary 全部保留，系统色那条路径也在它之前刚刷新过。
         // Theme application and accent application must happen together: WPF-UI rebuilds its theme dictionaries only when
         // the theme is applied, which is when its controls (a toggle's base state, the window frame, the navigation
         // selection) re-resolve the accent. Calling only ApplySystemAccent updates their hover and pressed states while the
-        // base state keeps the old color - hovering a toggle was the only way to make it look right.
-        ApplicationThemeManager.Apply(theme, WindowBackdropType.None, updateAccent: true);
+        // base state keeps the old color — hovering a toggle was the only way to make it look right.
+        //
+        // The theme application must not touch the accent as well (`updateAccent: false`): with `true` it put a just-written
+        // custom colour back to the system one (#7C3AED -> #5378B1), while `false` kept the custom colour together with the
+        // Primary/Secondary shades derived from it, and the system path has just refreshed itself one step above.
+        ApplicationThemeManager.Apply(theme, WindowBackdropType.None, updateAccent: false);
 
         _updateResources(appearance, theme, palette);
     }
+
+    /// <summary>
+    /// 把自选强调色写给 WPF-UI。
+    ///
+    /// 后两个参数分别是"颜色取自系统 Glass Color"与"这是系统强调色"，自选色两者都不是，因此都传 false：
+    /// 传 true 会让库对颜色做 HSV 提亮，用户挑的颜色就不再是屏幕上出现的颜色。
+    /// Writes the custom accent to WPF-UI.
+    ///
+    /// The last two arguments mean "the colour came from the system glass colour" and "this is the system accent"; a custom colour
+    /// is neither, so both are false. Passing true would let the library brighten the colour in HSV space, and the colour the user
+    /// picked would no longer be the colour on screen.
+    /// </summary>
+    /// <param name="accent">自选强调色。/ Custom accent colour.</param>
+    /// <param name="theme">当前应用主题，库用它挑选深浅档。/ Current application theme, which the library uses to pick the shades.</param>
+    private static void ApplyCustomAccent(Color accent, ApplicationTheme theme) =>
+        ApplicationAccentColorManager.Apply(accent, theme, systemGlassColor: false, systemAccentColor: false);
 
     /// <summary>
     /// 将应用主题模式转换为当前有效的 WPF 主题。

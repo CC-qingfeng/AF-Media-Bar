@@ -209,9 +209,199 @@
                                 SelectedValuePath="Tag">
                                 <ComboBoxItem Content="{DynamicResource Loc.Appearance.Backdrop.Solid}" Tag="{x:Static settings:ApplicationBackdropMode.FluentSolid}" />
                                 <ComboBoxItem Content="{DynamicResource Loc.Appearance.Backdrop.Mica}" Tag="{x:Static settings:ApplicationBackdropMode.Mica}" />
+                                <ComboBoxItem Content="{DynamicResource Loc.Appearance.Backdrop.MicaAlt}" Tag="{x:Static settings:ApplicationBackdropMode.MicaAlt}" />
                                 <ComboBoxItem Content="{DynamicResource Loc.Appearance.Backdrop.Acrylic}" Tag="{x:Static settings:ApplicationBackdropMode.Acrylic}" />
                             </ComboBox>
                         </components:SettingsRow>
+
+                        <!--
+                            材质浓度：只作用于"应用自己绘制材质"的两处（Windows 10 的窗口，以及永不激活的曲目通知）。
+                            Windows 11 的云母/亚克力/Mica Alt 由 DWM 绘制，浓度对它无效，因此行说明里写清了适用面。
+                            Material concentration: it only affects the two places where the application paints the material itself
+                            (Windows 10 windows and the never-activating track notification). Mica, Acrylic, and Mica Alt on Windows 11
+                            are painted by DWM and ignore it, which the row's description states.
+                        -->
+                        <components:SettingsRow
+                            Description="{DynamicResource Loc.Appearance.Row.BackdropTint.Description}"
+                            Icon="{ui:SymbolIcon CircleHalfFill24}"
+                            Title="{DynamicResource Loc.Appearance.Row.BackdropTint.Title}">
+                            <StackPanel Orientation="Horizontal">
+                                <Slider
+                                    IsSnapToTickEnabled="True"
+                                    Maximum="{Binding Source={x:Static settings:AppearanceSettings.MaximumBackdropTintOpacityPercent}}"
+                                    Minimum="{Binding Source={x:Static settings:AppearanceSettings.MinimumBackdropTintOpacityPercent}}"
+                                    Style="{StaticResource AfSettingsRowSliderStyle}"
+                                    TickFrequency="{Binding Source={x:Static settings:AppearanceSettings.BackdropTintOpacityStep}}"
+                                    Value="{Binding ViewModel.BackdropTintOpacityPercent, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                <TextBlock Style="{StaticResource AfSettingsRowValueStyle}" Text="{Binding ViewModel.BackdropTintOpacityPercent, StringFormat={}{0:0}%}" />
+                            </StackPanel>
+                        </components:SettingsRow>
+                        <TextBlock
+                            Margin="0,2,0,4"
+                            Style="{StaticResource AfSettingsHintTextStyle}"
+                            Text="{DynamicResource Loc.Appearance.BackdropTint.Hint}" />
+
+                        <components:SettingsRow
+                            Description="{DynamicResource Loc.Appearance.Row.Accent.Description}"
+                            Icon="{ui:SymbolIcon ColorBackground20}"
+                            Title="{DynamicResource Loc.Appearance.Row.Accent.Title}">
+                            <ComboBox
+                                MinWidth="180"
+                                SelectedValue="{Binding ViewModel.AccentColorMode, Mode=TwoWay}"
+                                SelectedValuePath="Tag">
+                                <ComboBoxItem Content="{DynamicResource Loc.Appearance.Accent.FollowSystem}" Tag="{x:Static settings:AccentColorMode.System}" />
+                                <ComboBoxItem Content="{DynamicResource Loc.Appearance.Accent.Custom}" Tag="{x:Static settings:AccentColorMode.Custom}" />
+                            </ComboBox>
+                        </components:SettingsRow>
+
+                        <!--
+                            自选色板。这里的颜色是刻意的硬编码：色块展示的就是"用户正在挑选的那个颜色"，它按定义不是主题语义画刷，
+                            与上面模拟任意壁纸的对照预览属于同一类例外。
+                            Custom swatch strip. These colours are deliberately hardcoded: a swatch shows the very colour the user is
+                            picking, which by definition is not a theme semantic brush, making it the same class of exception as the
+                            wallpaper contrast preview above.
+                        -->
+                        <Border
+                            Margin="0,4,0,0"
+                            Padding="14,12"
+                            Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                            BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                            BorderThickness="1"
+                            CornerRadius="6"
+                            Visibility="{Binding ViewModel.IsCustomAccent, Converter={StaticResource AfBooleanToVisibilityConverter}}">
+                            <StackPanel>
+                                <TextBlock
+                                    Margin="0,0,0,8"
+                                    Style="{StaticResource AfSettingsRowDescriptionStyle}"
+                                    Text="{DynamicResource Loc.Appearance.Accent.PaletteLabel}" />
+                                <StackPanel Orientation="Horizontal">
+                                    <Button
+                                        Width="26"
+                                        Height="26"
+                                        Margin="0,0,4,0"
+                                        Padding="0"
+                                        Background="#0078D4"
+                                        Command="{Binding ViewModel.SetAccentColorCommand}"
+                                        CommandParameter="#0078D4"
+                                        Style="{StaticResource AfSettingsColorSwatchStyle}"
+                                        Tag="#0078D4"
+                                        ToolTip="#0078D4" />
+                                    <Button
+                                        Width="26"
+                                        Height="26"
+                                        Margin="0,0,4,0"
+                                        Padding="0"
+                                        Background="#0099BC"
+                                        Command="{Binding ViewModel.SetAccentColorCommand}"
+                                        CommandParameter="#0099BC"
+                                        Style="{StaticResource AfSettingsColorSwatchStyle}"
+                                        Tag="#0099BC"
+                                        ToolTip="#0099BC" />
+                                    <Button
+                                        Width="26"
+                                        Height="26"
+                                        Margin="0,0,4,0"
+                                        Padding="0"
+                                        Background="#107C10"
+                                        Command="{Binding ViewModel.SetAccentColorCommand}"
+                                        CommandParameter="#107C10"
+                                        Style="{StaticResource AfSettingsColorSwatchStyle}"
+                                        Tag="#107C10"
+                                        ToolTip="#107C10" />
+                                    <Button
+                                        Width="26"
+                                        Height="26"
+                                        Margin="0,0,4,0"
+                                        Padding="0"
+                                        Background="#876400"
+                                        Command="{Binding ViewModel.SetAccentColorCommand}"
+                                        CommandParameter="#876400"
+                                        Style="{StaticResource AfSettingsColorSwatchStyle}"
+                                        Tag="#876400"
+                                        ToolTip="#876400" />
+                                    <Button
+                                        Width="26"
+                                        Height="26"
+                                        Margin="0,0,4,0"
+                                        Padding="0"
+                                        Background="#C42B1C"
+                                        Command="{Binding ViewModel.SetAccentColorCommand}"
+                                        CommandParameter="#C42B1C"
+                                        Style="{StaticResource AfSettingsColorSwatchStyle}"
+                                        Tag="#C42B1C"
+                                        ToolTip="#C42B1C" />
+                                    <Button
+                                        Width="26"
+                                        Height="26"
+                                        Margin="0,0,4,0"
+                                        Padding="0"
+                                        Background="#E3008C"
+                                        Command="{Binding ViewModel.SetAccentColorCommand}"
+                                        CommandParameter="#E3008C"
+                                        Style="{StaticResource AfSettingsColorSwatchStyle}"
+                                        Tag="#E3008C"
+                                        ToolTip="#E3008C" />
+                                    <Button
+                                        Width="26"
+                                        Height="26"
+                                        Margin="0,0,4,0"
+                                        Padding="0"
+                                        Background="#881798"
+                                        Command="{Binding ViewModel.SetAccentColorCommand}"
+                                        CommandParameter="#881798"
+                                        Style="{StaticResource AfSettingsColorSwatchStyle}"
+                                        Tag="#881798"
+                                        ToolTip="#881798" />
+                                    <Button
+                                        Width="26"
+                                        Height="26"
+                                        Margin="0,0,4,0"
+                                        Padding="0"
+                                        Background="#7C3AED"
+                                        Command="{Binding ViewModel.SetAccentColorCommand}"
+                                        CommandParameter="#7C3AED"
+                                        Style="{StaticResource AfSettingsColorSwatchStyle}"
+                                        Tag="#7C3AED"
+                                        ToolTip="#7C3AED" />
+                                    <Button
+                                        Width="26"
+                                        Height="26"
+                                        Margin="0,0,4,0"
+                                        Padding="0"
+                                        Background="#4A545E"
+                                        Command="{Binding ViewModel.SetAccentColorCommand}"
+                                        CommandParameter="#4A545E"
+                                        Style="{StaticResource AfSettingsColorSwatchStyle}"
+                                        Tag="#4A545E"
+                                        ToolTip="#4A545E" />
+                                    <Button
+                                        Width="26"
+                                        Height="26"
+                                        Padding="0"
+                                        Background="#767676"
+                                        Command="{Binding ViewModel.SetAccentColorCommand}"
+                                        CommandParameter="#767676"
+                                        Style="{StaticResource AfSettingsColorSwatchStyle}"
+                                        Tag="#767676"
+                                        ToolTip="#767676" />
+                                </StackPanel>
+                                <StackPanel Margin="0,10,0,0" Orientation="Horizontal">
+                                    <TextBlock
+                                        VerticalAlignment="Center"
+                                        Style="{StaticResource AfSettingsRowDescriptionStyle}"
+                                        Text="{DynamicResource Loc.Appearance.Accent.HexLabel}" />
+                                    <TextBox
+                                        Width="110"
+                                        Margin="8,0,0,0"
+                                        Text="{Binding ViewModel.AccentColorHex, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <TextBlock
+                            Margin="0,8,0,0"
+                            Style="{StaticResource AfSettingsHintTextStyle}"
+                            Text="{DynamicResource Loc.Appearance.Accent.Hint}" />
 
                         <components:SettingsRow
                             Badge="{Binding ViewModel.MotionModeText}"

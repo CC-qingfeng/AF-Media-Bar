@@ -3,23 +3,65 @@ using AFMediaBar.Classes.Settings;
 namespace AFMediaBar.Classes.Services;
 
 /// <summary>
-/// 计算窗口请求材质在当前系统环境下的有效材质。
-/// Resolves the effective window backdrop for the requested mode and current system environment.
+/// 计算窗口请求材质在当前系统环境下的有效材质，以及 Accent 模糊路径要用的底色。
+/// Resolves the effective window backdrop for the requested mode and current system environment, and the tint the Accent blur path
+/// has to use.
 /// </summary>
 public static class WindowBackdropPolicy
 {
     /// <summary>
-    /// 在高对比度或不支持 Mica 的系统上回退到 FluentSolid。
-    /// Falls back to FluentSolid for high contrast or systems that do not support Mica.
+    /// 按系统能力回退：高对比度一律纯色；云母 Alt 在拿不到它时退到云母，云母也拿不到时退到纯色。
+    ///
+    /// 回退链而不是"不支持就纯色"是刻意的：云母 Alt 只在 Windows 11 22621 之后存在，而 22000 那一档已经有云母，
+    /// 让用户为了一个新材质在选择与纯色之间二选一是没必要的。
+    /// Falls back by system capability: high contrast is always solid; Mica Alt falls back to Mica when it is unavailable, and to
+    /// solid when Mica is unavailable too.
+    ///
+    /// A chain rather than "unsupported means solid" is deliberate: Mica Alt exists only from Windows 11 22621 on, while the
+    /// 22000 tier already has Mica, so forcing the user to choose between a new material and a solid surface would be pointless.
     /// </summary>
+    /// <param name="requested">设置里请求的材质。/ Requested backdrop from the settings.</param>
+    /// <param name="highContrast">是否处于高对比度。/ Whether high contrast is active.</param>
+    /// <param name="supportsMica">系统是否支持云母（Windows 11 22000+）。/ Whether the system supports Mica (Windows 11 22000+).</param>
+    /// <param name="supportsMicaAlt">系统是否支持云母 Alt（Windows 11 22621+）。/ Whether the system supports Mica Alt (Windows 11 22621+).</param>
     public static ApplicationBackdropMode Resolve(
         ApplicationBackdropMode requested,
         bool highContrast,
-        bool supportsMica)
+        bool supportsMica,
+        bool supportsMicaAlt)
     {
-        if (highContrast || requested == ApplicationBackdropMode.Mica && !supportsMica)
+        if (highContrast)
+            return ApplicationBackdropMode.FluentSolid;
+
+        if (requested == ApplicationBackdropMode.MicaAlt && !supportsMicaAlt)
+            requested = supportsMica ? ApplicationBackdropMode.Mica : ApplicationBackdropMode.FluentSolid;
+
+        if (requested == ApplicationBackdropMode.Mica && !supportsMica)
             return ApplicationBackdropMode.FluentSolid;
 
         return requested;
+    }
+
+    /// <summary>
+    /// Accent 模糊路径的底色：材质浓度按比例映射成 alpha，颜色跟随主题明暗。
+    ///
+    /// 这条路径由窗口自己绘制，因此浓度就是它的不透明度；Windows 的系统材质（云母/亚克力/Mica Alt）由 DWM 绘制，浓度对它们无效。
+    /// The tint of the Accent blur path: the material concentration maps onto alpha, and the colour follows the theme brightness.
+    ///
+    /// This path is painted by the window itself, so the concentration is literally its opacity; the Windows system materials
+    /// (Mica, Acrylic, Mica Alt) are painted by DWM and are unaffected by it.
+    /// </summary>
+    /// <param name="dark">是否深色主题，决定底色是深灰还是浅白。/ Whether the theme is dark, which picks a dark or a light base colour.</param>
+    /// <param name="opacityPercent">材质浓度（0–100）。/ Material concentration (0-100).</param>
+    /// <returns>ARGB 底色，直接交给 <c>AccentPolicy.GradientColor</c>。/ ARGB tint handed straight to <c>AccentPolicy.GradientColor</c>.</returns>
+    public static int ResolveLegacyTint(bool dark, int opacityPercent)
+    {
+        var percent = Math.Clamp(
+            opacityPercent,
+            AppearanceSettings.MinimumBackdropTintOpacityPercent,
+            AppearanceSettings.MaximumBackdropTintOpacityPercent);
+        var alpha = (int)Math.Round(percent / 100.0 * 255, MidpointRounding.AwayFromZero);
+        var rgb = dark ? 0x00202020 : 0x00F9F9F9;
+        return (alpha << 24) | rgb;
     }
 }
