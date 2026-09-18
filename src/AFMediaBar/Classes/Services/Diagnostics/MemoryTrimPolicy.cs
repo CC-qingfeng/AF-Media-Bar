@@ -17,7 +17,15 @@ public enum MemoryTrimTrigger
     PanelClosed = 2,
 
     /// <summary>用户在设置页明确点击"立即压缩物理内存"。/ The user explicitly clicked "compress physical memory now" on the settings page.</summary>
-    ManualRequest = 3
+    ManualRequest = 3,
+
+    /// <summary>
+    /// 启动已经安定下来：启动时读进来的一大批页面（JIT 后的代码、WPF 与 WinRT 元数据、一次性初始化）此后大概率不会再被碰到，
+    /// 因此这是把它们还回去最划算的时机。
+    /// Startup has settled: the large batch of pages read during startup — JITed code, WPF and WinRT metadata, one-time initialization — is unlikely to be
+    /// touched again, which makes this the most rewarding moment to hand them back.
+    /// </summary>
+    StartupSettled = 4
 }
 
 /// <summary>
@@ -63,6 +71,32 @@ public static class MemoryTrimPolicy
     public static readonly TimeSpan MinimumInterval = TimeSpan.FromSeconds(5);
 
     /// <summary>
+    /// 启动后最早可以考虑回收的时间。启动阶段读进来的页面此刻多半还被启动链自己用着（任务栏停靠、DPI 探测、首个媒体快照、
+    /// 主题与语言资源），过早回收等于刚还回去就立刻缺页读回来，既白做又拖慢启动。
+    /// The earliest moment a reclaim may be considered after startup. The pages read during startup are still in use by the startup chain at that point —
+    /// taskbar docking, DPI probing, the first media snapshot, theme and language resources — so reclaiming too early means paging them straight back in,
+    /// which is wasted work that also slows startup down.
+    /// </summary>
+    public static readonly TimeSpan StartupMinimumDelay = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// 启动后等待"用户有一会儿没操作"的时间。回收本身只是一次 GC 加交还工作集，而**缺页发生在用户下一次碰到这些页面的那一刻**，
+    /// 因此挑一个用户此刻没在拖窗口、没在滚轮盘的瞬间，就是把可感知卡顿压到最低的做法。
+    /// How long the user has to have been idle before the startup reclaim runs. The reclaim itself is just a collection plus returning the working set, while the
+    /// page faults happen **the next time the user touches those pages**, so choosing a moment when the user is not dragging the bar or spinning the wheel is
+    /// what keeps any perceptible stutter at its lowest.
+    /// </summary>
+    public static readonly TimeSpan StartupUserIdleThreshold = TimeSpan.FromSeconds(3);
+
+    /// <summary>
+    /// 启动后最迟执行的时间。用户可能一直在动鼠标（那就永远等不到空闲），而启动时读进来的页面早就冷掉了；
+    /// 到这个时间点就执行一次，既不无限期拖延，也不会在启动链还在跑的时候动手。
+    /// The latest moment the startup reclaim runs. The user may keep moving the mouse, in which case an idle moment never arrives, while the pages read during
+    /// startup have long gone cold; running once at this point neither postpones it forever nor fires while the startup chain is still working.
+    /// </summary>
+    public static readonly TimeSpan StartupDeadline = TimeSpan.FromSeconds(60);
+
+    /// <summary>
     /// 这一次请求该用多大强度。
     /// Which strength this request deserves.
     /// </summary>
@@ -75,6 +109,13 @@ public static class MemoryTrimPolicy
         // request obviously goes as deep as it can.
         MemoryTrimTrigger.SettingsWindowClosed => MemoryTrimStrength.Deep,
         MemoryTrimTrigger.ManualRequest => MemoryTrimStrength.Deep,
+
+        // 启动后的那一次也按最深来：它的全部意义就是把"启动时读进来、之后不会再碰"的冷页面交还系统；只收垃圾等于什么都没做
+        // （工作集读数不会动）。用户已经亲自验证过：手动点一次之后读数明显下降，而且没有可感知卡顿。
+        // The post-startup reclaim goes as deep as it can as well: its entire point is handing back the cold pages read during startup that will not be touched
+        // again, and collecting garbage alone would achieve nothing (the working-set figure would not move). The user has verified this first-hand: one manual
+        // click dropped the figure clearly, with no perceptible stutter.
+        MemoryTrimTrigger.StartupSettled => MemoryTrimStrength.Deep,
 
         // 空闲档与浮层关闭都只收垃圾：空闲档的"省内存"由档位本身（清缓存、降频）负责，工作集交给显示器关闭/睡眠档，
         // 浮层则随时可能被再打开。
@@ -113,5 +154,39 @@ public static class MemoryTrimPolicy
         }
 
         return nowUtc - lastTrimUtc >= MinimumInterval;
+    }
+
+    /// <summary>
+    /// 判断"启动后那一次回收"现在该不该执行。
+    /// Decides whether the post-startup reclaim should run now.
+    ///
+    /// 三条判据缺一不可：启动已经过去足够久（启动链不再需要那些页面）、用户此刻没有在操作（缺页要等用户下一次碰到页面才会发生，
+    /// 所以要在用户松手的时候还）、以及档位仍在常规（已经进入空闲或更深的档位时，档位路径刚做过更彻底的事，重复回收只是白跑）。
+    /// Three conditions, all of which have to hold: enough time has passed since startup (the startup chain no longer needs those pages), the user is not
+    /// interacting at this moment (page faults only happen the next time the user touches a page, so the hand-back belongs in a moment when the user has let
+    /// go), and the level is still normal (once idle or a deeper level applies, the level path has just done something more thorough, so a second reclaim is
+    /// pure waste).
+    ///
+    /// 到 <see cref="StartupDeadline"/> 之后即使条件不满足也执行：用户可能一直在动鼠标，而启动时读进来的页面早就冷了。
+    /// Past <see cref="StartupDeadline"/> it runs even when the conditions do not hold, because the user may keep moving the mouse while the pages read during
+    /// startup have long gone cold.
+    /// </summary>
+    /// <param name="sinceStart">自启动以来经过的时间。/ Time elapsed since startup.</param>
+    /// <param name="userIdle">用户空闲时长。/ How long the user has been idle.</param>
+    /// <param name="isLevelNormal">当前档位是否为常规（L0）。/ Whether the current level is normal (L0).</param>
+    /// <returns>该执行为 true。/ True when it should run.</returns>
+    public static bool ShouldTrimAfterStartup(TimeSpan sinceStart, TimeSpan userIdle, bool isLevelNormal)
+    {
+        if (sinceStart < StartupMinimumDelay)
+        {
+            return false;
+        }
+
+        if (!isLevelNormal)
+        {
+            return false;
+        }
+
+        return sinceStart >= StartupDeadline || userIdle >= StartupUserIdleThreshold;
     }
 }

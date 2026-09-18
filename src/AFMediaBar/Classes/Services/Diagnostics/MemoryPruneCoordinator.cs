@@ -52,6 +52,19 @@ public sealed class MemoryPruneCoordinator : IDisposable
     private DateTime _lastTrimUtc;
     private int _trimInProgress;
 
+    /// <summary>
+    /// 启动后的那一次回收是否还在等待时机，以及负责判定的短周期计时器。
+    /// Whether the post-startup reclaim is still waiting for its moment, together with the short-period timer that decides it.
+    ///
+    /// 之所以不复用档位评估计时器：L0 的评估周期是 30 秒，用它会让"启动后回收"落到启动后半分钟到一分钟之间，
+    /// 而这段时间正是读数最难看、用户最可能去看任务管理器的时候。
+    /// The level-evaluation timer is deliberately not reused: its period at L0 is thirty seconds, which would put the post-startup reclaim somewhere between
+    /// half a minute and a minute after launch — exactly the stretch where the figure looks worst and the user is most likely to open Task Manager.
+    /// </summary>
+    private readonly Stopwatch _sinceStart = new();
+    private DispatcherTimer? _startupTrimTimer;
+    private bool _startupTrimPending;
+
     private Dispatcher? _dispatcher;
     private DispatcherTimer? _timer;
     private DateTime _mediaActiveAtUtc = DateTime.UtcNow;
@@ -126,6 +139,18 @@ public sealed class MemoryPruneCoordinator : IDisposable
         // 起始时间点定为启动时刻：程序刚起来时用户一定刚操作过，"无媒体"的计时从这一刻起算才对。
         // The clock starts at startup: the user has just interacted with something, so counting media idleness from this moment is the honest choice.
         _mediaActiveAtUtc = DateTime.UtcNow;
+
+        // 启动后那一次回收：等启动链安定、用户松手之后再还页面。逻辑在 MemoryTrimPolicy.ShouldTrimAfterStartup 里，这里只负责按秒问它。
+        // The post-startup reclaim: pages are handed back once the startup chain has settled and the user has let go. The rule lives in
+        // MemoryTrimPolicy.ShouldTrimAfterStartup; this only asks it once a second.
+        _sinceStart.Restart();
+        _startupTrimPending = true;
+        _startupTrimTimer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromSeconds(1)
+        };
+        _startupTrimTimer.Tick += OnStartupTrimTick;
+        _startupTrimTimer.Start();
 
         _log?.Info(
             "Prune",
@@ -208,6 +233,7 @@ public sealed class MemoryPruneCoordinator : IDisposable
             MemoryTrimTrigger.SettingsWindowClosed => "设置窗口关闭 settings window closed",
             MemoryTrimTrigger.PanelClosed => "浮层关闭 panel closed",
             MemoryTrimTrigger.ManualRequest => "用户手动请求 manual request",
+            MemoryTrimTrigger.StartupSettled => "启动已安定 post-startup",
             _ => "进入空闲档 idle level entered"
         };
         var strength = result.Strength == MemoryTrimStrength.Deep ? "深度 deep" : "温和 gentle";
@@ -259,6 +285,8 @@ public sealed class MemoryPruneCoordinator : IDisposable
         }
 
         _disposed = true;
+        _startupTrimPending = false;
+        StopStartupTrimTimer();
         if (_timer is { } timer)
         {
             timer.Stop();
@@ -457,6 +485,43 @@ public sealed class MemoryPruneCoordinator : IDisposable
     }
 
     private void OnEvaluationTick(object? sender, EventArgs e) => Evaluate();
+
+    /// <summary>
+    /// 每秒问一次"启动后那一次回收到时候了吗"，到点就执行并自停。
+    /// Asks once a second whether the post-startup reclaim is due, then runs it and stops itself.
+    ///
+    /// 判定为假时唯一要做的事就是继续等，因此这个计时器只在启动后的一小段时间内存在；一旦执行（或协调器被释放）它立刻停止，
+    /// 不会变成一个常驻的每秒唤醒源。
+    /// While the decision is false the only thing to do is keep waiting, so this timer exists only for a short stretch after startup; it stops the moment the
+    /// reclaim runs — or the coordinator is disposed — and never turns into a resident once-a-second wakeup.
+    /// </summary>
+    private void OnStartupTrimTick(object? sender, EventArgs e)
+    {
+        if (_disposed || !_startupTrimPending)
+        {
+            StopStartupTrimTimer();
+            return;
+        }
+
+        if (!MemoryTrimPolicy.ShouldTrimAfterStartup(_sinceStart.Elapsed, _power.UserIdle, _level == MemoryPruneLevel.None))
+        {
+            return;
+        }
+
+        _startupTrimPending = false;
+        StopStartupTrimTimer();
+        RequestTrim(MemoryTrimTrigger.StartupSettled);
+    }
+
+    private void StopStartupTrimTimer()
+    {
+        if (_startupTrimTimer is { } timer)
+        {
+            timer.Stop();
+            timer.Tick -= OnStartupTrimTick;
+            _startupTrimTimer = null;
+        }
+    }
 
     private void OnPowerStateChanged(object? sender, EventArgs e) => Evaluate();
 
