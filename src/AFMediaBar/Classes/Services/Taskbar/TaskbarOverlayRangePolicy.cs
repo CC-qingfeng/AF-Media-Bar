@@ -48,105 +48,6 @@ public static class TaskbarOverlayRangePolicy
     private const double MaximumPrimaryShare = 0.5;
 
     /// <summary>
-    /// 槽位允许的最大主轴占比：容器是覆盖**整条**任务栏的窗口（XAML 岛、任务列表外壳），而槽位本身可以很宽——固定了很多图标时
-    /// 任务列表能超过半条任务栏。因此这里的上限只排除接近整条任务栏宽的窗口，明显宽于 UIA 那条 45% 的判据。
-    /// Maximum primary share for a slot: a container covers the **whole** taskbar (the XAML island, the task-list shell), while a slot
-    /// itself can be wide — with many pinned icons the task list exceeds half a taskbar. The bound therefore only excludes windows
-    /// close to the full taskbar width, which is noticeably looser than the 45% rule used for UIA elements.
-    /// </summary>
-    private const double MaximumSlotPrimaryShare = 0.9;
-
-    /// <summary>认定一个槽位所需的最小主轴长度：更短的是分隔条或零尺寸占位窗口。/ Minimum primary length for a slot: anything shorter is a separator or a zero-sized placeholder.</summary>
-    private const int MinimumSlotPrimaryPixels = 8;
-
-    /// <summary>
-    /// 判断任务栏**自己的子窗口**是不是一个"槽位"（开始按钮、任务列表、搜索框），并换算成占用区间。
-    /// Decides whether one of the taskbar's own child windows is a "slot" and converts it into an occupied range.
-    /// </summary>
-    /// <param name="windowRect">候选子窗口的矩形（屏幕物理像素）。/ Candidate child window rectangle in physical screen pixels.</param>
-    /// <param name="taskbarRect">任务栏矩形（屏幕物理像素）。/ Taskbar rectangle in physical screen pixels.</param>
-    /// <param name="orientation">任务栏方向。/ Taskbar orientation.</param>
-    /// <param name="range">换算出的占用区间（任务栏内的主轴坐标）。/ Resulting occupied range in taskbar-relative primary-axis coordinates.</param>
-    /// <returns>算作槽位时为 true。/ True when the window counts as a slot.</returns>
-    public static bool TryResolveSlot(
-        RECT windowRect,
-        RECT taskbarRect,
-        LayoutOrientation orientation,
-        out TaskbarPrimaryRange range) =>
-        TryResolveSlot(windowRect, taskbarRect, orientation, out range, out _);
-
-    /// <summary>
-    /// 判断任务栏自己的子窗口是不是一个"槽位"，并给出被拒原因。
-    ///
-    /// 这条路径不依赖 UI Automation：Windows 10 的搜索框是一个文本控件，只按按钮类控件过滤时整段都会漏掉；而它的窗口若挂在
-    /// 任务栏之下（XAML 岛的子树里），顶层窗口那两条采集也看不到。判定因此只看几何：与任务栏横轴相交、主轴长度落在
-    /// [8 像素, 45% 任务栏长度]——整条任务栏宽的容器与零尺寸占位会被报成"不是槽位"，调用方可以据此再往下一层找。
-    /// Decides whether one of the taskbar's own child windows is a "slot" and reports the rejection reason.
-    ///
-    /// This path does not depend on UI Automation: the Windows 10 search box is a text control, so filtering by button-like controls
-    /// skips the whole segment, and if its window hangs under the taskbar (inside the XAML island's subtree) neither of the two
-    /// top-level collections can see it either. The decision is therefore purely geometric: intersects the taskbar on the cross axis and
-    /// measures between 8 pixels and 45% of the taskbar on the primary axis. Full-width containers and zero-sized placeholders are
-    /// reported as "not a slot" so the caller can descend one level further.
-    /// </summary>
-    /// <param name="windowRect">候选子窗口的矩形（屏幕物理像素）。/ Candidate child window rectangle in physical screen pixels.</param>
-    /// <param name="taskbarRect">任务栏矩形（屏幕物理像素）。/ Taskbar rectangle in physical screen pixels.</param>
-    /// <param name="orientation">任务栏方向。/ Taskbar orientation.</param>
-    /// <param name="range">换算出的占用区间（任务栏内的主轴坐标）。/ Resulting occupied range in taskbar-relative primary-axis coordinates.</param>
-    /// <param name="rejection">不是槽位时的原因。/ Reason when the window is not a slot.</param>
-    /// <returns>算作槽位时为 true。/ True when the window counts as a slot.</returns>
-    public static bool TryResolveSlot(
-        RECT windowRect,
-        RECT taskbarRect,
-        LayoutOrientation orientation,
-        out TaskbarPrimaryRange range,
-        out TaskbarOccupancyRejection rejection)
-    {
-        range = default;
-        rejection = TaskbarOccupancyRejection.None;
-
-        var (primaryLength, crossLength) = ResolveLengths(taskbarRect, orientation);
-        if (primaryLength <= 0 || crossLength <= 0)
-            return false;
-
-        var (windowStart, windowEnd, windowCrossStart, windowCrossEnd) = ToAxes(windowRect, orientation);
-        var (taskbarStart, taskbarEnd, taskbarCrossStart, taskbarCrossEnd) = ToAxes(taskbarRect, orientation);
-
-        var crossOverlap = Math.Min(windowCrossEnd, taskbarCrossEnd) - Math.Max(windowCrossStart, taskbarCrossStart);
-        if (crossOverlap < crossLength * MinimumCrossOverlapRatio)
-        {
-            rejection = TaskbarOccupancyRejection.NotOverTaskbar;
-            return false;
-        }
-
-        var primarySize = windowEnd - windowStart;
-        if (primarySize < MinimumSlotPrimaryPixels)
-        {
-            rejection = TaskbarOccupancyRejection.TooSmall;
-            return false;
-        }
-
-        if (primarySize > primaryLength * MaximumSlotPrimaryShare)
-        {
-            rejection = TaskbarOccupancyRejection.Container;
-            return false;
-        }
-
-        var overlapStart = Math.Max(windowStart, taskbarStart);
-        var overlapEnd = Math.Min(windowEnd, taskbarEnd);
-        if (overlapEnd <= overlapStart)
-        {
-            rejection = TaskbarOccupancyRejection.OutsideTaskbar;
-            return false;
-        }
-
-        range = new TaskbarPrimaryRange(
-            Math.Clamp(overlapStart - taskbarStart, 0, primaryLength),
-            Math.Clamp(overlapEnd - taskbarStart, 0, primaryLength));
-        return range.End > range.Start;
-    }
-
-    /// <summary>
     /// 试着把一个顶层覆盖窗口换算成占用区间。
     /// Tries to convert a covering top-level window into an occupied range.
     /// </summary>
@@ -170,17 +71,17 @@ public static class TaskbarOverlayRangePolicy
     /// <param name="taskbarRect">任务栏矩形（屏幕物理像素）。/ Taskbar rectangle in physical screen pixels.</param>
     /// <param name="orientation">任务栏方向。/ Taskbar orientation.</param>
     /// <param name="range">换算出的占用区间（任务栏内的主轴坐标）。/ Resulting occupied range in taskbar-relative primary-axis coordinates.</param>
-    /// <param name="rejection">被拒原因；接受时为 <see cref="TaskbarOccupancyRejection.None"/>。/ Rejection reason, <see cref="TaskbarOccupancyRejection.None"/> when accepted.</param>
+    /// <param name="rejection">被拒原因；接受时为 <see cref="TaskbarOverlayRejection.None"/>。/ Rejection reason, <see cref="TaskbarOverlayRejection.None"/> when accepted.</param>
     /// <returns>该窗口算作任务栏元素时为 true。/ True when the window counts as part of the taskbar.</returns>
     public static bool TryResolve(
         RECT windowRect,
         RECT taskbarRect,
         LayoutOrientation orientation,
         out TaskbarPrimaryRange range,
-        out TaskbarOccupancyRejection rejection)
+        out TaskbarOverlayRejection rejection)
     {
         range = default;
-        rejection = TaskbarOccupancyRejection.None;
+        rejection = TaskbarOverlayRejection.None;
 
         var (primaryLength, crossLength) = ResolveLengths(taskbarRect, orientation);
         if (primaryLength <= 0 || crossLength <= 0)
@@ -192,14 +93,14 @@ public static class TaskbarOverlayRangePolicy
         var crossOverlap = Math.Min(windowCrossEnd, taskbarCrossEnd) - Math.Max(windowCrossStart, taskbarCrossStart);
         if (crossOverlap < crossLength * MinimumCrossOverlapRatio)
         {
-            rejection = TaskbarOccupancyRejection.NotOverTaskbar;
+            rejection = TaskbarOverlayRejection.NotOverTaskbar;
             return false;
         }
 
         var windowCrossSize = windowCrossEnd - windowCrossStart;
         if (windowCrossSize > crossLength * MaximumCrossSizeRatio)
         {
-            rejection = TaskbarOccupancyRejection.TooTall;
+            rejection = TaskbarOverlayRejection.TooTall;
             return false;
         }
 
@@ -207,13 +108,13 @@ public static class TaskbarOverlayRangePolicy
         var overlapEnd = Math.Min(windowEnd, taskbarEnd);
         if (overlapEnd <= overlapStart)
         {
-            rejection = TaskbarOccupancyRejection.OutsideTaskbar;
+            rejection = TaskbarOverlayRejection.OutsideTaskbar;
             return false;
         }
 
         if (overlapEnd - overlapStart > primaryLength * MaximumPrimaryShare)
         {
-            rejection = TaskbarOccupancyRejection.TooWide;
+            rejection = TaskbarOverlayRejection.TooWide;
             return false;
         }
 
@@ -235,7 +136,7 @@ public static class TaskbarOverlayRangePolicy
 }
 
 /// <summary>候选窗口未被计入任务栏占用的原因。/ Why a candidate window was not counted as taskbar occupancy.</summary>
-public enum TaskbarOccupancyRejection
+public enum TaskbarOverlayRejection
 {
     /// <summary>被接受。/ Accepted.</summary>
     None = 0,
@@ -250,11 +151,5 @@ public enum TaskbarOccupancyRejection
     OutsideTaskbar = 3,
 
     /// <summary>占掉任务栏大半主轴长度，是浮层而不是任务栏元素。/ Takes most of the taskbar's primary axis, so a flyout rather than a taskbar element.</summary>
-    TooWide = 4,
-
-    /// <summary>主轴长度超过任务栏的 45%，是容器（XAML 岛、任务列表外壳）而不是槽位。/ Longer than 45% of the taskbar, so a container (the XAML island, the task-list shell) rather than a slot.</summary>
-    Container = 5,
-
-    /// <summary>主轴长度太短，是分隔条或零尺寸占位窗口。/ Too short, so a separator or a zero-sized placeholder.</summary>
-    TooSmall = 6
+    TooWide = 4
 }

@@ -133,7 +133,7 @@ public sealed class TaskbarOccupiedAreaServiceTests
         // to the far left, and bounce it back once the menu closes.
         Assert.IsFalse(TaskbarOverlayRangePolicy.TryResolve(
             CreateRect(48, 900, 248, 1440), taskbar, LayoutOrientation.Horizontal, out _, out var tooTall));
-        Assert.AreEqual(TaskbarOccupancyRejection.TooTall, tooTall);
+        Assert.AreEqual(TaskbarOverlayRejection.TooTall, tooTall);
 
         // 比任务栏高一些（6 倍以内）仍然接受：Windows 10 的搜索宿主窗口未必恰好与任务栏等高。
         // Somewhat taller than the taskbar (within six times) is still accepted: the Windows 10 search host is not necessarily exactly
@@ -152,7 +152,7 @@ public sealed class TaskbarOccupiedAreaServiceTests
         // to the far left.
         Assert.IsFalse(TaskbarOverlayRangePolicy.TryResolve(
             CreateRect(100, 1392, 2400, 1440), taskbar, LayoutOrientation.Horizontal, out _, out var tooWide));
-        Assert.AreEqual(TaskbarOccupancyRejection.TooWide, tooWide);
+        Assert.AreEqual(TaskbarOverlayRejection.TooWide, tooWide);
 
         // 桌面窗口：尺寸远超任务栏。
         // The desktop window: far larger than the taskbar.
@@ -263,58 +263,6 @@ public sealed class TaskbarOccupiedAreaServiceTests
             TaskbarBarPosition.Start, clampedPadding, 0, 1, 4);
         Assert.AreEqual(rangeEnd - primarySize, clampedPlacement.Primary);
         Assert.AreEqual(clampedPlacement.Primary - rangeStart, clampedPadding);
-    }
-
-    /// <summary>
-    /// 任务栏自己的子窗口里，槽位（开始按钮、任务列表、搜索框）要计入占用，而容器（XAML 岛）与零尺寸占位不能计入——
-    /// Windows 10 的搜索框在 UIA 里是一个文本控件，只靠 UIA 会整段漏掉，这条几何判定是唯一不依赖 UIA 的兜底。
-    /// Among the taskbar's own child windows, slots (the Start button, the task list, the search box) count as occupied while containers
-    /// (the XAML island) and zero-sized placeholders do not: the Windows 10 search box is a text control in UIA, so filtering by
-    /// button-like controls skips it, and this geometric decision is the only fallback that does not depend on UIA.
-    /// </summary>
-    [TestMethod]
-    public void SlotPolicyAcceptsTaskbarChildrenAndRejectsContainers()
-    {
-        var taskbar = CreateRect(0, 1392, 1920, 1440);
-
-        // 开始按钮、任务列表、搜索框：都是任务栏上的一段。
-        // The Start button, the task list, and the search box: each is one stretch of the taskbar.
-        Assert.IsTrue(TaskbarOverlayRangePolicy.TryResolveSlot(
-            CreateRect(0, 1392, 40, 1440), taskbar, LayoutOrientation.Horizontal, out var start));
-        Assert.AreEqual(new TaskbarPrimaryRange(0, 40), start);
-        // 固定了很多图标时任务列表可以超过半条任务栏，它仍然是槽位（容器是"整条任务栏宽"的那一类）。
-        // With many pinned icons the task list exceeds half a taskbar and is still a slot (containers are the full-width kind).
-        Assert.IsTrue(TaskbarOverlayRangePolicy.TryResolveSlot(
-            CreateRect(252, 1392, 1180, 1440), taskbar, LayoutOrientation.Horizontal, out var taskList));
-        Assert.AreEqual(new TaskbarPrimaryRange(252, 1180), taskList);
-        Assert.IsTrue(TaskbarOverlayRangePolicy.TryResolveSlot(
-            CreateRect(40, 1392, 244, 1440), taskbar, LayoutOrientation.Horizontal, out var searchBox));
-        Assert.AreEqual(new TaskbarPrimaryRange(40, 244), searchBox);
-
-        // XAML 岛覆盖整条任务栏：是容器而不是槽位，调用方会再往下看一层。
-        // The XAML island covers the whole taskbar: a container rather than a slot, and the caller descends one level further.
-        Assert.IsFalse(TaskbarOverlayRangePolicy.TryResolveSlot(
-            CreateRect(0, 1392, 1920, 1440), taskbar, LayoutOrientation.Horizontal, out _, out var container));
-        Assert.AreEqual(TaskbarOccupancyRejection.Container, container);
-
-        // 零尺寸占位窗口（Windows 11 上的 TrayDummySearchControl 实测是 0×0）。
-        // A zero-sized placeholder (TrayDummySearchControl measured 0x0 on Windows 11).
-        Assert.IsFalse(TaskbarOverlayRangePolicy.TryResolveSlot(
-            CreateRect(0, 1392, 0, 1440), taskbar, LayoutOrientation.Horizontal, out _, out var tooSmall));
-        Assert.AreEqual(TaskbarOccupancyRejection.TooSmall, tooSmall);
-
-        // 挂在别的显示器上的窗口（横轴不与任务栏相交）不是任务栏的一部分。
-        // A window on another monitor (no cross-axis overlap with the taskbar) is not part of it.
-        Assert.IsFalse(TaskbarOverlayRangePolicy.TryResolveSlot(
-            CreateRect(0, 200, 400, 300), taskbar, LayoutOrientation.Horizontal, out _, out var notOver));
-        Assert.AreEqual(TaskbarOccupancyRejection.NotOverTaskbar, notOver);
-
-        // 竖向任务栏：主轴换成纵轴，判定不变。
-        // A vertical taskbar: the primary axis turns and the decision stays the same.
-        var vertical = CreateRect(0, 0, 48, 1080);
-        Assert.IsTrue(TaskbarOverlayRangePolicy.TryResolveSlot(
-            CreateRect(0, 0, 48, 40), vertical, LayoutOrientation.Vertical, out var verticalStart));
-        Assert.AreEqual(new TaskbarPrimaryRange(0, 40), verticalStart);
     }
 
     private sealed class FakeTaskbarOccupiedAreaProbe : ITaskbarOccupiedAreaProbe
