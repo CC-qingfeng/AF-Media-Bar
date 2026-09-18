@@ -289,7 +289,7 @@ public static class SettingsSearchIndex
             "Common.Group.LyricsDisplay",
             "Search.Lyrics.Display.Description",
             language,
-            ["歌词", "lyrics", "实时", "双行", "第二行", "翻译", "下一句", "translation", "实时歌词", "双行歌词"]),
+            ["歌词", "lyrics", "实时", "双行", "第二行", "翻译", "音译", "下一句", "translation", "romanization", "逐字", "擦亮", "亮起", "karaoke", "署名", "作词", "作曲", "实时歌词", "双行歌词"]),
         Create(
             SettingsPageKey.Lyrics,
             1,
@@ -297,6 +297,13 @@ public static class SettingsSearchIndex
             "Search.Lyrics.Alignment.Description",
             language,
             ["对齐", "align", "左", "中", "右", "居中", "left", "center", "right"]),
+        Create(
+            SettingsPageKey.Lyrics,
+            2,
+            "Common.Group.LyricsSources",
+            "Search.Lyrics.Sources.Description",
+            language,
+            ["来源", "歌词来源", "source", "sources", "网易云", "网易云音乐", "netease", "qq 音乐", "qqmusic", "酷狗", "kugou", "汽水", "soda", "lrclib", "搜索", "search", "匹配", "严格", "match", "strict", "顺序", "优先级", "priority", "order"]),
 
         // ---- 外观 / Appearance ----
         Create(

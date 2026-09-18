@@ -143,6 +143,7 @@ namespace AFMediaBar.Components
         private string _activeLyric = string.Empty;
         private string _nextLyric = string.Empty;
         private string _translatedLyric = string.Empty;
+        private string _romanizedLyric = string.Empty;
         private string _secondaryLyric = string.Empty;
         private string _lastSizeFingerprint = string.Empty;
         /// <summary>参与跑马灯的文本元素；没有任何一个在推进时计时器必须停止。/ Text elements taking part in the marquee; the timer must be stopped while none of them is advancing.</summary>
@@ -1011,6 +1012,7 @@ namespace AFMediaBar.Components
                     _activeLyric = string.Empty;
                     _nextLyric = string.Empty;
                     _translatedLyric = string.Empty;
+                    _romanizedLyric = string.Empty;
                     _secondaryLyric = string.Empty;
 
                     SongTitle.Text = _actualTitle;
@@ -1162,6 +1164,7 @@ namespace AFMediaBar.Components
             _activeLyric = update.Text;
             _nextLyric = update.NextText;
             _translatedLyric = update.TranslationText;
+            _romanizedLyric = update.RomanizationText;
             SetCurrentLyricLine(update.CurrentLine);
             SongTitle.Text = _actualTitle;
         }
@@ -1170,9 +1173,12 @@ namespace AFMediaBar.Components
         {
             var settings = SettingsManager.Current;
             var showLyrics = settings.LyricsEnabled && !string.IsNullOrEmpty(_activeLyric);
-            _secondaryLyric = settings.LyricsSecondaryLineMode == LyricsSecondaryLineMode.Translation
-                ? _translatedLyric
-                : _nextLyric;
+            _secondaryLyric = settings.LyricsSecondaryLineMode switch
+            {
+                LyricsSecondaryLineMode.Translation => _translatedLyric,
+                LyricsSecondaryLineMode.Romanization => _romanizedLyric,
+                _ => _nextLyric
+            };
             var showSecondary = showLyrics &&
                                 settings.TwoLineLyricsEnabled &&
                                 !string.IsNullOrEmpty(_secondaryLyric);

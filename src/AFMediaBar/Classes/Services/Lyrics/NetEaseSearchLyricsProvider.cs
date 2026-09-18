@@ -2,7 +2,6 @@ using AFMediaBar.Classes.Abstractions;
 using AFMediaBar.Classes.Models;
 using Lyricify.Lyrics.Providers.Web.Netease;
 using Lyricify.Lyrics.Searchers;
-using Lyricify.Lyrics.Searchers.Helpers;
 
 namespace AFMediaBar.Classes.Services.Lyrics;
 
@@ -15,18 +14,15 @@ namespace AFMediaBar.Classes.Services.Lyrics;
 /// This is the only entry on the generic retrieval chain that can reach NetEase lyrics including Chinese translations: the
 /// source-specific provider only applies while the NetEase client itself is playing.
 ///
-/// 搜索必须过评分：低于 <see cref="MinimumMatch"/>（High）一律不采用，避免同名现场版、翻唱或纯伴奏串词。
-/// The search has to pass the score: anything below <see cref="MinimumMatch"/> (High) is rejected, which keeps a same-named
-/// live version, a cover, or an instrumental from supplying the wrong lyrics.
+/// 搜索必须过评分：低于用户选择的匹配严格度（默认 High）一律不采用，避免同名现场版、翻唱或纯伴奏串词。
+/// The search has to pass the score: anything below the strictness the user chose (High by default) is rejected, which keeps a
+/// same-named live version, a cover, or an instrumental from supplying the wrong lyrics.
 /// </summary>
 public sealed class NetEaseSearchLyricsProvider : ILyricsProvider
 {
-    /// <summary>采用搜索结果所需的最低匹配等级。/ The minimum match level required to accept a search result.</summary>
-    public const CompareHelper.MatchType MinimumMatch = CompareHelper.MatchType.High;
-
     private readonly Api _api = new();
 
-    public string SourceName => "NeteaseSearch";
+    public string SourceName => LyricsSourceCatalog.NetEaseSearch;
 
     public async Task<LyricsResult?> GetLyricsAsync(
         LyricsRequest request,
@@ -38,7 +34,8 @@ public sealed class NetEaseSearchLyricsProvider : ILyricsProvider
         }
 
         var track = LyricsSearch.ToTrackMetadata(request);
-        var match = await LyricsSearch.MatchAsync(track, Searchers.Netease, MinimumMatch, cancellationToken);
+        var minimumMatch = LyricsMatchPolicy.ToMinimumMatch(request.MatchStrictness);
+        var match = await LyricsSearch.MatchAsync(track, Searchers.Netease, minimumMatch, cancellationToken);
         if (match is not NeteaseSearchResult netease || string.IsNullOrWhiteSpace(netease.Id))
         {
             return null;

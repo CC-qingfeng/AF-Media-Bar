@@ -17,19 +17,35 @@ public static class LyricsProviderFactory
     /// 建立默认提供器序列：网易云按 id 精确取词 → 网易云搜索兜底 → LRCLIB → QQ 音乐 → 酷狗 → 汽水音乐。
     /// Builds the default provider sequence: NetEase by id, the NetEase search fallback, LRCLIB, QQ Music, Kugou, and Soda Music.
     ///
-    /// 中文曲库在前是因为它们同时提供译文或逐字时间轴；调整顺序只需要改这一个列表，取词链本身不认识具体来源。
-    /// The Chinese catalogues come first because they also carry a translation or a syllable timeline; changing the order only
-    /// means editing this one list, since the retrieval chain itself knows nothing about specific sources.
+    /// 中文曲库在前是因为它们同时提供译文或逐字时间轴；顺序的权威在 <see cref="LyricsSourceCatalog.DefaultOrder"/>，
+    /// 用户可以在设置里改用它；这里只负责按那个顺序构造提供器。
+    /// The Chinese catalogues come first because they also carry a translation or a syllable timeline; the authoritative order
+    /// lives in <see cref="LyricsSourceCatalog.DefaultOrder"/> and the user may override it in the settings, while this method
+    /// only builds the providers in that order.
     /// </summary>
-    public static IReadOnlyList<ILyricsProvider> CreateDefault() =>
-    [
-        new NetEaseLyricsProvider(),
-        new NetEaseSearchLyricsProvider(),
-        new LrclibLyricsProvider(),
-        new QQMusicLyricsProvider(),
-        new KugouLyricsProvider(),
-        new SodaMusicLyricsProvider()
-    ];
+    public static IReadOnlyList<ILyricsProvider> CreateDefault()
+    {
+        var providers = new Dictionary<string, ILyricsProvider>(StringComparer.Ordinal)
+        {
+            [LyricsSourceCatalog.NetEase] = new NetEaseLyricsProvider(),
+            [LyricsSourceCatalog.NetEaseSearch] = new NetEaseSearchLyricsProvider(),
+            [LyricsSourceCatalog.Lrclib] = new LrclibLyricsProvider(),
+            [LyricsSourceCatalog.QQMusic] = new QQMusicLyricsProvider(),
+            [LyricsSourceCatalog.Kugou] = new KugouLyricsProvider(),
+            [LyricsSourceCatalog.SodaMusic] = new SodaMusicLyricsProvider()
+        };
+
+        var ordered = new List<ILyricsProvider>(providers.Count);
+        foreach (var sourceId in LyricsSourceCatalog.DefaultOrder)
+        {
+            if (providers.TryGetValue(sourceId, out var provider))
+            {
+                ordered.Add(provider);
+            }
+        }
+
+        return ordered;
+    }
 
     /// <summary>
     /// 建立使用默认预算与默认提供器序列的歌词服务。

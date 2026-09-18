@@ -16,7 +16,7 @@ public sealed class NetEaseLyricsProvider : ILyricsProvider
 {
     private readonly Api _api = new();
 
-    public string SourceName => "Netease";
+    public string SourceName => LyricsSourceCatalog.NetEase;
 
     public async Task<LyricsResult?> GetLyricsAsync(
         LyricsRequest request,

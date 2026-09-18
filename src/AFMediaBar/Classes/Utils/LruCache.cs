@@ -72,4 +72,17 @@ internal sealed class LruCache<TKey, TValue> where TKey : notnull
             _map.Remove(leastRecent.Value.Key);
         }
     }
+
+    /// <summary>
+    /// 清空所有条目，用于"设置变了，缓存结果不再适用"的场景。
+    /// Clears every entry, for the case where a settings change made the cached results no longer applicable.
+    /// </summary>
+    public void Clear()
+    {
+        lock (_sync)
+        {
+            _map.Clear();
+            _lruList.Clear();
+        }
+    }
 }

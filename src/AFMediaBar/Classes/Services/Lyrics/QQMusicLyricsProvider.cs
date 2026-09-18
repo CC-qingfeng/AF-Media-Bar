@@ -2,7 +2,6 @@ using AFMediaBar.Classes.Abstractions;
 using AFMediaBar.Classes.Models;
 using Lyricify.Lyrics.Providers.Web.QQMusic;
 using Lyricify.Lyrics.Searchers;
-using Lyricify.Lyrics.Searchers.Helpers;
 
 namespace AFMediaBar.Classes.Services.Lyrics;
 
@@ -18,12 +17,9 @@ namespace AFMediaBar.Classes.Services.Lyrics;
 /// </summary>
 public sealed class QQMusicLyricsProvider : ILyricsProvider
 {
-    /// <summary>采用搜索结果所需的最低匹配等级。/ The minimum match level required to accept a search result.</summary>
-    public const CompareHelper.MatchType MinimumMatch = CompareHelper.MatchType.High;
-
     private readonly Api _api = new();
 
-    public string SourceName => "QQMusic";
+    public string SourceName => LyricsSourceCatalog.QQMusic;
 
     public async Task<LyricsResult?> GetLyricsAsync(
         LyricsRequest request,
@@ -35,7 +31,8 @@ public sealed class QQMusicLyricsProvider : ILyricsProvider
         }
 
         var track = LyricsSearch.ToTrackMetadata(request);
-        var match = await LyricsSearch.MatchAsync(track, Searchers.QQMusic, MinimumMatch, cancellationToken);
+        var minimumMatch = LyricsMatchPolicy.ToMinimumMatch(request.MatchStrictness);
+        var match = await LyricsSearch.MatchAsync(track, Searchers.QQMusic, minimumMatch, cancellationToken);
         if (match is not QQMusicSearchResult qq)
         {
             return null;
@@ -48,7 +45,12 @@ public sealed class QQMusicLyricsProvider : ILyricsProvider
             return null;
         }
 
-        var document = LyricsTextParser.Parse(main, translation, request: request, durationSeconds: request.DurationSeconds);
+        var document = LyricsTextParser.Parse(
+            main,
+            translation,
+            request: request,
+            durationSeconds: request.DurationSeconds,
+            filterInfoLines: request.FilterInfoLines);
         return document.Lines.Count > 0 ? new LyricsResult(SourceName, document) : null;
     }
 

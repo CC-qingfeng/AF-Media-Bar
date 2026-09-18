@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using AFMediaBar.Classes.Abstractions;
 using AFMediaBar.Classes.Models;
+using AFMediaBar.Classes.Settings;
 
 namespace AFMediaBar.Classes.Services.Lyrics;
 
@@ -76,8 +77,21 @@ public sealed class LyricsService
         LyricsRequest request,
         CancellationToken cancellationToken)
     {
+        // 取词选项与启用来源都在发起前从设置解析：提供器因此不读设置、保持无状态；"改来源后当前这首也要重新取词"
+        // 由缓存失效策略负责（见 LyricsCacheInvalidationPolicy）。
+        // Both the retrieval options and the enabled sources are resolved from the settings before the first request, which keeps
+        // providers stateless and free of settings reads; making the current track refetch after a source change belongs to the
+        // cache invalidation policy instead (see LyricsCacheInvalidationPolicy).
+        var settings = SettingsManager.Current;
+        var effectiveRequest = request with
+        {
+            MatchStrictness = settings.LyricsMatchStrictness,
+            FilterInfoLines = settings.LyricsInfoLineFilterEnabled
+        };
+        var providers = LyricsSourcePolicy.ResolveActive(_providers, settings.LyricsSource);
+
         var startedAt = Stopwatch.GetTimestamp();
-        foreach (var provider in _providers)
+        foreach (var provider in providers)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
@@ -87,7 +101,7 @@ public sealed class LyricsService
                 return null;
             }
 
-            var result = await TryProviderAsync(provider, request, budget, cancellationToken);
+            var result = await TryProviderAsync(provider, effectiveRequest, budget, cancellationToken);
             if (result is not null)
             {
                 return result;

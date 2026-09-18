@@ -42,6 +42,24 @@
                 </DataTrigger>
             </Style.Triggers>
         </Style>
+
+        <!--
+            未唱部分不透明度只在启用逐字擦亮时才有作用对象：关闭时用徽章说明原因，而不是把滑杆静默变灰。
+            The unsung opacity only has a target while syllable highlighting is on: a badge states why when it is off, instead of
+            leaving a silently greyed slider behind.
+        -->
+        <Style
+            x:Key="UnsungOpacityRowStyle"
+            BasedOn="{StaticResource {x:Type components:SettingsRow}}"
+            TargetType="{x:Type components:SettingsRow}">
+            <Setter Property="Badge" Value="" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding ViewModel.CanConfigureUnsungOpacity}" Value="False">
+                    <Setter Property="Badge" Value="{DynamicResource Loc.Lyrics.Row.UnsungOpacity.Badge}" />
+                    <Setter Property="BadgeTone" Value="Attention" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
     </Page.Resources>
 
     <Grid>
@@ -86,6 +104,40 @@
                         </components:SettingsRow>
 
                         <components:SettingsRow
+                            Description="{DynamicResource Loc.Lyrics.Row.UnsungOpacity.Description}"
+                            Icon="{ui:SymbolIcon CircleHalfFill24}"
+                            Style="{StaticResource UnsungOpacityRowStyle}"
+                            Title="{DynamicResource Loc.Lyrics.Row.UnsungOpacity.Title}">
+                            <!--
+                                上下限用 Binding 而不是 x:Static：x:Static 返回装箱的 int，RangeBase.Maximum 需要 double，
+                                标记扩展不做这个转换，而绑定会（与外观页的字重滑杆同一处理）。
+                                The bounds use Binding rather than x:Static because x:Static yields a boxed int, RangeBase.Maximum
+                                wants a double, and the markup extension performs no conversion while the binding engine does —
+                                the same handling as the font-weight slider on the appearance page.
+                            -->
+                            <StackPanel Orientation="Horizontal">
+                                <Slider
+                                    IsEnabled="{Binding ViewModel.CanConfigureUnsungOpacity}"
+                                    IsSnapToTickEnabled="True"
+                                    Maximum="{Binding Source={x:Static settings:LyricsUnsungOpacity.MaximumPercent}}"
+                                    Minimum="{Binding Source={x:Static settings:LyricsUnsungOpacity.MinimumPercent}}"
+                                    Style="{StaticResource AfSettingsRowSliderStyle}"
+                                    TickFrequency="{Binding Source={x:Static settings:LyricsUnsungOpacity.StepPercent}}"
+                                    Value="{Binding ViewModel.UnsungOpacityPercent, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                <TextBlock
+                                    Style="{StaticResource AfSettingsRowValueStyle}"
+                                    Text="{Binding ViewModel.UnsungOpacityText}" />
+                            </StackPanel>
+                        </components:SettingsRow>
+
+                        <components:SettingsRow
+                            Description="{DynamicResource Loc.Lyrics.Row.InfoLines.Description}"
+                            Icon="{ui:SymbolIcon TextGrammarWand24}"
+                            Title="{DynamicResource Loc.Lyrics.Row.InfoLines.Title}">
+                            <ui:ToggleSwitch IsChecked="{Binding ViewModel.InfoLineFilterEnabled, Mode=TwoWay}" />
+                        </components:SettingsRow>
+
+                        <components:SettingsRow
                             Description="{DynamicResource Loc.Lyrics.Row.TwoLine.Description}"
                             Icon="{ui:SymbolIcon TextAlignJustify24}"
                             Style="{StaticResource TwoLineRowStyle}"
@@ -119,6 +171,7 @@
                                         SelectedValuePath="Tag">
                                         <ComboBoxItem Content="{DynamicResource Loc.Lyrics.SecondLine.NextLine}" Tag="{x:Static settings:LyricsSecondaryLineMode.NextLine}" />
                                         <ComboBoxItem Content="{DynamicResource Loc.Lyrics.SecondLine.Translation}" Tag="{x:Static settings:LyricsSecondaryLineMode.Translation}" />
+                                        <ComboBoxItem Content="{DynamicResource Loc.Lyrics.SecondLine.Romanization}" Tag="{x:Static settings:LyricsSecondaryLineMode.Romanization}" />
                                     </ComboBox>
                                 </components:SettingsRow>
                             </StackPanel>
@@ -143,6 +196,105 @@
                                 <ComboBoxItem Content="{DynamicResource Loc.Common.AlignRight}" Tag="{x:Static settings:LyricsTextAlignment.Right}" />
                             </ComboBox>
                         </components:SettingsRow>
+                    </StackPanel>
+                </components:SettingsGroup>
+
+                <components:SettingsGroup Header="{DynamicResource Loc.Common.Group.LyricsSources}" Icon="{ui:SymbolIcon CloudArrowDown24}">
+                    <StackPanel>
+                        <components:SettingsCallout
+                            Margin="0,0,0,12"
+                            IsAccent="True"
+                            Symbol="CloudArrowDown24"
+                            Text="{DynamicResource Loc.Lyrics.Sources.Callout}" />
+
+                        <components:SettingsRow
+                            Description="{DynamicResource Loc.Lyrics.Row.MatchStrictness.Description}"
+                            Icon="{ui:SymbolIcon Filter24}"
+                            Title="{DynamicResource Loc.Lyrics.Row.MatchStrictness.Title}">
+                            <ComboBox
+                                MinWidth="160"
+                                SelectedValue="{Binding ViewModel.MatchStrictness, Mode=TwoWay}"
+                                SelectedValuePath="Tag">
+                                <ComboBoxItem Content="{DynamicResource Loc.Lyrics.Strictness.Balanced}" Tag="{x:Static settings:LyricsMatchStrictness.Balanced}" />
+                                <ComboBoxItem Content="{DynamicResource Loc.Lyrics.Strictness.Strict}" Tag="{x:Static settings:LyricsMatchStrictness.Strict}" />
+                                <ComboBoxItem Content="{DynamicResource Loc.Lyrics.Strictness.Exact}" Tag="{x:Static settings:LyricsMatchStrictness.Exact}" />
+                            </ComboBox>
+                        </components:SettingsRow>
+
+                        <!--
+                            列表用展开器承载，一行一个来源；顺序即优先级，因此每行自带上下移按钮，
+                            与「媒体与通知」页的来源列表、快速启动列表保持同一套写法。
+                            The list lives inside an expander with one source per row; the order is the priority, so every row carries
+                            its own move buttons, matching the source and quick-launch lists on the media page.
+                        -->
+                        <ui:CardExpander
+                            Style="{StaticResource AfSettingsExpanderStyle}"
+                            Icon="{ui:SymbolIcon CloudArrowDown24}">
+                            <ui:CardExpander.Header>
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource AfSettingsRowTitleStyle}" Text="{DynamicResource Loc.Lyrics.Sources.Expander.Title}" />
+                                    <TextBlock Style="{StaticResource AfSettingsRowDescriptionStyle}" Text="{DynamicResource Loc.Lyrics.Sources.Expander.Description}" />
+                                </StackPanel>
+                            </ui:CardExpander.Header>
+                            <StackPanel>
+                                <components:SettingsRow
+                                    Description="{DynamicResource Loc.Lyrics.Sources.Reset.Description}"
+                                    Icon="{ui:SymbolIcon ArrowReset24}"
+                                    IsNested="True"
+                                    Title="{DynamicResource Loc.Lyrics.Sources.Reset.Title}">
+                                    <ui:Button
+                                        Command="{Binding ViewModel.ResetSourceOrderCommand}"
+                                        Content="{DynamicResource Loc.Lyrics.Sources.Reset.Action}"
+                                        Icon="{ui:SymbolIcon ArrowReset24}"
+                                        Style="{StaticResource AfSettingsButtonStyle}" />
+                                </components:SettingsRow>
+
+                                <ItemsControl Margin="0,0,0,4" ItemsSource="{Binding ViewModel.SourceEntries}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <components:SettingsRow
+                                                Description="{DynamicResource Loc.Lyrics.Sources.Row.Description}"
+                                                IsNested="True"
+                                                Title="{Binding DisplayName}">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <ui:ToggleSwitch IsChecked="{Binding IsEnabled, Mode=TwoWay}" />
+                                                    <ui:Button
+                                                        Margin="8,0,0,0"
+                                                        Command="{Binding DataContext.ViewModel.MoveSourceUpCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                        CommandParameter="{Binding}"
+                                                        Icon="{ui:SymbolIcon ArrowUp24}"
+                                                        Style="{StaticResource AfSettingsIconButtonStyle}"
+                                                        ToolTip="{DynamicResource Loc.Lyrics.Sources.MoveUp}" />
+                                                    <ui:Button
+                                                        Margin="4,0,0,0"
+                                                        Command="{Binding DataContext.ViewModel.MoveSourceDownCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                                        CommandParameter="{Binding}"
+                                                        Icon="{ui:SymbolIcon ArrowDown24}"
+                                                        Style="{StaticResource AfSettingsIconButtonStyle}"
+                                                        ToolTip="{DynamicResource Loc.Lyrics.Sources.MoveDown}" />
+                                                </StackPanel>
+                                            </components:SettingsRow>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <!-- 全部来源关闭时说明后果：这时不会有任何歌词请求，媒体栏只显示标题与歌手。 -->
+                                <!-- With every source off the callout states the consequence: no lyric request is made at all and the bar shows title and artist only. -->
+                                <components:SettingsCallout Text="{DynamicResource Loc.Lyrics.Sources.AllDisabled.Callout}">
+                                    <components:SettingsCallout.Style>
+                                        <Style TargetType="{x:Type components:SettingsCallout}">
+                                            <Setter Property="Margin" Value="0,8,0,0" />
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding ViewModel.IsEverySourceDisabled}" Value="True">
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </components:SettingsCallout.Style>
+                                </components:SettingsCallout>
+                            </StackPanel>
+                        </ui:CardExpander>
                     </StackPanel>
                 </components:SettingsGroup>
 

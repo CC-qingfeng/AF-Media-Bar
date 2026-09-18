@@ -1,6 +1,7 @@
 using AFMediaBar.Classes.Models;
 using AFMediaBar.Classes.Services;
 using AFMediaBar.Classes.Services.Audio;
+using AFMediaBar.Classes.Services.Lyrics;
 using AFMediaBar.Classes.Settings;
 using AFMediaBar.Resources;
 using System.Diagnostics;
@@ -54,6 +55,7 @@ public partial class TaskbarFullPanelWindow : FluentWindow
         appearanceService.Attach(this);
         _mediaSessionService.SnapshotChanged += OnSnapshotChanged;
         SettingsManager.TaskbarExperienceSettingsChanged += OnTaskbarExperienceSettingsChanged;
+        Translations.LanguageChanged += OnLanguageChanged;
         Closed += OnClosed;
         _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
         _timer.Tick += Timer_Tick;
@@ -176,6 +178,7 @@ public partial class TaskbarFullPanelWindow : FluentWindow
         TitleText.Text = string.IsNullOrWhiteSpace(snapshot.Title) ? Translations.Get("Panel.FullPanel.NoMedia") : snapshot.Title;
         ArtistText.Text = string.IsNullOrWhiteSpace(snapshot.Artist) ? snapshot.SourceName : snapshot.Artist;
         SourceText.Text = snapshot.SourceName;
+        ApplyLyricsSourceLine(snapshot);
         ArtworkImage.Source = snapshot.Artwork;
         ArtworkPlaceholder.Visibility = snapshot.Artwork is null ? Visibility.Visible : Visibility.Collapsed;
         SetButtonAvailability(PreviousButton, snapshot.CanSkipPrevious);
@@ -198,6 +201,37 @@ public partial class TaskbarFullPanelWindow : FluentWindow
 
     private void OnTaskbarExperienceSettingsChanged(object? sender, EventArgs e) =>
         Dispatcher.BeginInvoke(() => ApplyFullPanelSettings(animate: true));
+
+    /// <summary>
+    /// 语言变化时重算由代码拼出来的那一行（歌词来源）；绑定文案由 WPF 自己重读，只有这条是拼出来的。
+    /// Recomputes the one line built in code (the lyric source) after a language change; bound text re-reads itself, and this is
+    /// the only composed one.
+    /// </summary>
+    private void OnLanguageChanged(object? sender, EventArgs e) =>
+        Dispatcher.BeginInvoke(() => ApplyLyricsSourceLine(_snapshot));
+
+    /// <summary>
+    /// 显示当前曲目的歌词来源。
+    /// Shows the lyric source of the current track.
+    ///
+    /// 没有歌词时整行收起：这一行的存在意义是回答"这句歌词是哪来的"，没有歌词时它没有可回答的问题。
+    /// The line collapses without lyrics: its whole point is to answer "where did this lyric come from", and without lyrics there
+    /// is no such question.
+    /// </summary>
+    private void ApplyLyricsSourceLine(MediaSnapshot snapshot)
+    {
+        if (snapshot.Lyrics is not { } lyrics || string.IsNullOrWhiteSpace(lyrics.Source))
+        {
+            LyricsSourceText.Text = string.Empty;
+            LyricsSourceText.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        LyricsSourceText.Text = Translations.Format(
+            "Panel.FullPanel.LyricsSource",
+            LyricsSourceCatalog.GetDisplayName(lyrics.Source));
+        LyricsSourceText.Visibility = Visibility.Visible;
+    }
 
     private void ApplyFullPanelSettings(bool animate)
     {
@@ -539,6 +573,7 @@ public partial class TaskbarFullPanelWindow : FluentWindow
         _metricsSubscription = null;
         _mediaSessionService.SnapshotChanged -= OnSnapshotChanged;
         SettingsManager.TaskbarExperienceSettingsChanged -= OnTaskbarExperienceSettingsChanged;
+        Translations.LanguageChanged -= OnLanguageChanged;
         Closed -= OnClosed;
     }
 }

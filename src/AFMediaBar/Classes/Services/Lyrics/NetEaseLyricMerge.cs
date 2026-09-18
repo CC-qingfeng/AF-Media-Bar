@@ -53,7 +53,8 @@ public static class NetEaseLyricMerge
                 translation,
                 romanization,
                 request,
-                request.DurationSeconds);
+                request.DurationSeconds,
+                request.FilterInfoLines);
             if (document.Lines.Count > 0)
             {
                 return new LyricsResult(sourceName, document);

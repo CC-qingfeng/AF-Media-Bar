@@ -12,7 +12,7 @@ namespace AFMediaBar.Classes.Services;
 /// <summary>负责用户设置 JSON 的加载、恢复、原子保存和防抖。 / Owns loading, recovery, atomic saving and debouncing of user settings JSON.</summary>
 public sealed class SettingsPersistenceService : IDisposable
 {
-    public const int CurrentSchemaVersion = 13;
+    public const int CurrentSchemaVersion = 14;
     private readonly string _directoryPath;
     private readonly string _settingsPath;
     private readonly string _backupPath;
@@ -375,6 +375,23 @@ public sealed class SettingsPersistenceService : IDisposable
             // rather than the coincidence that a missing field reads as enum value zero. It also keeps an existing user
             // from being silently pinned to one language: their interface follows whatever their system speaks.
             result.InterfaceLanguage = InterfaceLanguage.System;
+        }
+        if (envelope.SchemaVersion <= 13)
+        {
+            // Schema 14 新增五项歌词设置。旧文件里没有这些字段，反序列化会保留声明处的默认值，这里仍然逐项显式赋值：
+            // 每一项都要与升级前的实际行为一致（逐字擦亮开着、底色层 0.45、信息行过滤开着、匹配等级 High、全部来源按
+            // 默认顺序），而不是依赖"缺字段恰好等于默认值"——尤其是来源列表：空列表必须是"全部来源"，绝不能读成
+            // "一首歌都取不到歌词"。
+            // Schema 14 adds five lyric settings. Older files have no such fields and deserialization would keep the declared
+            // defaults; every one is assigned explicitly anyway, because each has to match the behaviour that was in effect before
+            // the setting existed (highlight on, base layer at 0.45, info-line filter on, match level High, every source in the
+            // default order) instead of resting on the coincidence that a missing field equals a default — especially the source
+            // list, where an empty list has to mean "all sources" and must never read as "no lyrics at all".
+            result.LyricsSyllableHighlightEnabled = true;
+            result.LyricsUnsungOpacityPercent = LyricsUnsungOpacity.DefaultPercent;
+            result.LyricsInfoLineFilterEnabled = true;
+            result.LyricsMatchStrictness = LyricsMatchStrictness.Balanced;
+            result.LyricsSource = LyricsSourceSettings.Default;
         }
         return result.Normalize();
     }

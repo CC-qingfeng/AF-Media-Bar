@@ -4,6 +4,7 @@ using System.Windows.Threading;
 using AFMediaBar.Classes.Models;
 using AFMediaBar.Classes.Services;
 using AFMediaBar.Classes.Services.Lyrics;
+using AFMediaBar.Classes.Settings;
 
 namespace AFMediaBar.Components;
 
@@ -24,9 +25,10 @@ public partial class TaskBarMediaControl
     /// Highlight frame interval: about 30 frames per second, matching the timing precision inside a lyric line.</summary>
     private const int LyricHighlightFrameIntervalMilliseconds = 33;
 
-    /// <summary>启用擦亮时底色层的不透明度：同一支前景色压暗，形成"已唱/未唱"的对比。
-    /// Opacity of the base layer while highlighting is active: the same foreground dimmed, which contrasts sung and unsung text.</summary>
-    private const double LyricHighlightBaseOpacity = 0.45;
+    /// <summary>启用擦亮时底色层的不透明度：同一支前景色压暗，形成"已唱/未唱"的对比；数值取自设置，用户可在歌词页调整。
+    /// Opacity of the base layer while highlighting is active: the same foreground dimmed, which contrasts sung and unsung text.
+    /// The value comes from the settings and is adjustable on the lyrics page.</summary>
+    private static double LyricHighlightBaseOpacity => SettingsManager.Current.LyricsUnsungOpacityPercent / 100d;
 
     /// <summary>裁剪宽度小于该值时不显示高亮层，避免行首出现一条几乎没有宽度的杂线。
     /// Below this clip width the highlight layer stays hidden, which keeps a hair-width line from appearing at the line start.</summary>
@@ -113,8 +115,15 @@ public partial class TaskBarMediaControl
     /// <summary>
     /// 判断当前是否具备逐字擦亮的条件。
     /// Decides whether syllable highlighting is currently possible.
+    ///
+    /// 用户开关与环境降级是两件事：开关关掉就不再擦亮，开关打开时环境仍能否决它（高对比度、系统关闭动效、控件不可见），
+    /// 因为那两种情况下擦亮要么破坏可读性，要么与"减少动效"的意图冲突。
+    /// The user's switch and the environment's degradations are two different things: turning the switch off stops the reveal, and
+    /// while it is on the environment can still veto it (high contrast, system animations off, the control not visible), because in
+    /// those cases the reveal would either hurt readability or contradict the intent to reduce motion.
     /// </summary>
     private bool CanAnimateLyricHighlight() =>
+        SettingsManager.Current.LyricsSyllableHighlightEnabled &&
         _currentLyricLine is not null &&
         _snapshot.IsConnected &&
         _snapshot.IsPlaying &&

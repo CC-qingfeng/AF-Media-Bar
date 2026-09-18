@@ -35,15 +35,17 @@ public static class LyricsTextParser
     /// <param name="romanizationText">可选的独立音译文本 / Optional separately supplied romanization text.</param>
     /// <param name="request">曲目元数据，用于信息行判定 / Track metadata, used for info-line classification.</param>
     /// <param name="durationSeconds">曲目时长（秒），用于补齐末行结束时间 / Track duration in seconds, used to complete the last line's end.</param>
-    /// <returns>歌词文档；无法识别、解析失败或无时间轴时返回空行文档，界面因此回落到标题与歌手。
-    /// The lyric document; an unrecognized, unparsable, or untimed input yields a document without lines, so the UI falls
-    /// back to title and artist.</returns>
+    /// <param name="filterInfoLines">是否丢弃作者、作曲、制作等信息行 / Whether credit lines such as writer, composer, and producer are dropped.</param>
+    /// <returns>歌词文档；无法识别、解析失败、没有时间轴或只剩占位文本时返回空行文档，界面因此回落到标题与歌手。
+    /// The lyric document; an unrecognized, unparsable, untimed, or placeholder-only input yields a document without lines, so
+    /// the UI falls back to title and artist.</returns>
     public static LyricDocument Parse(
         string? rawText,
         string? translationText = null,
         string? romanizationText = null,
         LyricsRequest? request = null,
-        double? durationSeconds = null)
+        double? durationSeconds = null,
+        bool filterInfoLines = true)
     {
         if (string.IsNullOrWhiteSpace(rawText))
         {
@@ -68,7 +70,7 @@ public static class LyricsTextParser
         }
 
         var track = CreateTrackMetadata(request, durationSeconds);
-        var dropMask = ResolveDropMask(data.Lines, track);
+        var dropMask = filterInfoLines ? ResolveDropMask(data.Lines, track) : new bool[data.Lines.Count];
         var translations = ParseTimestampedText(translationText);
         var romanizations = ParseTimestampedText(romanizationText);
         var drafts = new List<LyricLineDraft>(data.Lines.Count);
@@ -92,6 +94,14 @@ public static class LyricsTextParser
             var start = startMilliseconds / 1000d;
             var text = line.SubLine is not null ? line.FullText : line.Text;
             if (string.IsNullOrWhiteSpace(text))
+            {
+                continue;
+            }
+
+            // "暂无歌词"一类的占位行不是歌词：它带着时间戳通过解析后，会成为静置层唯一的一句歌词。
+            // A placeholder line such as "暂无歌词" is not a lyric: it passes parsing with a timestamp and would then be the only
+            // line the rest layer shows.
+            if (LyricPlaceholderPolicy.IsPlaceholder(text))
             {
                 continue;
             }

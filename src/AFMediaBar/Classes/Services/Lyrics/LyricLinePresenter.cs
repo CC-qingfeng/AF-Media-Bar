@@ -30,7 +30,7 @@ public sealed class LyricLinePresenter
             var cleared = _document is not null || _lastIndex != -2;
             _document = null;
             _lastIndex = -2;
-            return new LyricLineUpdate(string.Empty, string.Empty, string.Empty, cleared, null);
+            return new LyricLineUpdate(string.Empty, string.Empty, string.Empty, string.Empty, cleared, null);
         }
 
         // 快照每次都带着同一个文档实例（取词结果被缓存），因此按引用比较既正确又不产生逐帧的字符串比较。
@@ -54,6 +54,7 @@ public sealed class LyricLinePresenter
             currentLine?.Text ?? string.Empty,
             nextText,
             currentLine?.Translation ?? string.Empty,
+            currentLine?.Romanization ?? string.Empty,
             changed,
             currentLine);
     }
@@ -66,11 +67,13 @@ public sealed class LyricLinePresenter
 /// <param name="Text">当前句 / The active line.</param>
 /// <param name="NextText">下一句，末尾为空 / The next line, empty at the end of the document.</param>
 /// <param name="TranslationText">当前句译文，缺失为空 / The active line's translation, empty when absent.</param>
+/// <param name="RomanizationText">当前句音译，缺失为空 / The active line's romanization, empty when absent.</param>
 /// <param name="Changed">当前句或文档是否变化 / Whether the active line or the document changed.</param>
 /// <param name="CurrentLine">当前行对象，用于逐字擦亮；位置早于第一行时为 null / The active line object used for syllable highlighting; null before the first line.</param>
 public readonly record struct LyricLineUpdate(
     string Text,
     string NextText,
     string TranslationText,
+    string RomanizationText,
     bool Changed,
     LyricLine? CurrentLine);

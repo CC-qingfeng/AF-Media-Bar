@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 using System.Windows.Media;
 using AFMediaBar.Classes.Models;
 using AFMediaBar.Classes.Services.Lyrics;
+using AFMediaBar.Classes.Settings;
 using AFMediaBar.Classes.Utils;
 using AFMediaBar.Resources;
 using Windows.Media.Control;
@@ -33,6 +34,13 @@ public sealed class MediaSnapshotBuilder
     private readonly LruCache<string, LyricsResult?> _lyricsCache = new(LyricsCacheCapacity);
     private readonly HashSet<string> _pendingLyrics = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// 缓存代次：设置变化清空缓存时自增，让仍在飞行中的取词结果写不回来（否则它会把按旧设置取到的歌词塞进新缓存）。
+    /// Cache generation: incremented when a settings change clears the cache, so a retrieval still in flight cannot write back
+    /// (otherwise it would push lyrics fetched under the old settings into the new cache).
+    /// </summary>
+    private int _lyricsCacheGeneration;
+
     public event Action? EnrichmentCompleted;
 
     /// <summary>
@@ -42,6 +50,23 @@ public sealed class MediaSnapshotBuilder
     public MediaSnapshotBuilder(LyricsService lyricsService)
     {
         _lyricsService = lyricsService;
+        SettingsManager.SettingsChanged += OnSettingsChanged;
+    }
+
+    /// <summary>
+    /// 取词相关设置变化时清空缓存并立即重取当前曲目。
+    /// Clears the cache and immediately refetches the current track after a retrieval-related settings change.
+    /// </summary>
+    private void OnSettingsChanged(object? sender, SettingsChangedEventArgs e)
+    {
+        if (!LyricsCacheInvalidationPolicy.ShouldClearCache(e.PropertyName, e.ResetScope))
+        {
+            return;
+        }
+
+        _lyricsCache.Clear();
+        _lyricsCacheGeneration++;
+        EnrichmentCompleted?.Invoke();
     }
 
     /// <summary>
@@ -145,6 +170,7 @@ public sealed class MediaSnapshotBuilder
         GlobalSystemMediaTransportControlsSessionMediaProperties songInfo,
         GlobalSystemMediaTransportControlsSessionTimelineProperties timelineProperties)
     {
+        var generation = _lyricsCacheGeneration;
         try
         {
             var duration = (timelineProperties.EndTime - timelineProperties.StartTime).TotalSeconds;
@@ -154,11 +180,22 @@ public sealed class MediaSnapshotBuilder
                 songInfo.AlbumTitle ?? string.Empty,
                 duration > 0 ? duration : null,
                 NetEaseSongId: null);
-            _lyricsCache.Set(key, await _lyricsService.GetLyricsAsync(request, CancellationToken.None));
+            var result = await _lyricsService.GetLyricsAsync(request, CancellationToken.None);
+
+            // 取词过程中设置若被改过（来源、严格度、署名行过滤），这次结果已经不属于当前配置，写入只会让用户以为设置没生效。
+            // If the settings changed while this retrieval ran (sources, strictness, credit filtering), the result no longer belongs
+            // to the current configuration and writing it would only make the setting look ineffective.
+            if (generation == _lyricsCacheGeneration)
+            {
+                _lyricsCache.Set(key, result);
+            }
         }
         catch
         {
-            _lyricsCache.Set(key, null);
+            if (generation == _lyricsCacheGeneration)
+            {
+                _lyricsCache.Set(key, null);
+            }
         }
         finally
         {

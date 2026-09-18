@@ -7,6 +7,7 @@ using AFMediaBar.Classes.Abstractions;
 using AFMediaBar.Classes.Models;
 using AFMediaBar.Classes.Services.Lyrics;
 using AFMediaBar.Classes.Services.Players;
+using AFMediaBar.Classes.Settings;
 using AFMediaBar.Classes.Utils;
 using AFMediaBar.Resources;
 
@@ -34,6 +35,9 @@ public sealed class NetEaseMediaProvider : IMediaSourceProvider
     private readonly HashSet<string> _pendingArtwork = new(StringComparer.OrdinalIgnoreCase);
     private readonly LruCache<string, LyricsResult?> _lyricsCache = new(LyricsCacheCapacity);
     private readonly HashSet<string> _pendingLyrics = new(StringComparer.Ordinal);
+
+    /// <summary>缓存代次：取词设置变化时自增，让仍在飞行中的结果写不回来。/ Cache generation: incremented when retrieval settings change, so an in-flight result cannot be written back.</summary>
+    private int _lyricsCacheGeneration;
     private CancellationTokenSource? _cancellation;
     private NetEase? _memoryPlayer;
     private PlayerInfo? _currentInfo;
@@ -51,6 +55,23 @@ public sealed class NetEaseMediaProvider : IMediaSourceProvider
     {
         _dispatcher = Application.Current.Dispatcher;
         _lyricsService = lyricsService;
+        SettingsManager.SettingsChanged += OnSettingsChanged;
+    }
+
+    /// <summary>
+    /// 取词相关设置变化时清空缓存：本提供器每 233 毫秒轮询一次，因此下一次轮询会用新设置重新取词。
+    /// Clears the cache after a retrieval-related settings change: this provider polls every 233 ms, so the next poll refetches with
+    /// the new settings.
+    /// </summary>
+    private void OnSettingsChanged(object? sender, SettingsChangedEventArgs e)
+    {
+        if (!LyricsCacheInvalidationPolicy.ShouldClearCache(e.PropertyName, e.ResetScope))
+        {
+            return;
+        }
+
+        _lyricsCache.Clear();
+        _lyricsCacheGeneration++;
     }
 
     /// <summary>
@@ -288,11 +309,20 @@ public sealed class NetEaseMediaProvider : IMediaSourceProvider
 
     private async Task LoadLyricsAsync(PlayerInfo info, CancellationToken token)
     {
+        var generation = _lyricsCacheGeneration;
         try
         {
             var request = new LyricsRequest(info.Title, info.Artists, info.Album, info.Duration, info.Identity);
             var result = await _lyricsService.GetLyricsAsync(request, token);
-            _lyricsCache.Set(info.Identity, result);
+
+            // 取词过程中设置若被改过，这次结果已经不属于当前配置，写入只会让用户以为设置没生效。
+            // If the settings changed while this retrieval ran, the result no longer belongs to the current configuration and
+            // writing it would only make the setting look ineffective.
+            if (generation == _lyricsCacheGeneration)
+            {
+                _lyricsCache.Set(info.Identity, result);
+            }
+
             if (!_isDisposed && _currentInfo is { } current &&
                 string.Equals(current.Identity, info.Identity, StringComparison.Ordinal))
             {
@@ -305,7 +335,10 @@ public sealed class NetEaseMediaProvider : IMediaSourceProvider
         }
         catch
         {
-            _lyricsCache.Set(info.Identity, null);
+            if (generation == _lyricsCacheGeneration)
+            {
+                _lyricsCache.Set(info.Identity, null);
+            }
         }
         finally
         {

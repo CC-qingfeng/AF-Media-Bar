@@ -2,7 +2,6 @@ using AFMediaBar.Classes.Abstractions;
 using AFMediaBar.Classes.Models;
 using Lyricify.Lyrics.Providers.Web.Kugou;
 using Lyricify.Lyrics.Searchers;
-using Lyricify.Lyrics.Searchers.Helpers;
 
 namespace AFMediaBar.Classes.Services.Lyrics;
 
@@ -21,12 +20,9 @@ namespace AFMediaBar.Classes.Services.Lyrics;
 /// </summary>
 public sealed class KugouLyricsProvider : ILyricsProvider
 {
-    /// <summary>采用搜索结果所需的最低匹配等级。/ The minimum match level required to accept a search result.</summary>
-    public const CompareHelper.MatchType MinimumMatch = CompareHelper.MatchType.High;
-
     private readonly Api _api = new();
 
-    public string SourceName => "Kugou";
+    public string SourceName => LyricsSourceCatalog.Kugou;
 
     public async Task<LyricsResult?> GetLyricsAsync(
         LyricsRequest request,
@@ -38,7 +34,8 @@ public sealed class KugouLyricsProvider : ILyricsProvider
         }
 
         var track = LyricsSearch.ToTrackMetadata(request);
-        var match = await LyricsSearch.MatchAsync(track, Searchers.Kugou, MinimumMatch, cancellationToken);
+        var minimumMatch = LyricsMatchPolicy.ToMinimumMatch(request.MatchStrictness);
+        var match = await LyricsSearch.MatchAsync(track, Searchers.Kugou, minimumMatch, cancellationToken);
         if (match is not KugouSearchResult kugou || string.IsNullOrWhiteSpace(kugou.Hash))
         {
             return null;
@@ -73,7 +70,11 @@ public sealed class KugouLyricsProvider : ILyricsProvider
             return null;
         }
 
-        var document = LyricsTextParser.Parse(krc, request: request, durationSeconds: request.DurationSeconds);
+        var document = LyricsTextParser.Parse(
+            krc,
+            request: request,
+            durationSeconds: request.DurationSeconds,
+            filterInfoLines: request.FilterInfoLines);
         return document.Lines.Count > 0 ? new LyricsResult(SourceName, document) : null;
     }
 

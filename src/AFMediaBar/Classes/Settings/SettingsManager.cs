@@ -14,7 +14,19 @@ public enum DynamicIslandBackgroundMode { SystemTheme = 0, Transparent = 1 }
 /// <summary>托盘滚轮行为。 / Tray-wheel behavior.</summary>
 public enum TrayWheelBehavior { AdjustVolume = 0, SwitchOutputDevice = 1, Disabled = 2 }
 /// <summary>双行歌词第二行模式。 / Secondary lyric-line mode.</summary>
-public enum LyricsSecondaryLineMode { NextLine = 0, Translation = 1 }
+public enum LyricsSecondaryLineMode
+{
+    /// <summary>显示下一句歌词。/ Show the next lyric line.</summary>
+    NextLine = 0,
+
+    /// <summary>显示当前句翻译。/ Show the translation of the active line.</summary>
+    Translation = 1,
+
+    /// <summary>显示当前句音译（如粤拼、罗马字）。成员值参与序列化，因此只能追加。
+    /// Show the romanization of the active line (Cantonese jyutping, romanized Japanese, and so on). Member values take part in
+    /// serialization, so this may only be appended.</summary>
+    Romanization = 2
+}
 
 /// <summary>应用全部用户设置，并在属性直接修改时发布变更。 / All user settings; direct mutations publish changes.</summary>
 public sealed class AppSettings : INotifyPropertyChanged
@@ -46,6 +58,11 @@ public sealed class AppSettings : INotifyPropertyChanged
     private ModeSurfaceSettings _taskbarSurface = ModeSurfaceSettings.Default;
     private ModeSurfaceSettings _dynamicIslandSurface = ModeSurfaceSettings.Default;
     private LyricsTextAlignment _lyricsTextAlignment = LyricsTextAlignment.Center;
+    private bool _lyricsSyllableHighlightEnabled = true;
+    private int _lyricsUnsungOpacityPercent = LyricsUnsungOpacity.DefaultPercent;
+    private bool _lyricsInfoLineFilterEnabled = true;
+    private LyricsMatchStrictness _lyricsMatchStrictness = LyricsMatchStrictness.Balanced;
+    private LyricsSourceSettings _lyricsSource = LyricsSourceSettings.Default;
     private TrackChangeNotificationSettings _trackChangeNotification = TrackChangeNotificationSettings.Default;
     private SmtcSourceFilterSettings _smtcSourceFilter = SmtcSourceFilterSettings.Default;
     private QuickLaunchSettings _quickLaunch = QuickLaunchSettings.Default;
@@ -86,6 +103,21 @@ public sealed class AppSettings : INotifyPropertyChanged
     public ModeSurfaceSettings TaskbarSurface { get => _taskbarSurface; set => Set(ref _taskbarSurface, value.Normalize()); }
     public ModeSurfaceSettings DynamicIslandSurface { get => _dynamicIslandSurface; set => Set(ref _dynamicIslandSurface, value.Normalize()); }
     public LyricsTextAlignment LyricsTextAlignment { get => _lyricsTextAlignment; set => Set(ref _lyricsTextAlignment, value); }
+
+    /// <summary>是否启用逐字擦亮（有音节时间轴时当前行随播放亮起）。/ Whether syllable highlighting is enabled.</summary>
+    public bool LyricsSyllableHighlightEnabled { get => _lyricsSyllableHighlightEnabled; set => Set(ref _lyricsSyllableHighlightEnabled, value); }
+
+    /// <summary>启用逐字擦亮时底色层（未唱部分）的不透明度百分比。/ Opacity percentage of the base (unsung) layer while highlighting is on.</summary>
+    public int LyricsUnsungOpacityPercent { get => _lyricsUnsungOpacityPercent; set => Set(ref _lyricsUnsungOpacityPercent, value); }
+
+    /// <summary>是否丢弃作者、作曲、制作等信息行。/ Whether credit lines such as writer, composer, and producer are dropped.</summary>
+    public bool LyricsInfoLineFilterEnabled { get => _lyricsInfoLineFilterEnabled; set => Set(ref _lyricsInfoLineFilterEnabled, value); }
+
+    /// <summary>搜索型歌词来源的匹配严格度。/ Match strictness for search-based lyric sources.</summary>
+    public LyricsMatchStrictness LyricsMatchStrictness { get => _lyricsMatchStrictness; set => Set(ref _lyricsMatchStrictness, value); }
+
+    /// <summary>启用的歌词来源与它们的优先级顺序。/ The enabled lyric sources and their priority order.</summary>
+    public LyricsSourceSettings LyricsSource { get => _lyricsSource; set => Set(ref _lyricsSource, value.Normalize()); }
     public TrackChangeNotificationSettings TrackChangeNotification
     {
         get => _trackChangeNotification;
@@ -131,6 +163,9 @@ public sealed class AppSettings : INotifyPropertyChanged
         if (!Enum.IsDefined(result.DynamicIslandBackgroundMode)) result.DynamicIslandBackgroundMode = defaults.DynamicIslandBackgroundMode;
         if (!Enum.IsDefined(result.DynamicIslandEdge)) result.DynamicIslandEdge = defaults.DynamicIslandEdge;
         if (!Enum.IsDefined(result.LyricsTextAlignment)) result.LyricsTextAlignment = defaults.LyricsTextAlignment;
+        if (!Enum.IsDefined(result.LyricsMatchStrictness)) result.LyricsMatchStrictness = defaults.LyricsMatchStrictness;
+        result.LyricsUnsungOpacityPercent = LyricsUnsungOpacity.Normalize(result.LyricsUnsungOpacityPercent);
+        result.LyricsSource = result.LyricsSource.Normalize();
         result.TaskbarExperience = result.TaskbarExperience.Normalize();
         result.Interaction = result.Interaction.Normalize();
         result.TaskbarSurface = result.TaskbarSurface.Normalize();
@@ -185,6 +220,11 @@ public sealed class AppSettings : INotifyPropertyChanged
         TaskbarSurface = TaskbarSurface,
         DynamicIslandSurface = DynamicIslandSurface,
         LyricsTextAlignment = LyricsTextAlignment,
+        LyricsSyllableHighlightEnabled = LyricsSyllableHighlightEnabled,
+        LyricsUnsungOpacityPercent = LyricsUnsungOpacityPercent,
+        LyricsInfoLineFilterEnabled = LyricsInfoLineFilterEnabled,
+        LyricsMatchStrictness = LyricsMatchStrictness,
+        LyricsSource = LyricsSource,
         TrackChangeNotification = TrackChangeNotification,
         SmtcSourceFilter = SmtcSourceFilter,
         QuickLaunch = QuickLaunch,
@@ -264,6 +304,11 @@ public static class SettingsManager
     public static void SetTwoLineLyricsEnabled(bool enabled) => Current.TwoLineLyricsEnabled = enabled;
     public static void SetLyricsSecondaryLineMode(LyricsSecondaryLineMode mode) => Current.LyricsSecondaryLineMode = mode;
     public static void SetLyricsTextAlignment(LyricsTextAlignment alignment) => Current.LyricsTextAlignment = alignment;
+    public static void SetLyricsSyllableHighlightEnabled(bool enabled) => Current.LyricsSyllableHighlightEnabled = enabled;
+    public static void SetLyricsUnsungOpacityPercent(int percent) => Current.LyricsUnsungOpacityPercent = LyricsUnsungOpacity.Normalize(percent);
+    public static void SetLyricsInfoLineFilterEnabled(bool enabled) => Current.LyricsInfoLineFilterEnabled = enabled;
+    public static void SetLyricsMatchStrictness(LyricsMatchStrictness strictness) => Current.LyricsMatchStrictness = strictness;
+    public static void SetLyricsSourceSettings(LyricsSourceSettings settings) => Current.LyricsSource = settings;
     public static void SetAppearanceSettings(AppearanceSettings appearance) => Current.Appearance = appearance;
     public static void SetTaskbarExperienceSettings(TaskbarExperienceSettings settings) => Current.TaskbarExperience = settings;
     public static void SetInteractionSettings(GlobalInteractionSettings settings) => Current.Interaction = settings;
@@ -336,6 +381,11 @@ public static class SettingsManager
         var next = Current.Clone(); var defaults = Defaults;
         next.LyricsEnabled = defaults.LyricsEnabled; next.TwoLineLyricsEnabled = defaults.TwoLineLyricsEnabled;
         next.LyricsSecondaryLineMode = defaults.LyricsSecondaryLineMode; next.LyricsTextAlignment = defaults.LyricsTextAlignment;
+        next.LyricsSyllableHighlightEnabled = defaults.LyricsSyllableHighlightEnabled;
+        next.LyricsUnsungOpacityPercent = defaults.LyricsUnsungOpacityPercent;
+        next.LyricsInfoLineFilterEnabled = defaults.LyricsInfoLineFilterEnabled;
+        next.LyricsMatchStrictness = defaults.LyricsMatchStrictness;
+        next.LyricsSource = defaults.LyricsSource;
         Replace(next, SettingsResetScope.Lyrics);
     }
     public static void ResetLayout()
@@ -368,7 +418,12 @@ public static class SettingsManager
             case nameof(AppSettings.TrayWheelBehavior): TrayWheelBehaviorChanged?.Invoke(null, EventArgs.Empty); break;
             case nameof(AppSettings.LyricsEnabled):
             case nameof(AppSettings.TwoLineLyricsEnabled):
-            case nameof(AppSettings.LyricsSecondaryLineMode): LyricsSettingsChanged?.Invoke(null, EventArgs.Empty); break;
+            case nameof(AppSettings.LyricsSecondaryLineMode):
+            case nameof(AppSettings.LyricsSyllableHighlightEnabled):
+            case nameof(AppSettings.LyricsUnsungOpacityPercent):
+            case nameof(AppSettings.LyricsInfoLineFilterEnabled):
+            case nameof(AppSettings.LyricsMatchStrictness):
+            case nameof(AppSettings.LyricsSource): LyricsSettingsChanged?.Invoke(null, EventArgs.Empty); break;
             case nameof(AppSettings.LyricsTextAlignment): LyricsSettingsChanged?.Invoke(null, EventArgs.Empty); break;
             case nameof(AppSettings.TaskbarExperience): TaskbarExperienceSettingsChanged?.Invoke(null, EventArgs.Empty); break;
             case nameof(AppSettings.Interaction): InteractionSettingsChanged?.Invoke(null, EventArgs.Empty); break;
