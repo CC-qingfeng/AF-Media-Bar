@@ -7,6 +7,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using AFMediaBar.Classes.Models;
 using AFMediaBar.Classes.Models.Layout;
@@ -84,6 +85,17 @@ namespace AFMediaBar.Components
                 _hoverCloseTimer.Stop();
                 HideTaskbarHoverLayer();
             };
+            // 悬停层收起的兜底：动画回调可能因为渲染时钟停走或动画被顶掉而永远不来，那时悬停层会卡在半途留在屏幕上。
+            // 计时器只依赖 Dispatcher，所以无论渲染是否在跑，状态都会被收干净。
+            // Fallback for collapsing the hover layer: the animation callback may never arrive when the render clock stops or the animation is
+            // replaced, which would leave the layer stuck on screen halfway. The timer only depends on the dispatcher, so the state is
+            // cleaned up whether or not rendering runs.
+            _hoverHideFallbackTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+            _hoverHideFallbackTimer.Tick += (_, _) =>
+            {
+                _hoverHideFallbackTimer.Stop();
+                FinishTaskbarHoverLayerHide();
+            };
             // 滚轮提示的按键轮询：只在指针位于媒体栏上时运行，指针一离开就在下一个 tick 自停。
             // The wheel tooltip's key poll: it only runs while the pointer is over the bar and stops itself on the first tick after
             // the pointer leaves.
@@ -118,6 +130,7 @@ namespace AFMediaBar.Components
                 _progressTimer.Stop();
                 _hoverOpenTimer.Stop();
                 _hoverCloseTimer.Stop();
+                _hoverHideFallbackTimer.Stop();
                 _wheelTooltipTimer.Stop();
                 _marqueeTimer.Stop();
                 _lyricHighlightTimer.Stop();
@@ -153,6 +166,10 @@ namespace AFMediaBar.Components
         private readonly DispatcherTimer _progressTimer;
         private readonly DispatcherTimer _hoverOpenTimer;
         private readonly DispatcherTimer _hoverCloseTimer;
+        private readonly DispatcherTimer _hoverHideFallbackTimer;
+
+        /// <summary>兜底收起比退出动画多等的余量，确保正常动画回调先跑。/ Extra margin the fallback waits beyond the exit animation, so the normal animation callback runs first.</summary>
+        private static readonly TimeSpan HoverHideFallbackMargin = TimeSpan.FromMilliseconds(150);
         private readonly DispatcherTimer _wheelTooltipTimer;
         private readonly ToolTip _wheelTooltip;
         private WheelGestureSlot? _appliedWheelSlot;
@@ -753,6 +770,10 @@ namespace AFMediaBar.Components
         /// </summary>
         private void ApplyTaskbarSectionGeometry(double primaryLength)
         {
+            // 先按封面自身的比例纠正封面框：下面的文字起点与整条宽度都按封面右缘计算，封面宽度必须是最终值。
+            // The artwork box is corrected to the artwork's own aspect first, because the text start and the whole length below are derived
+            // from the artwork's right edge, which therefore has to be final.
+            ApplyTaskbarArtworkAspect();
             if (_currentMode != WindowMode.Taskbar || _isVertical || !double.IsFinite(primaryLength))
             {
                 // 几何拿不到有效长度时仍然按现有文字宽度重跑一次跑马灯：一次无效的长度不该让正在滚动的文字退回被裁状态，
@@ -836,6 +857,37 @@ namespace AFMediaBar.Components
             if (!double.IsFinite(artworkLeft))
                 artworkLeft = 0;
             return artworkLeft + Math.Max(0, SongImageBorder.Width);
+        }
+
+        /// <summary>
+        /// 按封面自身的宽高比调整封面框：高度取布局引擎给的尺寸，宽度按比例算，因此视频类宽封面不再被裁掉左右两边、
+        /// 竖版封面也不再被裁掉上下两边。比例超出允许范围时改用 <see cref="Stretch.Uniform"/>（留白也不裁切）。
+        /// 只作用于任务栏横向模式：其余模式（竖向任务栏、灵动岛）的封面尺寸仍由布局引擎唯一决定。
+        /// Adjusts the artwork box to the artwork's own aspect: the height comes from the layout engine and the width follows the ratio, so a
+        /// wide video cover is no longer cropped left and right and a portrait cover is no longer cropped top and bottom. Beyond the allowed
+        /// range it switches to <see cref="Stretch.Uniform"/>, which letterboxes instead of cropping. This only applies to the horizontal
+        /// taskbar: in the other modes (vertical taskbar, dynamic island) the artwork size stays the layout engine's decision alone.
+        /// </summary>
+        private void ApplyTaskbarArtworkAspect()
+        {
+            if (_currentMode != WindowMode.Taskbar || _isVertical)
+                return;
+
+            var height = SongImageBorder.Height;
+            if (!double.IsFinite(height) || height <= 0)
+                return;
+
+            var artwork = SongImage.ImageSource as BitmapSource;
+            var box = ArtworkBoxPolicy.Resolve(height, artwork?.PixelWidth ?? 0, artwork?.PixelHeight ?? 0);
+            if (Math.Abs(SongImageBorder.Width - box.Width) > 0.01)
+                SongImageBorder.Width = box.Width;
+
+            // 比例没被夹取时封面框与封面同比例，UniformToFill 正好铺满且不裁切；被夹取时只能留白。
+            // While the aspect is not clamped the box matches the artwork exactly, so UniformToFill fills it without cropping; once clamped,
+            // letterboxing is the only way to avoid cropping.
+            var stretch = box.Letterbox ? Stretch.Uniform : Stretch.UniformToFill;
+            if (SongImage.Stretch != stretch)
+                SongImage.Stretch = stretch;
         }
 
         /// <summary>当前是否有已连接且正在播放的媒体。/ Indicates whether connected media is currently playing.</summary>
@@ -1126,6 +1178,10 @@ namespace AFMediaBar.Components
                     BackgroundImage.Source = null;
                 }
 
+                // 封面换了就重新按它的比例定封面框：非正方形封面（视频封面）因此不再被裁切。
+                // A new artwork re-derives the box from its aspect, so a non-square cover such as a video's is no longer cropped.
+                ApplyTaskbarArtworkAspect();
+
                 ApplyLyricPresentation();
                 // 文字内容一确定就重跑一次跑马灯，而且必须在**所有**文字写入之后：更长的标题该不该滚动只由这一段文字与当前可用宽度决定，
                 // 而歌词呈现会把整行原文写进歌词两行、顶掉跑马灯的窗口——那时不同步恢复，屏幕上的歌词就会跳回行首。
@@ -1173,12 +1229,14 @@ namespace AFMediaBar.Components
         {
             var settings = SettingsManager.Current;
             var showLyrics = settings.LyricsEnabled && !string.IsNullOrEmpty(_activeLyric);
-            _secondaryLyric = settings.LyricsSecondaryLineMode switch
-            {
-                LyricsSecondaryLineMode.Translation => _translatedLyric,
-                LyricsSecondaryLineMode.Romanization => _romanizedLyric,
-                _ => _nextLyric
-            };
+            // 第二行按"首选项 → 翻译 → 音译 → 下一句"的顺序取：首选项缺失时不再空着，而是回退到还有内容的来源。
+            // The second line is taken in the order "preferred, translation, romanization, next line": a missing preferred source no longer
+            // leaves the row blank but falls back to a source that still has content.
+            _secondaryLyric = LyricsSecondaryLinePolicy.Resolve(
+                settings.LyricsSecondaryLineMode,
+                _nextLyric,
+                _translatedLyric,
+                _romanizedLyric);
             var showSecondary = showLyrics &&
                                 settings.TwoLineLyricsEnabled &&
                                 !string.IsNullOrEmpty(_secondaryLyric);

@@ -165,13 +165,20 @@
                                     Icon="{ui:SymbolIcon TextBulletListSquare24}"
                                     IsNested="True"
                                     Title="{DynamicResource Loc.Lyrics.Row.SecondLine.Title}">
+                                    <!--
+                                        顺序即优先级：所选内容优先，其次是固定回退顺序（翻译 → 音译 → 下一句）。
+                                        下拉框只挑选首选来源，回退顺序由 `LyricsSecondaryLinePolicy.FallbackOrder` 决定。
+                                        The order is the priority: the chosen source first, then the fixed fallback order (translation,
+                                        romanization, next line). The selector only picks the preferred source; the fallback order lives in
+                                        `LyricsSecondaryLinePolicy.FallbackOrder`.
+                                    -->
                                     <ComboBox
                                         MinWidth="160"
                                         SelectedValue="{Binding ViewModel.SecondaryLineMode, Mode=TwoWay}"
                                         SelectedValuePath="Tag">
-                                        <ComboBoxItem Content="{DynamicResource Loc.Lyrics.SecondLine.NextLine}" Tag="{x:Static settings:LyricsSecondaryLineMode.NextLine}" />
                                         <ComboBoxItem Content="{DynamicResource Loc.Lyrics.SecondLine.Translation}" Tag="{x:Static settings:LyricsSecondaryLineMode.Translation}" />
                                         <ComboBoxItem Content="{DynamicResource Loc.Lyrics.SecondLine.Romanization}" Tag="{x:Static settings:LyricsSecondaryLineMode.Romanization}" />
+                                        <ComboBoxItem Content="{DynamicResource Loc.Lyrics.SecondLine.NextLine}" Tag="{x:Static settings:LyricsSecondaryLineMode.NextLine}" />
                                     </ComboBox>
                                 </components:SettingsRow>
                             </StackPanel>

@@ -465,7 +465,7 @@ public sealed class SettingsPersistenceService : IDisposable
         private static TEnum DefaultValue()
         {
             object value = typeof(TEnum) == typeof(TrayWheelBehavior) ? TrayWheelBehavior.SwitchOutputDevice :
-                typeof(TEnum) == typeof(LyricsSecondaryLineMode) ? LyricsSecondaryLineMode.NextLine :
+                typeof(TEnum) == typeof(LyricsSecondaryLineMode) ? LyricsSecondaryLineMode.Translation :
                 typeof(TEnum) == typeof(TaskbarBarPosition) ? TaskbarBarPosition.Start :
                 typeof(TEnum) == typeof(LayoutOrientationMode) ? LayoutOrientationMode.Auto :
                 typeof(TEnum) == typeof(DynamicIslandBackgroundMode) ? DynamicIslandBackgroundMode.SystemTheme :

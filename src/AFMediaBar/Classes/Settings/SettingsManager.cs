@@ -35,7 +35,12 @@ public sealed class AppSettings : INotifyPropertyChanged
     private TrayWheelBehavior _trayWheelBehavior = TrayWheelBehavior.SwitchOutputDevice;
     private bool _lyricsEnabled = true;
     private bool _twoLineLyricsEnabled;
-    private LyricsSecondaryLineMode _lyricsSecondaryLineMode = LyricsSecondaryLineMode.NextLine;
+    /// <summary>
+    /// 双行歌词第二行的**首选项**；缺失时按固定顺序回退（翻译 → 音译 → 下一句），因此默认取翻译，与"优先显示翻译"一致。
+    /// Preferred source of the second lyric line; a missing source falls back along a fixed order (translation, romanization, next line),
+    /// so the default is the translation, matching "prefer the translation".
+    /// </summary>
+    private LyricsSecondaryLineMode _lyricsSecondaryLineMode = LyricsSecondaryLineMode.Translation;
     private bool _taskbarBarEnabled = true;
     private string? _taskbarTargetMonitorDeviceId;
     private TaskbarBarPosition _position = TaskbarBarPosition.Start;

@@ -134,6 +134,7 @@
                                                 </TextBlock.Style>
                                             </TextBlock>
                                             <Image Width="18" Height="18"
+                                                   RenderOptions.BitmapScalingMode="HighQuality"
                                                    Source="{Binding IconData, Converter={StaticResource ByteArrayToImageSourceConverter}}"
                                                    Stretch="Uniform" />
                                         </Grid>

@@ -390,8 +390,8 @@ internal static class StringsEn
         table.Add("Lyrics.Row.InfoLines.Title", "Filter credit lines");
         table.Add("Lyrics.Row.MatchStrictness.Description", "How closely a lyric search by title has to match; the stricter it is, the less likely a same-named live version or cover is accepted");
         table.Add("Lyrics.Row.MatchStrictness.Title", "Search match strictness");
-        table.Add("Lyrics.Row.SecondLine.Description", "Chooses the next lyric line, the translation, or the romanization of the current line");
-        table.Add("Lyrics.Row.SecondLine.Note", "A missing translation or romanization leaves no blank placeholder");
+        table.Add("Lyrics.Row.SecondLine.Description", "Chooses the next lyric line, the translation, or the romanization of the current line; a missing choice falls back to translation, romanization, then the next line");
+        table.Add("Lyrics.Row.SecondLine.Note", "Order: the chosen source, then translation, romanization, and the next line; missing sources are skipped");
         table.Add("Lyrics.Row.SecondLine.Title", "Second-line content");
         table.Add("Lyrics.Row.ShowLyrics.Description", "Syncs the current line to playback progress; when off, the title and artist are shown");
         table.Add("Lyrics.Row.ShowLyrics.Title", "Show live lyrics");

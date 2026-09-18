@@ -95,6 +95,7 @@
         <Grid Name="InteractionSurface" Background="#01000000"
               PreviewMouseWheel="InteractionSurface_PreviewMouseWheel"
               MouseMove="InteractionSurface_MouseMove"
+              MouseLeave="InteractionSurface_MouseLeave"
               ToolTipService.BetweenShowDelay="0"
               ToolTipService.InitialShowDelay="0"
               ToolTipService.Placement="Top"

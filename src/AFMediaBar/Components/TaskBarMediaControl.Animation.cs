@@ -1081,6 +1081,7 @@ public partial class TaskBarMediaControl
 
         ApplyTaskbarExperienceSettings();
         _isTaskbarHoverVisible = true;
+        _hoverHideFallbackTimer.Stop();
         AnimateComponentHover(SongInfoHoverOverlay, true);
         AnimateSongInfoCovered(true);
         HoverRevealHost.Visibility = Visibility.Visible;
@@ -1110,32 +1111,26 @@ public partial class TaskBarMediaControl
     {
         _hoverOpenTimer.Stop();
         _hoverCloseTimer.Stop();
+        _hoverHideFallbackTimer.Stop();
+        var keepRegularHover = CanUseTaskbarComponentHover() &&
+                               (SongInfoStackPanel.IsMouseOver || TaskbarDirectFullPanelHandle.IsMouseOver);
         if (immediate || HoverRevealHost.Visibility != Visibility.Visible)
         {
-            HoverRevealClip.BeginAnimation(RectangleGeometry.RectProperty, null);
-            HoverRevealHost.Width = 0;
-            HoverRevealClip.Rect = new Rect(0, 0, 0, HoverRevealHost.Height);
-            HoverRevealHost.Visibility = Visibility.Collapsed;
-            HoverRevealHost.IsHitTestVisible = false;
-            _isTaskbarHoverVisible = false;
+            FinishTaskbarHoverLayerHide();
             AnimateSongInfoCovered(false, immediate: true);
-            var keepRegularHover = CanUseTaskbarComponentHover() &&
-                                   (SongInfoStackPanel.IsMouseOver || TaskbarDirectFullPanelHandle.IsMouseOver);
             AnimateComponentHover(SongInfoHoverOverlay, keepRegularHover);
             AnimateDirectFullPanelHandle(keepRegularHover, immediate: true);
             return;
         }
 
         AnimateSongInfoCovered(false);
+        // 逻辑状态立刻落地：悬停层从这一刻起就是"已关闭"，不依赖动画回调。
+        // The logical state lands right away: the layer counts as closed from this moment on, without depending on an animation callback.
+        _isTaskbarHoverVisible = false;
 
         if (!CurrentMotion.UseTransitions)
         {
-            HoverRevealClip.BeginAnimation(RectangleGeometry.RectProperty, null);
-            HoverRevealHost.Width = 0;
-            HoverRevealClip.Rect = new Rect(0, 0, 0, HoverRevealHost.Height);
-            HoverRevealHost.Visibility = Visibility.Collapsed;
-            HoverRevealHost.IsHitTestVisible = false;
-            _isTaskbarHoverVisible = false;
+            FinishTaskbarHoverLayerHide();
             return;
         }
 
@@ -1146,18 +1141,55 @@ public partial class TaskBarMediaControl
             Duration = CurrentMotion.ExitDuration,
             EasingFunction = CreateEaseInOut()
         };
-        hide.Completed += (_, _) =>
-        {
-            HoverRevealClip.BeginAnimation(RectangleGeometry.RectProperty, null);
-            HoverRevealHost.Width = 0;
-            HoverRevealClip.Rect = new Rect(0, 0, 0, HoverRevealHost.Height);
-            HoverRevealHost.Visibility = Visibility.Collapsed;
-            HoverRevealHost.IsHitTestVisible = false;
-            _isTaskbarHoverVisible = false;
-            if (!SongInfoStackPanel.IsMouseOver && !TaskbarDirectFullPanelHandle.IsMouseOver)
-                AnimateComponentHover(SongInfoHoverOverlay, false);
-        };
+        hide.Completed += (_, _) => FinishTaskbarHoverLayerHide();
         HoverRevealClip.BeginAnimation(RectangleGeometry.RectProperty, hide, HandoffBehavior.SnapshotAndReplace);
+
+        // 兜底：动画回调可能永远不来——渲染时钟停走（任务栏自动隐藏、窗口被遮挡）或这次动画被下一次动画顶掉时，
+        // 收起动作会卡在半途、悬停层留在屏幕上。计时器只依赖 Dispatcher，因此一定会把状态收干净。
+        // Fallback: the animation callback may never arrive — when the render clock stops (auto-hidden taskbar, occluded window) or the
+        // animation is replaced by the next one, the collapse freezes halfway and the hover layer stays on screen. The timer only depends
+        // on the dispatcher, so the state is always cleaned up.
+        _hoverHideFallbackTimer.Interval = CurrentMotion.ExitDuration + HoverHideFallbackMargin;
+        _hoverHideFallbackTimer.Start();
+    }
+
+    /// <summary>
+    /// 把悬停层收干净：裁剪归零、宽度归零、隐藏并取消命中测试。可以重复调用（动画回调与兜底计时器都会走到这里）。
+    /// Finishes hiding the hover layer: zeroes the clip and the width, hides it, and drops hit testing. It is safe to call repeatedly,
+    /// since both the animation callback and the fallback timer land here.
+    /// </summary>
+    private void FinishTaskbarHoverLayerHide()
+    {
+        _hoverHideFallbackTimer.Stop();
+        HoverRevealClip.BeginAnimation(RectangleGeometry.RectProperty, null);
+        HoverRevealHost.Width = 0;
+        HoverRevealClip.Rect = new Rect(0, 0, 0, HoverRevealHost.Height);
+        HoverRevealHost.Visibility = Visibility.Collapsed;
+        HoverRevealHost.IsHitTestVisible = false;
+        _isTaskbarHoverVisible = false;
+        if (!SongInfoStackPanel.IsMouseOver && !TaskbarDirectFullPanelHandle.IsMouseOver)
+        {
+            AnimateComponentHover(SongInfoHoverOverlay, false);
+            AnimateDirectFullPanelHandle(false);
+        }
+    }
+
+    /// <summary>
+    /// 指针离开整条媒体栏：悬停层如果还开着（逻辑上已关闭、正在播收起动画，或收起被卡住）就直接收起。
+    /// 这条路径让"移出程序"不依赖文字区/悬停层各自的通知是否齐全。
+    /// The pointer left the whole media bar: when the hover layer is still up — logically closed, mid exit animation, or stuck — it is
+    /// collapsed. This path keeps "left the app" from depending on the notifications of the text region and the hover host being complete.
+    /// </summary>
+    private void InteractionSurface_MouseLeave(object sender, MouseEventArgs e)
+    {
+        _hoverOpenTimer.Stop();
+        if (!_isTaskbarHoverVisible && HoverRevealHost.Visibility != Visibility.Visible)
+        {
+            _hoverCloseTimer.Stop();
+            return;
+        }
+
+        HideTaskbarHoverLayer();
     }
 
 }

@@ -1,3 +1,5 @@
+using System.Drawing;
+using System.Drawing.Imaging;
 using System.IO;
 using DrawingIcon = System.Drawing.Icon;
 
@@ -75,28 +77,50 @@ public sealed class ApplicationIconService
             }
 
             var extension = Path.GetExtension(path);
-            if (extension.Equals(".ico", StringComparison.OrdinalIgnoreCase) ||
-                extension.Equals(".png", StringComparison.OrdinalIgnoreCase) ||
+            // 位图文件本身就是像素正确的图像，原样交给 WPF 解码。
+            // A bitmap file already carries the correct pixels, so it goes to WPF as it is.
+            if (extension.Equals(".png", StringComparison.OrdinalIgnoreCase) ||
                 extension.Equals(".jpg", StringComparison.OrdinalIgnoreCase) ||
                 extension.Equals(".jpeg", StringComparison.OrdinalIgnoreCase))
             {
                 return File.ReadAllBytes(path);
             }
 
-            using var icon = DrawingIcon.ExtractAssociatedIcon(path);
-            if (icon is null)
-            {
-                return null;
-            }
-
-            using var stream = new MemoryStream();
-            icon.Save(stream);
-            return stream.ToArray();
+            // .ico 与 .exe/.dll 都走图标路径：`Icon.Save` 写出的是带 AND 掩码的 DIB，WPF 读它时颜色与透明度都不可靠
+            // （图标发灰、带色偏），因此先按掩码合成到 32bpp ARGB，再编码成 PNG。
+            // Both .ico and .exe/.dll go through the icon path: `Icon.Save` writes a DIB with an AND mask whose colours and transparency WPF
+            // does not decode reliably (icons come out grey and colour-cast), so the icon is composited onto 32bpp ARGB and encoded as PNG.
+            using var icon = extension.Equals(".ico", StringComparison.OrdinalIgnoreCase)
+                ? new DrawingIcon(path, new System.Drawing.Size(32, 32))
+                : DrawingIcon.ExtractAssociatedIcon(path);
+            return icon is null ? null : EncodeIcon(icon);
         }
         catch
         {
             return null;
         }
+    }
+
+    /// <summary>
+    /// 按图标自带的透明掩码合成到 32bpp ARGB 位图上并编码为 PNG：这是唯一能让 WPF 拿到正确颜色与透明度的路径。
+    /// Composites an icon onto a 32bpp ARGB bitmap using its own transparency mask and encodes it as PNG: this is the only path that gives
+    /// WPF the correct colours and transparency.
+    /// </summary>
+    /// <param name="icon">已解码的图标。/ The decoded icon.</param>
+    private static byte[] EncodeIcon(DrawingIcon icon)
+    {
+        var width = icon.Width > 0 ? icon.Width : 32;
+        var height = icon.Height > 0 ? icon.Height : 32;
+        using var bitmap = new Bitmap(width, height, PixelFormat.Format32bppArgb);
+        using (var graphics = Graphics.FromImage(bitmap))
+        {
+            graphics.Clear(Color.Transparent);
+            graphics.DrawIcon(icon, new Rectangle(0, 0, width, height));
+        }
+
+        using var stream = new MemoryStream();
+        bitmap.Save(stream, ImageFormat.Png);
+        return stream.ToArray();
     }
 
     private static string? NormalizeIconPath(string? value)

@@ -390,8 +390,8 @@ internal static class StringsZhHans
         table.Add("Lyrics.Row.InfoLines.Title", "过滤署名行");
         table.Add("Lyrics.Row.MatchStrictness.Description", "按曲名搜索歌词时要求的匹配程度；越严格越不容易匹配到同名的现场版或翻唱");
         table.Add("Lyrics.Row.MatchStrictness.Title", "搜索匹配严格度");
-        table.Add("Lyrics.Row.SecondLine.Description", "选择下一句歌词、当前句翻译或当前句音译");
-        table.Add("Lyrics.Row.SecondLine.Note", "译文或音译缺失时不会留下空白占位");
+        table.Add("Lyrics.Row.SecondLine.Description", "选择下一句歌词、当前句翻译或当前句音译；所选内容缺失时按 翻译 → 音译 → 下一句 回退");
+        table.Add("Lyrics.Row.SecondLine.Note", "顺序：所选内容 → 翻译 → 音译 → 下一句，缺失的来源自动跳过");
         table.Add("Lyrics.Row.SecondLine.Title", "第二行内容");
         table.Add("Lyrics.Row.ShowLyrics.Description", "按播放进度同步显示当前句；关闭后显示标题与歌手");
         table.Add("Lyrics.Row.ShowLyrics.Title", "显示实时歌词");
