@@ -178,3 +178,17 @@ AF Media Bar 使用 [MIT License](LICENSE) 开源。
 如果 AF Media Bar 对你有帮助，可以给项目一个 Star❤️。
 
 </div>
+
+## 赞助
+
+请作者喝杯咖啡。**大于 10 元的赞助可以进入赞助者名单，请在备注中留下 id。**
+
+<div align="center">
+
+| 微信 | 支付宝 |
+| :---: | :---: |
+| <img src="src/AFMediaBar/Assets/Sponsor/wechat-pay.png" alt="微信收款码" width="220"> | <img src="src/AFMediaBar/Assets/Sponsor/alipay-pay.png" alt="支付宝收款码" width="220"> |
+
+爱发电赞助链接：[爱发电](https://ifdian.net/a/amorfate)
+
+</div>
