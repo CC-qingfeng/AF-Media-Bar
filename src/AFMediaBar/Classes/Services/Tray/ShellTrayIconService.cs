@@ -228,10 +228,18 @@ public sealed class ShellTrayIconService : IDisposable
         _icon = next.Handle;
         if (_isAdded)
         {
+            // uFlags 必须写明这次要改的是图标：NIM_MODIFY 的 uFlags 是"改哪些字段"的位掩码，`CreateData` 不设它
+            // （只有 AddIcon 会设），留着 0 就等于告诉 Shell"什么都不用改"，调用返回成功而托盘图标一动不动。
+            // uFlags has to name the field being changed: for NIM_MODIFY it is a bitmask of what to update, and `CreateData`
+            // leaves it unset (only AddIcon sets it). Leaving it at 0 tells the Shell "change nothing": the call succeeds and the
+            // tray icon never moves.
             var data = CreateData();
+            data.uFlags = NativeMethods.NIF_ICON;
             NativeMethods.ShellNotifyIcon(NativeMethods.NIM_MODIFY, ref data);
         }
 
+        // 换图之后再释放旧句柄：Shell 读取的是本次调用时传进去的那一个。
+        // The previous handle is released only after the swap: the Shell read the one handed to it in this call.
         previous?.Dispose();
     }
 

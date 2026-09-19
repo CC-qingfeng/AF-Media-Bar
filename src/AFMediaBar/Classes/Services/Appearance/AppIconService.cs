@@ -3,6 +3,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using Microsoft.Win32;
 using Wpf.Ui.Appearance;
 using DrawingIcon = System.Drawing.Icon;
 
@@ -24,10 +25,21 @@ namespace AFMediaBar.Classes.Services;
 public sealed class AppIconService : IDisposable
 {
     private readonly Dictionary<string, ImageSource> _imageCache = new(StringComparer.Ordinal);
+    private string? _publishedTrayArtwork;
     private bool _disposed;
 
-    /// <summary>创建图标服务并订阅主题变化。/ Creates the icon service and subscribes to theme changes.</summary>
-    public AppIconService() => ApplicationThemeManager.Changed += OnApplicationThemeChanged;
+    /// <summary>创建图标服务并订阅主题变化与系统偏好变化。/ Creates the icon service and subscribes to theme and system preference changes.</summary>
+    public AppIconService()
+    {
+        ApplicationThemeManager.Changed += OnApplicationThemeChanged;
+
+        // 系统偏好变化单独订阅：Windows 的「系统模式」（任务栏）可以在本程序主题不变的情况下改变，
+        // 而 WPF-UI 只在**应用主题**变化时才发 Changed，于是"只改任务栏模式"这条路径不会经过上面那个事件。
+        // System preferences are subscribed separately: the Windows "system mode" (taskbar) can change while this application's
+        // theme does not, and WPF-UI only raises Changed for an **application-theme** change, so changing only the taskbar mode
+        // never reaches the handler above.
+        SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
+    }
 
     /// <summary>主题变化、图标应当换一套时触发。/ Raised when the theme changed and the artwork should be swapped.</summary>
     public event Action? IconChanged;
@@ -71,15 +83,19 @@ public sealed class AppIconService : IDisposable
     }
 
     /// <summary>
-    /// 当前主题该用的托盘图标。返回值的 <c>Handle</c> 可以交给 Shell，用完后由调用方释放——句柄的所有权跟着返回值走，
-    /// 因此托盘服务释放它自己的那一份，不需要知道图标是从哪来的。
-    /// The tray icon for the current theme. Its `Handle` may be handed to the Shell and the caller releases it when done: ownership
-    /// travels with the return value, so the tray service frees what it holds without knowing where the icon came from.
+    /// 当前托盘图标的图形。
+    ///
+    /// 托盘坐在**任务栏**上，因此它跟的是 Windows 的「系统模式」（`SystemUsesLightTheme`），而不是本程序的主题：Windows
+    /// 允许两者分开设置（任务栏浅色 + 应用深色是合法组合），跟错一方就会出现"深色图形贴在深色任务栏上"。
+    /// The artwork for the tray icon. The tray sits on the **taskbar**, so it follows the Windows "system mode"
+    /// (`SystemUsesLightTheme`) rather than this application's theme: Windows lets the two be set separately (a light taskbar with
+    /// dark applications is a legal combination), and following the wrong one leaves dark artwork on a dark taskbar.
     /// </summary>
     /// <returns>图标句柄的所有权包；资源不可用时为 null。/ An ownership wrapper for the icon handle, or null when unavailable.</returns>
     public TrayIcon? ResolveTrayIcon()
     {
-        var uri = AppIconPolicy.ResolveArtworkUri(ApplicationThemeManager.GetAppTheme(), SystemColors.WindowColor);
+        var uri = ResolveTrayArtworkUri();
+        _publishedTrayArtwork = uri;
         try
         {
             using var stream = Application.GetResourceStream(new Uri(uri, UriKind.Absolute)).Stream;
@@ -93,6 +109,19 @@ public sealed class AppIconService : IDisposable
             Debug.WriteLine($"[AppIconService] Could not load {uri} for the tray: {exception.Message}");
             return null;
         }
+    }
+
+    /// <summary>
+    /// 托盘该用的图形 URI：取 Windows 的系统模式，读不到时才回退本程序主题。
+    /// The artwork URI for the tray: the Windows system mode, falling back to this application's theme only when it cannot be read.
+    /// </summary>
+    private static string ResolveTrayArtworkUri()
+    {
+        WindowsThemeDetector.GetWindowsTheme(out _, out var systemTheme);
+        return AppIconPolicy.ResolveTrayArtworkUri(
+            systemTheme,
+            ApplicationThemeManager.GetAppTheme(),
+            SystemColors.WindowColor);
     }
 
     /// <summary>把一个窗口的图标换成当前主题对应的那一套。/ Swaps one window's icon to the one for the current theme.</summary>
@@ -120,6 +149,32 @@ public sealed class AppIconService : IDisposable
         IconChanged?.Invoke();
     }
 
+    /// <summary>
+    /// 系统偏好变化后，只在**托盘该用的图形**真的变了才通知。
+    ///
+    /// `SystemEvents` 对鼠标速度、字体平滑之类的偏好变化同样会发消息，无差别通知会让每个窗口白跑一遍外观重应用；而托盘
+    /// 这一侧的图形与窗口不同，只有系统模式（任务栏）改变时它才需要换。
+    /// After a system preference change, only a real change of the **tray's** artwork is published. `SystemEvents` also fires for
+    /// mouse speed or font smoothing, and notifying unconditionally would make every window re-run its appearance pass; the tray
+    /// artwork is decided differently from the windows', so only a change of the system mode (taskbar) needs a swap.
+    /// </summary>
+    private void OnUserPreferenceChanged(object? sender, UserPreferenceChangedEventArgs e)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        var artwork = ResolveTrayArtworkUri();
+        if (string.Equals(artwork, _publishedTrayArtwork, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _publishedTrayArtwork = artwork;
+        IconChanged?.Invoke();
+    }
+
     /// <summary>退订主题变化。/ Unsubscribes from theme changes.</summary>
     public void Dispose()
     {
@@ -130,6 +185,7 @@ public sealed class AppIconService : IDisposable
 
         _disposed = true;
         ApplicationThemeManager.Changed -= OnApplicationThemeChanged;
+        SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
     }
 
     /// <summary>

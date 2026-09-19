@@ -47,4 +47,33 @@ public static class AppIconPolicy
     /// <param name="color">待判定的颜色。/ Colour to test.</param>
     public static bool IsDark(Color color) =>
         ((299 * color.R) + (587 * color.G) + (114 * color.B)) / 1000 < 128;
+
+    /// <summary>
+    /// 托盘图标该用哪一套图形：托盘坐在**任务栏**上，因此跟的是 Windows 的「系统模式」（`SystemUsesLightTheme`），
+    /// 只有读不到时才回退本程序主题。
+    ///
+    /// 两个表面刻意分开判定：Windows 允许"任务栏浅色 + 应用深色"这类组合，跟错一方就会出现深色图形贴在深色任务栏上
+    /// （或白色图形贴在浅色任务栏上），而窗口图标跟的是本程序主题（见 <see cref="ResolveArtworkUri"/>）。
+    /// Which artwork the tray icon uses. The tray sits on the **taskbar** and therefore follows the Windows "system mode"
+    /// (`SystemUsesLightTheme`), falling back to this application's theme only when it cannot be read.
+    ///
+    /// The two surfaces are decided separately on purpose: Windows allows a light taskbar with dark applications, and following the
+    /// wrong one leaves dark artwork on a dark taskbar (or white artwork on a light one), while window artwork follows this
+    /// application's theme (see <see cref="ResolveArtworkUri"/>).
+    /// </summary>
+    /// <param name="systemTheme">Windows 的系统模式（任务栏）。/ The Windows system mode (taskbar).</param>
+    /// <param name="applicationTheme">本程序生效的应用主题，仅在系统模式读不到时使用。/ The application theme in effect, used only when the system mode is unreadable.</param>
+    /// <param name="systemWindowColor">系统窗口底色。/ The system window colour.</param>
+    /// <returns>图形资源的 pack URI。/ The pack URI of the artwork.</returns>
+    public static string ResolveTrayArtworkUri(
+        WindowsThemeDetector.ThemeMode systemTheme,
+        ApplicationTheme applicationTheme,
+        Color systemWindowColor) => ResolveArtworkUri(
+            systemTheme switch
+            {
+                WindowsThemeDetector.ThemeMode.Dark => ApplicationTheme.Dark,
+                WindowsThemeDetector.ThemeMode.Light => ApplicationTheme.Light,
+                _ => applicationTheme
+            },
+            systemWindowColor);
 }

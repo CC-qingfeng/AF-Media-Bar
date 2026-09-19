@@ -69,6 +69,35 @@ public sealed class AppIconTests
     }
 
     /// <summary>
+    /// 托盘跟系统模式（任务栏）而不是本程序主题：Windows 允许"任务栏浅色 + 应用深色"这类组合，跟错一方就会出现深色图形
+    /// 贴在深色任务栏上。窗口图标仍然跟本程序主题。
+    /// The tray follows the system mode (taskbar) rather than this application's theme: Windows allows a light taskbar with dark
+    /// applications, and following the wrong one leaves dark artwork on a dark taskbar. Window artwork still follows the app theme.
+    /// </summary>
+    [TestMethod]
+    public void TrayFollowsTheSystemModeInsteadOfTheApplicationTheme()
+    {
+        Assert.AreEqual(
+            AppIconPolicy.DarkArtworkUri,
+            AppIconPolicy.ResolveTrayArtworkUri(WindowsThemeDetector.ThemeMode.Light, ApplicationTheme.Dark, Colors.White),
+            "浅色任务栏必须用深色图形，即使应用主题是深色。");
+
+        Assert.AreEqual(
+            AppIconPolicy.LightArtworkUri,
+            AppIconPolicy.ResolveTrayArtworkUri(WindowsThemeDetector.ThemeMode.Dark, ApplicationTheme.Light, Colors.Black),
+            "深色任务栏必须用白色图形，即使应用主题是浅色。");
+    }
+
+    /// <summary>系统模式读不到时退回本程序主题。/ The application theme is the fallback when the system mode cannot be read.</summary>
+    [TestMethod]
+    public void TrayFallsBackToTheApplicationThemeWhenTheSystemModeIsUnknown()
+    {
+        Assert.AreEqual(
+            AppIconPolicy.LightArtworkUri,
+            AppIconPolicy.ResolveTrayArtworkUri(WindowsThemeDetector.ThemeMode.Unknown, ApplicationTheme.Dark, Colors.White));
+    }
+
+    /// <summary>
     /// 每一处被引用的图标素材都必须真的存在。
     ///
     /// 这条守卫来自一次真实事故：四张旧图标被删除、两张新图标放进来，而 `.csproj`、`SettingsWindow.xaml` 与安装脚本仍然
