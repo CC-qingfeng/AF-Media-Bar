@@ -7,72 +7,29 @@ using Wpf.Ui.Appearance;
 namespace AFMediaBar.Layout.Tests;
 
 /// <summary>
-/// 程序自身图标的主题映射，以及"被引用的图标素材必须真的存在"这条守卫。
-/// The theme mapping of the application's own icon, plus the guard that every referenced icon asset really exists.
+/// 程序自身图标的两条回归守卫。
+///
+/// 按 `../IMPLEMENTATION_CONSTRAINTS.md` §13.1，这里只留"已经真实发生过一次"的故障：素材引用失效（图标不显示、
+/// 安装包构建失败）与托盘跟错主题（图标在深色任务栏上看不见）。主题到图形的取值映射、深浅判定权重、系统模式读不到时的
+/// 回退分支都**刻意不加测试**——它们守的是看代码就知道的常量与算术，改错了切一次主题就能看见，正是 §13.1 列为"不该新增"
+/// 的那一类。
+/// Two regression guards for the application's own icon. Per §13.1 only failures that really happened once are kept here:
+/// references to assets that no longer exist (an icon that never draws, an installer build that fails) and a tray icon following
+/// the wrong theme (invisible on a dark taskbar). The theme-to-artwork mapping, the luminance weights, and the fallback branch for
+/// an unreadable system mode are deliberately **not** tested: they guard constants and arithmetic that reading the code already
+/// reveals, a mistake shows up the first time the theme is switched, and §13.1 names exactly that as "should not be added".
 /// </summary>
 [TestClass]
 public sealed class AppIconTests
 {
     /// <summary>
-    /// 深色主题用白色图形：深色标题栏与深色任务栏上，深色图形是看不见的。
-    /// The dark theme uses the white artwork: dark artwork is invisible on a dark title bar and a dark taskbar.
-    /// </summary>
-    [TestMethod]
-    public void DarkThemeUsesTheWhiteArtwork()
-    {
-        Assert.AreEqual(
-            AppIconPolicy.LightArtworkUri,
-            AppIconPolicy.ResolveArtworkUri(ApplicationTheme.Dark, Colors.White));
-    }
-
-    /// <summary>浅色主题用深色图形。/ The light theme uses the dark artwork.</summary>
-    [TestMethod]
-    public void LightThemeUsesTheDarkArtwork()
-    {
-        Assert.AreEqual(
-            AppIconPolicy.DarkArtworkUri,
-            AppIconPolicy.ResolveArtworkUri(ApplicationTheme.Light, Colors.White));
-    }
-
-    /// <summary>
-    /// 高对比度按系统窗口底色决定，而不是一律当成浅色：那套配色可能是黑底白字，也可能是白底黑字。
-    /// High contrast is decided by the system window colour rather than being treated as light: that scheme may be white-on-black or
-    /// black-on-white.
-    /// </summary>
-    [TestMethod]
-    public void HighContrastFollowsTheSystemWindowColour()
-    {
-        Assert.AreEqual(
-            AppIconPolicy.LightArtworkUri,
-            AppIconPolicy.ResolveArtworkUri(ApplicationTheme.HighContrast, Colors.Black),
-            "黑底高对比度必须用白色图形。");
-
-        Assert.AreEqual(
-            AppIconPolicy.DarkArtworkUri,
-            AppIconPolicy.ResolveArtworkUri(ApplicationTheme.HighContrast, Colors.White),
-            "白底高对比度必须用深色图形。");
-    }
-
-    /// <summary>深浅判定按人眼敏感度加权，中灰两侧各取一端。/ Darkness is decided by sensitivity-weighted luminance, one end either side of mid grey.</summary>
-    [TestMethod]
-    public void DarknessUsesWeightedLuminance()
-    {
-        Assert.IsTrue(AppIconPolicy.IsDark(Colors.Black));
-        Assert.IsTrue(AppIconPolicy.IsDark(Color.FromRgb(0x20, 0x20, 0x20)));
-        Assert.IsFalse(AppIconPolicy.IsDark(Colors.White));
-        Assert.IsFalse(AppIconPolicy.IsDark(Color.FromRgb(0xF3, 0xF3, 0xF3)));
-
-        // 纯绿比纯蓝亮得多：换成简单平均就会把两者判成同一档。
-        // Pure green is much brighter than pure blue; a plain average would put the two in the same bucket.
-        Assert.IsFalse(AppIconPolicy.IsDark(Colors.Lime));
-        Assert.IsTrue(AppIconPolicy.IsDark(Colors.Blue));
-    }
-
-    /// <summary>
-    /// 托盘跟系统模式（任务栏）而不是本程序主题：Windows 允许"任务栏浅色 + 应用深色"这类组合，跟错一方就会出现深色图形
-    /// 贴在深色任务栏上。窗口图标仍然跟本程序主题。
-    /// The tray follows the system mode (taskbar) rather than this application's theme: Windows allows a light taskbar with dark
-    /// applications, and following the wrong one leaves dark artwork on a dark taskbar. Window artwork still follows the app theme.
+    /// 托盘跟系统模式（任务栏）而不是本程序主题。
+    ///
+    /// 守的故障：真实发生过一次——深浅色切换时托盘图标不变，而窗口图标变了。当时托盘与窗口共用"本程序主题"这一个判定，
+    /// 但 Windows 允许"任务栏浅色 + 应用深色"这类组合，共用一套必然有一边贴错底色的图形。
+    /// Guards a failure that really happened once: the tray icon stayed put when the theme was switched while the window icons
+    /// changed. The tray and the windows shared a single "application theme" decision, but Windows allows a light taskbar with dark
+    /// applications, so one shared decision always puts the wrong artwork on one of the two surfaces.
     /// </summary>
     [TestMethod]
     public void TrayFollowsTheSystemModeInsteadOfTheApplicationTheme()
@@ -88,23 +45,14 @@ public sealed class AppIconTests
             "深色任务栏必须用白色图形，即使应用主题是浅色。");
     }
 
-    /// <summary>系统模式读不到时退回本程序主题。/ The application theme is the fallback when the system mode cannot be read.</summary>
-    [TestMethod]
-    public void TrayFallsBackToTheApplicationThemeWhenTheSystemModeIsUnknown()
-    {
-        Assert.AreEqual(
-            AppIconPolicy.LightArtworkUri,
-            AppIconPolicy.ResolveTrayArtworkUri(WindowsThemeDetector.ThemeMode.Unknown, ApplicationTheme.Dark, Colors.White));
-    }
-
     /// <summary>
     /// 每一处被引用的图标素材都必须真的存在。
     ///
-    /// 这条守卫来自一次真实事故：四张旧图标被删除、两张新图标放进来，而 `.csproj`、`SettingsWindow.xaml` 与安装脚本仍然
+    /// 守的故障：真实发生过一次——四张旧图标被删除、两张新图标放进来，而 `.csproj`、`SettingsWindow.xaml` 与安装脚本仍然
     /// 指向旧文件。XAML 上的表现是图标画不出来，安装脚本上的表现是 CI 直接编译失败，两者都不会出现在"生成成功"里。
-    /// Every referenced icon asset has to exist. This guard comes from a real incident: four old icons were deleted and two new ones
-    /// added while the `.csproj`, `SettingsWindow.xaml` and the installer script still pointed at the old files. In XAML the symptom
-    /// is an icon that never draws, in the installer script it is a CI build that fails, and neither appears in a successful build.
+    /// Guards a failure that really happened once: four old icons were deleted and two new ones added while the `.csproj`,
+    /// `SettingsWindow.xaml` and the installer script still pointed at the old files. In XAML the symptom is an icon that never
+    /// draws, in the installer script it is a CI build that fails, and neither appears in a successful build.
     /// </summary>
     [TestMethod]
     public void EveryReferencedIconAssetExists()
