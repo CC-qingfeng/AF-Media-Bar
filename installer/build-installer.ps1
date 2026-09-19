@@ -123,43 +123,74 @@ then rerun this script (or pass -IsccPath <path to ISCC.exe>, or -EnsureIscc on 
 function Resolve-ChineseMessagesFile {
     <#
     .SYNOPSIS
-    找到（必要时下载）简体中文的语言文件，并返回它的完整路径。
-    Locates the Simplified Chinese messages file — downloading it when necessary — and returns its full path.
+    找到简体中文的语言文件，并返回它的完整路径。
+    Locates the Simplified Chinese messages file and returns its full path.
 
     .DESCRIPTION
     简体中文属于 Inno Setup 的"非官方语言包"：官方安装程序、winget 与 choco 都不带它，因此把 MessagesFile 写成
     "compiler:Languages\ChineseSimplified.isl" 在 CI 上必然失败（真实发生过）。查找顺序：
-      1. 本机 Inno Setup 安装目录（有人手工装过语言包时直接用）；
-      2. 仓库缓存 installer\languages\ChineseSimplified.isl（CI 与离线构建都能复用）；
-      3. 从上游仓库下载到该缓存目录（raw 优先、jsDelivr 备用）。
-    下载失败时抛出带明确指引的错误，而不是让 ISCC 报一句"找不到 include 文件"。
+      1. 仓库缓存 installer\languages\ChineseSimplified.isl —— 该文件随仓库分发，因此 CI 与离线构建都不需要网络；
+      2. 本机 Inno Setup 安装目录（有人手工装过语言包时直接用）；
+      3. 从上游 kira-96/Inno-Setup-Chinese-Simplified-Translation 下载到该缓存目录（raw 优先、jsDelivr 备用）。
+
+    被采用的每一份文件都必须与 $expectedSha256 一致：语言文件决定向导里全部内建文案，来源不明或被改过的文件宁可让
+    构建失败，也不要产出一个文案不对的安装包。
     Simplified Chinese lives in Inno Setup's "unofficial languages" set, which neither the official installer nor winget nor
     choco ships, so writing MessagesFile as "compiler:Languages\ChineseSimplified.isl" always fails on CI (it really happened).
-    The search order is the local Inno installation, then the repository cache installer\languages\, then a download into that
-    cache (raw first, jsDelivr as a fallback). A failed download throws an error with explicit instructions instead of letting
-    ISCC report a missing include file.
+    The order is the repository cache (shipped with the repository, so CI and offline builds need no network), then the local Inno
+    installation, then a download from the upstream kira-96 repository into that cache (raw first, jsDelivr as the fallback).
+    Every adopted file must match $expectedSha256: the language file decides every built-in string in the wizard, so a file of
+    unknown provenance fails the build instead of producing an installer whose wording is wrong.
     #>
     param([string]$IsccPath)
 
     $cacheDirectory = Join-Path $PSScriptRoot 'languages'
     $cachePath = Join-Path $cacheDirectory 'ChineseSimplified.isl'
 
+    # 随仓库分发的那一份：CI 与离线构建因此完全不依赖网络。换上游版本时必须同一次改动里更新这里的期望哈希。
+    # The copy that ships with the repository, so CI and offline builds never depend on the network. Bumping the upstream
+    # version means updating the expected hash here in the same change.
+    $expectedSha256 = 'bf0751fa176569c6faa2f6e17ed2734617bef325d5cc06eae030fdd0258ee778'
+
+    function Test-MessagesFile([string]$Path) {
+        $actual = (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+        if ($actual -eq $expectedSha256) { return $true }
+        Write-Warning "Chinese messages file $Path has SHA-256 $actual but $expectedSha256 was expected."
+        return $false
+    }
+
     if (Test-Path -LiteralPath $cachePath) {
-        Write-Host "Chinese messages file: $cachePath (repository cache)"
-        return (Resolve-Path -LiteralPath $cachePath).Path
+        if (Test-MessagesFile $cachePath) {
+            Write-Host "Chinese messages file: $cachePath (repository cache)"
+            return (Resolve-Path -LiteralPath $cachePath).Path
+        }
+
+        # 被改过的缓存文件不能继续用：继续用会让向导文案与预期不符，而失败的构建至少能指出是哪一份文件不对。
+        # A modified cache file is not used: it would change the wizard wording, while a failed build at least says which file is
+        # wrong. The message deliberately does not fall through to the download, because overwriting a file that a human edited
+        # without being asked to would hide the real situation.
+        throw @"
+The Simplified Chinese messages file in the repository cache does not match the expected content:
+  $cachePath
+Expected SHA-256 $expectedSha256
+Restore the shipped file with: git checkout -- installer/languages/ChineseSimplified.isl
+"@
     }
 
     # 本机 Inno 安装目录里可能已有该文件（例如用户自己装过语言包）。
     # The local Inno installation may already carry the file (a user who installed the language pack by hand).
     $installed = Join-Path (Split-Path -Parent $IsccPath) 'Languages\ChineseSimplified.isl'
-    if (Test-Path -LiteralPath $installed) {
+    if ((Test-Path -LiteralPath $installed) -and (Test-MessagesFile $installed)) {
         Write-Host "Chinese messages file: $installed (installed Inno Setup)"
         return (Resolve-Path -LiteralPath $installed).Path
     }
 
+    # 上游是简体中文翻译的维护仓库（Inno Setup 官方只登记、不分发）。换地址前先确认它给出的仍是同一份文件。
+    # Upstream is the repository that maintains this translation (Inno Setup lists it but does not ship it). Confirm a new address
+    # still serves the very same file before replacing these.
     $sources = @(
-        'https://raw.githubusercontent.com/jrsoftware/issrc/main/Files/Languages/Unofficial/ChineseSimplified.isl'
-        'https://cdn.jsdelivr.net/gh/jrsoftware/issrc@main/Files/Languages/Unofficial/ChineseSimplified.isl'
+        'https://raw.githubusercontent.com/kira-96/Inno-Setup-Chinese-Simplified-Translation/main/ChineseSimplified.isl'
+        'https://cdn.jsdelivr.net/gh/kira-96/Inno-Setup-Chinese-Simplified-Translation@main/ChineseSimplified.isl'
     )
 
     New-Item -ItemType Directory -Force -Path $cacheDirectory | Out-Null
@@ -172,9 +203,12 @@ function Resolve-ChineseMessagesFile {
                 throw 'the downloaded file is missing or implausibly small.'
             }
 
+            if (-not (Test-MessagesFile $temporary)) {
+                throw "the downloaded file is not the expected translation."
+            }
+
             Move-Item -LiteralPath $temporary -Destination $cachePath -Force
-            $hash = (Get-FileHash -LiteralPath $cachePath -Algorithm SHA256).Hash.ToLowerInvariant()
-            Write-Host "Chinese messages file: $cachePath (downloaded, SHA-256 $hash)"
+            Write-Host "Chinese messages file: $cachePath (downloaded, SHA-256 $expectedSha256)"
             return (Resolve-Path -LiteralPath $cachePath).Path
         }
         catch {
@@ -186,11 +220,14 @@ function Resolve-ChineseMessagesFile {
 The Simplified Chinese messages file could not be located or downloaded.
 
 Installers compiled without it would show an English wizard, which is why this fails instead of continuing.
-Place the file manually at:
+The file normally ships with the repository; restore it with:
+  git checkout -- installer/languages/ChineseSimplified.isl
+Otherwise place it manually at:
   $cachePath
-and rerun this script. Either copy it from an Inno Setup installation that has the language pack
-(<Inno Setup>\Languages\ChineseSimplified.isl) or download it from:
-  https://raw.githubusercontent.com/jrsoftware/issrc/main/Files/Languages/Unofficial/ChineseSimplified.isl
+by copying it from an Inno Setup installation that has the language pack
+(<Inno Setup>\Languages\ChineseSimplified.isl), or by downloading it from:
+  https://raw.githubusercontent.com/kira-96/Inno-Setup-Chinese-Simplified-Translation/main/ChineseSimplified.isl
+The file must have SHA-256 $expectedSha256.
 "@
 }
 

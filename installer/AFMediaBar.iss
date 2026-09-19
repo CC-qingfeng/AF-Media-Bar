@@ -18,15 +18,17 @@
 ; 它**不能**写成 "compiler:Languages\ChineseSimplified.isl"：简体中文属于 Inno Setup 的"非官方语言包"，
 ; 官方安装程序、winget 与 choco 安装都不带这个文件，于是 CI 上必然报
 ; Couldn't open include file "...\Languages\ChineseSimplified.isl"（这个失败真实发生过）。
-; 解析顺序是：本机 Inno 安装目录 → 仓库缓存 installer\languages\ → 下载到该缓存目录。
-; 单独调用 ISCC 时用下面的默认值指向仓库缓存，因此先由脚本跑过一次即可。
+; 解析顺序是：仓库缓存 installer\languages\ChineseSimplified.isl → 本机 Inno 安装目录 → 从上游
+; kira-96/Inno-Setup-Chinese-Simplified-Translation 下载到该缓存目录；脚本对每一份被采用的文件校验固定的 SHA-256。
+; 仓库缓存随版本库分发，因此单独调用 ISCC 时下面的默认值直接可用，不需要先跑一次脚本。
 ; The Simplified Chinese messages file is resolved by build-installer.ps1 and passed in as /DChineseMessagesFile.
 ;
 ; It must **not** be written as "compiler:Languages\ChineseSimplified.isl": Simplified Chinese lives in Inno Setup's "unofficial
 ; languages" set, which neither the official installer nor winget nor choco ships, so CI inevitably fails with
 ; Couldn't open include file "...\Languages\ChineseSimplified.isl" (a failure that really happened).
-; The order is: the local Inno installation, then the repository cache installer\languages\, then a download into that cache.
-; A bare ISCC invocation uses the default below, which points at the repository cache, so running the script once is enough.
+; The order is: the repository cache installer\languages\ChineseSimplified.isl, then the local Inno installation, then a download
+; from the upstream kira-96/Inno-Setup-Chinese-Simplified-Translation into that cache; the script checks every adopted file
+; against a pinned SHA-256. The cache ships with the repository, so a bare ISCC invocation can use the default below as it is.
 #ifndef ChineseMessagesFile
   #define ChineseMessagesFile "languages\ChineseSimplified.isl"
 #endif
