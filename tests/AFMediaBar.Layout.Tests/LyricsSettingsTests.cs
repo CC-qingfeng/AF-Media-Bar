@@ -26,35 +26,33 @@ public sealed class LyricsSettingsTests
         if (Directory.Exists(_directory)) Directory.Delete(_directory, true);
     }
 
-    // ---- Schema 13 → 14 ----
+    // ---- 缺字段的默认值 / missing-field defaults ----
 
     [TestMethod]
-    public void Schema13FileGetsTheDocumentedLyricDefaults()
+    public void MissingLyricFieldsUseTheDocumentedDefaults()
     {
+        // 文件里没有五项取词与擦亮设置：每一项都必须取文档化的默认值，尤其是来源列表——null 表示"全部来源"，
+        // 绝不能读成"一首歌都取不到歌词"的空列表。
+        // The file carries none of the five lyric and highlight settings, so each one must take its documented default — especially the
+        // source list, where null means "all sources" and must never read as the empty list that fetches no lyrics at all.
         Directory.CreateDirectory(_directory);
         File.WriteAllText(
             Path.Combine(_directory, "settings.json"),
-            "{\"schemaVersion\":13,\"settings\":{\"lyricsEnabled\":false,\"twoLineLyricsEnabled\":true}}");
+            $"{{\"schemaVersion\":{SettingsPersistenceService.CurrentSchemaVersion},\"settings\":{{\"lyricsEnabled\":false,\"twoLineLyricsEnabled\":true}}}}");
 
         using var service = new SettingsPersistenceService(_directory);
         service.Initialize();
 
-        // 升级前的实际行为：擦亮开着、底色层 0.45、署名行过滤开着、匹配等级 High、全部来源按默认顺序。
-        // The behaviour in effect before the setting existed: highlighting on, base layer at 0.45, credit filtering on, match level
-        // High, and every source in the default order.
         Assert.IsTrue(SettingsManager.Current.LyricsSyllableHighlightEnabled);
         Assert.AreEqual(LyricsUnsungOpacity.DefaultPercent, SettingsManager.Current.LyricsUnsungOpacityPercent);
         Assert.IsTrue(SettingsManager.Current.LyricsInfoLineFilterEnabled);
         Assert.AreEqual(LyricsMatchStrictness.Balanced, SettingsManager.Current.LyricsMatchStrictness);
         Assert.IsNull(SettingsManager.Current.LyricsSource.EnabledSourceIds);
 
-        // 旧字段照旧保留，不因为迁移被改写。
-        // Older fields survive the migration untouched.
+        // 文件里已有的歌词字段照旧保留。
+        // Lyric fields the file does carry survive untouched.
         Assert.IsFalse(SettingsManager.Current.LyricsEnabled);
         Assert.IsTrue(SettingsManager.Current.TwoLineLyricsEnabled);
-        StringAssert.Contains(
-            File.ReadAllText(service.SettingsPath),
-            $"\"schemaVersion\": {SettingsPersistenceService.CurrentSchemaVersion}");
     }
 
     [TestMethod]

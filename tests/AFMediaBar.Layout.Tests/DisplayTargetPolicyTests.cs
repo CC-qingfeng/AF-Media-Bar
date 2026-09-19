@@ -24,21 +24,6 @@ public sealed class DisplayTargetPolicyTests
     }
 
     [TestMethod]
-    public void LegacyIndexMigrationClampsToEnumeratedMonitors()
-    {
-        var monitors = new[]
-        {
-            Monitor("DISPLAY1", true, new Rect(0, 0, 1920, 1040), 96),
-            Monitor("DISPLAY2", false, new Rect(1920, 0, 2560, 1400), 120)
-        };
-
-        Assert.AreEqual("DISPLAY1", DisplayTargetPolicy.ResolveLegacyDeviceId(monitors, -1));
-        Assert.AreEqual("DISPLAY2", DisplayTargetPolicy.ResolveLegacyDeviceId(monitors, 1));
-        Assert.AreEqual("DISPLAY2", DisplayTargetPolicy.ResolveLegacyDeviceId(monitors, 99));
-        Assert.IsNull(DisplayTargetPolicy.ResolveLegacyDeviceId([], 0));
-    }
-
-    [TestMethod]
     public void NotificationTargetUsesForegroundThenFixedAndPrimaryFallbacks()
     {
         var primary = Monitor("DISPLAY1", true, new Rect(0, 0, 1920, 1040), 96);

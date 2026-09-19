@@ -68,6 +68,7 @@ internal static class StringsZhHans
         table.Add("About.Support.Alipay", "支付宝");
         table.Add("About.Support.Open", "打开链接");
         table.Add("About.Support.Pending", "收款码与赞助链接由作者后续补充；上方的路径就是文件应当放入的位置");
+        table.Add("About.Support.SponsorNote", "大于 10 元的赞助可以进入赞助者名单，请在备注中留下 id");
         table.Add("About.Support.WeChat", "微信");
         table.Add("Credits.Contributions", "提交 {0} 次");
         table.Add("Credits.Reason.ContributorsEmpty", "贡献者列表为空");

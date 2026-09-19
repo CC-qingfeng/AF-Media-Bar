@@ -68,6 +68,7 @@ internal static class StringsZhHant
         table.Add("About.Support.Alipay", "支付寶");
         table.Add("About.Support.Open", "開啟連結");
         table.Add("About.Support.Pending", "收款碼與贊助連結由作者後續補充；上方的路徑就是檔案應當放入的位置");
+        table.Add("About.Support.SponsorNote", "大於 10 元的贊助可以進入贊助者名單，請在備註中留下 id");
         table.Add("About.Support.WeChat", "微信");
         table.Add("Credits.Contributions", "提交 {0} 次");
         table.Add("Credits.Reason.ContributorsEmpty", "貢獻者清單為空");

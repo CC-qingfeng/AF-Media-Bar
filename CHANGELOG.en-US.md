@@ -6,34 +6,50 @@ All notable changes to AF Media Bar are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.2.0] - 2026-09-19
+
+The first release of the rebuilt interface and interaction model: taskbar lyrics, an installer, and target-display selection are new capabilities, and the settings pages, appearance, and interactions were reorganised by function.
 
 ### Added
 
-- Added shared horizontal and vertical layout profiles with a fine-grid editor for placing and resizing widgets and composing static, hover-switch, and edge-collapse containers.
-- Added widget-specific sizing, text-line and width limits, content alignment, and hover-proximity settings.
-- Made empty strip areas draggable and added mouse-wheel interaction to output-device and media-volume widgets.
+- Taskbar lyrics: sources are matched in order across NetEase Cloud Music, LRCLIB, QQ Music, Kugou Music, and Soda Music, with syllable-by-syllable reveal, unsung-part shading, translation, romanization, and two-line alignment; sources can be enabled, disabled, and reordered on the lyrics page.
+- An installer: installed copies can check for updates in-app and download and silently install later versions, while the portable build stays a single file that writes no registry entries.
+- Target display selection: the bar can follow the taskbar on a chosen display, recovering automatically after DPI changes or an Explorer restart.
+- Quick launch: with no acceptable media, clicking or scrolling the note opens your own list, wheel-previews entries, and starts the last one about 1.2 s after scrolling stops.
+- Now-playing track notification: shown once a track changes and starts playing, with an adjustable placement, duration, and display, and optional fullscreen suppression.
+- An SMTC app allow list: only sessions published by selected apps are accepted.
+- An audio control panel: tray click and wheel can be bound to the panel, Settings, or the device/volume entries.
+- New spectrum styles: waveform and pixel bars.
+- An About page: developers (GitHub contributors with avatars), sponsors, payment codes and the Afdian entry, and the open-source licence list.
+- Automatic background memory trimming: graded reclaim while idle, with the display off, and while suspending, one more reclaim after startup settles, and a compress-memory-now action in Settings.
+- An application log with unhandled-exception capture, and entries in Settings that open the log and settings folders.
 
 ### Improved
 
-- Settings previews and the player now share the same layout model, while collapse containers expand and retract along a shared edge with a selected anchor container.
-- Media text supports combined two-line title and artist display, with clearer input behavior for hover and collapsed states.
-- The layout workspace and properties panel adapt to different window widths and include matching text in all three supported languages.
+- Settings were reorganised into Display modes, Media & Notifications, Interaction, Lyrics, Appearance, and Application, plus About in the footer, with rebuilt group containers, group strips, and a fixed page header, and keyword search that jumps to the matching group.
+- Unified appearance: fonts, font size, light/dark theme, window material, and material concentration now apply globally, and the accent colour follows the system by default or can be picked or entered as hex.
+- Interface language: Simplified Chinese, Traditional Chinese, and English, following the Windows display language by default and applying immediately without a restart.
+- Taskbar behaviour: artwork keeps its own aspect ratio, text that does not fit rotates inside its own region (a line being revealed follows its highlight), and the bar can auto-hide while nothing plays.
+- Audio: the output-device list is stably ordered, the current media app is adjusted in 2% steps, and spatial audio can be inspected and the Windows sound settings opened from there.
+- Windows 10: window material and the dark title bar fall back by system version.
+- Low-performance fallback: decorative motion, marquees, spectrum easing, and blur are disabled automatically under software rendering or a low-performance path.
+- The update check requests public manifest endpoints only and never goes through a third-party proxy; downloads are verified against SHA-256 while they download and retried through the accelerators listed in the manifest when the direct connection fails.
+
+### Fixed
+
+- Fixed automatic media following overriding a source that was selected manually.
+- Fixed the marquee being displaced when hover begins and the full layer not opening after the hover layer is collapsed.
+- Fixed the missing wheel tooltip over the media area and the missing quick-launch preview tooltip.
+- Fixed the Windows 10 taskbar search box not being avoided and the offset when the bar is dragged manually.
+- Fixed a possible crash when a media session is closed during playback and the wrong size of the first track notification.
 
 ### Compatibility and Limitations
 
-- Layout data now uses schema 5 as the only supported format. Unrecognized or invalid layout files are preserved and replaced with the default profile.
-- The fine-grid editor is still being stabilized. Four-way collapse, DPI pointer alignment, outside-window proximity, taskbar recovery, and invalid-profile recovery have not yet completed real-Windows acceptance.
-- Interactive widgets are rejected from hover leave-state slots; edge-collapse content is completely hidden while collapsed and only a trigger region remains.
-- Layout profiles and widget properties are stored in `%LOCALAPPDATA%\AFMediaBar\profiles\layout.json`; legacy widget registry values are used only during first-run migration.
-
-### Planned
-
-- Display scrolling video subtitles or lyrics.
-- Display media progress bars.
-- Polish the UI and provide preset themes.
-- Export and share configurations.
-- Add an onboarding tutorial.
+- Vertical taskbars and floating mode are no longer offered: this version supports the horizontal taskbar only, and Dynamic Island, Desktop Card, and Floating Orb in Settings are placeholders that only change what the page shows.
+- The grid layout editor is no longer part of Settings: layout profiles written by 1.1.1 and earlier (`%LOCALAPPDATA%\AFMediaBar\profiles\layout.json`, schema 5) are no longer used and the interface returns to a fixed layout.
+- **Upgrading resets your settings**: this version reads only its own schema number (2) and never reads the older file that 1.1.1 wrote; that file is renamed to `settings.json.unsupported-<timestamp>` and kept, and the app starts from the defaults. The "my defaults" snapshot is handled the same way, so the settings have to be configured once more.
+- Upgrading from 1.1.1 to 1.2.0 means downloading manually: the manifest for this version offers no automatically installable package, and in-app download and silent installation return in 1.2.1.
+- Only `win-x64` is published and there is no ARM64 build yet; the published files are not commercially code-signed, so Windows SmartScreen may report an unknown publisher.
 
 ## [1.1.1] - 2026-08-17
 
@@ -107,7 +123,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Restricted native library lookup to System32.
 - Removed generic execution of media-provided `.exe` source identifiers.
 
-[Unreleased]: https://github.com/Fervent-Tempo/AF-Media-Bar/compare/v1.1.1...HEAD
+[1.2.0]: https://github.com/Fervent-Tempo/AF-Media-Bar/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/Fervent-Tempo/AF-Media-Bar/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/Fervent-Tempo/AF-Media-Bar/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/Fervent-Tempo/AF-Media-Bar/compare/v1.0.0...v1.0.1

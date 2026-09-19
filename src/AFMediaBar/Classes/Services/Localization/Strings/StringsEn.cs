@@ -68,6 +68,7 @@ internal static class StringsEn
         table.Add("About.Support.Alipay", "Alipay");
         table.Add("About.Support.Open", "Open link");
         table.Add("About.Support.Pending", "The payment codes and the support link are supplied by the author later; the path above is where the file belongs");
+        table.Add("About.Support.SponsorNote", "Sponsorships above 10 CNY can join the sponsor list; please leave your ID in the payment note");
         table.Add("About.Support.WeChat", "WeChat");
         table.Add("Credits.Contributions", "{0} commits");
         table.Add("Credits.Reason.ContributorsEmpty", "The contributors list is empty");

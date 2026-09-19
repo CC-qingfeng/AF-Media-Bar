@@ -3,14 +3,6 @@ using System.IO;
 
 namespace AFMediaBar.Classes.Settings;
 
-/// <summary>旧播放器交互预设，仅保留用于读取早期设置。 / Legacy player-interaction preset retained only for reading older settings.</summary>
-public enum MediaInteractionMode
-{
-    Buttons = 0,
-    Hybrid = 1,
-    Gestures = 2
-}
-
 /// <summary>播放器表面滚轮可绑定的媒体或音频动作。 / Media or audio action bindable to player-surface wheel input.</summary>
 public enum WheelAction
 {
@@ -21,13 +13,6 @@ public enum WheelAction
 
     /// <summary>不绑定：滚轮在媒体栏上不做任何事（提示仍会说明"已禁用"）。成员值参与序列化，因此只能追加。 / Not bound: the wheel does nothing over the media bar, while the tooltip still states that it is disabled. Member values take part in serialization, so this may only be appended.</summary>
     Disabled = 4
-}
-
-/// <summary>旧组合滚轮鼠标按键，仅保留用于读取早期设置。 / Legacy mouse chord retained only for reading older settings.</summary>
-public enum MouseChordButton
-{
-    Left = 0,
-    Right = 1
 }
 
 /// <summary>单击通知区域图标时执行的动作。 / Action performed when the notification-area icon is clicked.</summary>
@@ -181,11 +166,11 @@ public enum SpectrumStyle
 public readonly record struct SpectrumComponentSettings(int BandCount, int RefreshRateHz, int SensitivityPercent)
 {
     /// <summary>
-    /// 频谱呈现样式。该成员以 init 属性而不是位置参数存在，因此旧设置文件缺少该字段时反序列化到样式枚举的 0 值（柱状图），
-    /// 与迁移前的观感一致，也不需要改动既有的构造签名。
-    /// The presentation style. It is an init property rather than a positional parameter, so an older settings file that
-    /// lacks the field deserializes to enum value 0 (bars), which matches the pre-migration appearance, and the existing
-    /// constructor signature stays intact.
+    /// 频谱呈现样式。该成员以 init 属性而不是位置参数存在：设置文件缺这个字段时反序列化落到声明处的默认值（柱状图），
+    /// 既不需要改动既有的构造签名，也不会让"没写过这项"被读成别的样式。
+    /// The presentation style. It is an init property rather than a positional parameter, so a settings file that lacks the field
+    /// deserializes to the default declared here (bars): the existing constructor signature stays intact, and "never written" is
+    /// never read as some other style.
     /// </summary>
     public SpectrumStyle Style { get; init; } = SpectrumStyle.Bars;
 

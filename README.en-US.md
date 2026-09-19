@@ -45,19 +45,21 @@ The app runs in its own process and hosts its WPF bar as a taskbar child window.
 
 | Category | Capabilities |
 | --- | --- |
-| Media | Previous, play/pause, next, repeat, and click-to-position or draggable progress; unavailable controls stay transparent and dim their icons; Full always keeps explicit buttons |
+| Media | Previous, play/pause, next, repeat, and click-to-position or draggable progress |
 | Source interaction | Bind artwork and title/lyric clicks independently to play/pause, activate the media app, or open the full layer; right-click the bar to switch sources; an SMTC allow list can be enabled per app under Media & Notifications |
-| Live lyrics | Lyrics appear in the taskbar rest layer and replace title and artist; they are fetched in order across NetEase Cloud Music, LRCLIB, QQ Music, Kugou Music, and Soda Music (each can be enabled, disabled, and reordered, or all turned off to stop lookups); syllable reveal, unsung-part shading, translation and romanization, a reorderable second line, credit-line filtering, and two-line alignment; the full layer names the lyrics source |
-| Taskbar behavior | Docked as a taskbar child window that avoids icons and system areas; artwork keeps its own aspect ratio (wide and portrait covers are no longer cropped); width can follow content or stay fixed, and a title, artist, or lyric line that does not fit rotates inside its own region (a line being revealed follows its highlight); the target display is selectable, and DPI changes or an Explorer restart recover automatically; optional auto-hide while every session is stopped |
-| Appearance | Global fonts, font size, light/dark theme, window material (Mica Alt included) and material concentration; the accent colour follows the system by default and can also be picked or entered as hex; text colour follows the real taskbar background automatically |
-| Interface language | Simplified Chinese, Traditional Chinese, and English; the default follows the Windows display language, and a change under Application → Interface language applies immediately without restarting |
-| Hover and Full layers | Hover blurs/dims the original text while buttons stay crisp; Full lives outside the taskbar with toggleable sections, components, and two presets; rest density, layout, and alignment are adjustable |
-| Audio | Switch the default output device from a stable ordered list; adjust the current media app in 2% steps; show spatial audio and jump to the Windows sound settings; bind tray click and wheel to the flyout, Settings, or device/volume |
-| Quick launch | With no acceptable media, click the note to open your own list; wheel-preview entries and start the last one about 1.2 s after scrolling stops; sources, EXE, LNK, and Store apps are supported |
-| Spectrum and metrics | WASAPI loopback spectrum in four styles (bars, waveform, pixel bars, mirrored bars) with 9–24 bars, a 14–34 DIP height, 5–30 Hz refresh, and 1–400% sensitivity, coloured to match the media text; the taskbar metrics component rotates memory, CPU, GPU, and this app's own memory in 0.5–5 s intervals and opens Task Manager on click |
-| Track-change notification | Show the current track once it really changes and starts playing, with six placements, 1–10 s duration, fullscreen suppression, and fixed- or foreground-display targeting |
-| Low-performance fallback | Under software rendering or a low-performance path, decorative motion, marquees, spectrum easing, blur, and backdrop effects are disabled automatically |
-| Diagnostics and upkeep | Background memory and suspend pruning (graded reclaim while idle, with the display off, and while suspending, plus one reclaim after startup settles); a single-file application log with unhandled-exception capture; Settings offers compress-memory-now and the log and settings folders |
+| Live lyrics | Lyrics appear on the taskbar with syllable-by-syllable reveal, translation, romanization, and two-line alignment; sources are matched in order across NetEase Cloud Music, LRCLIB, QQ Music, Kugou Music, and Soda Music |
+| Taskbar behavior | Docked as a taskbar child window that avoids icons and system areas; artwork keeps its own aspect ratio and text that does not fit rotates inside its own region; the target display is selectable and the bar can auto-hide while nothing plays |
+| Appearance | Global fonts, font size, light/dark theme, window material, and material concentration; the accent colour follows the system and can also be picked or entered as hex |
+| Interface language | Simplified Chinese, Traditional Chinese, and English; the default follows the Windows display language, and a change applies immediately without restarting |
+| Hover and Full layers | Hover shows the control layer and blurs/dims the text region; Full allows toggling sections and components plus two presets |
+| Audio | Switch the default output device, adjust the current media app in 2% steps, and inspect spatial audio; tray click and wheel are rebindable |
+| Quick launch | With no acceptable media, click the note to open your own list: wheel-preview entries and start the last one about 1.2 s after scrolling stops |
+| Spectrum and metrics | Four spectrum styles with an adjustable bar count, height, and refresh rate; the taskbar metrics component rotates memory, CPU, GPU, and this app's own memory, and opens Task Manager on click |
+| Track-change notification | Show the current track once it changes and starts playing, with an adjustable placement, duration, and display; identified from the source and title, not from a play queue |
+| Low-performance fallback | Decorative motion, marquees, spectrum easing, and blur are disabled automatically under software rendering or a low-performance path |
+| Diagnostics and upkeep | Graded memory reclaim while idle, with the display off, and while suspending, plus one reclaim after startup settles; Settings offers compress-memory-now and an application log |
+
+A media app only appears once it publishes a GSMTC session; some players need "system media controls" or "media keys" enabled in their own settings. Taskbar is the only runtime mode: Dynamic Island, Desktop Card, and Floating Orb in Settings are placeholders that only change the page area.
 
 ## How It Works
 
@@ -93,21 +95,6 @@ Both packages are published on GitHub Releases only. Where GitHub is unreliable,
 
 AF Media Bar is not commercially code-signed, so Windows SmartScreen may warn about an unknown publisher on first run or install.
 
-## Basic Usage
-
-| Action | Result |
-| --- | --- |
-| Click artwork / title or lyrics | Play/pause by default / activate the current media app; both can be rebound to open the playing app, open the full layer, or do nothing (Interaction page) |
-| Wheel over the media area | The plain wheel and the chorded wheel can be bound separately to previous/next, switch player, output device, current volume, or nothing; the default is plain-wheel track change and Shift + wheel player switching, and the tooltip reports what just happened |
-| Right-click the bar | Switch media source, open Settings, open the full layer, or exit |
-| Click the note or wheel with no media | Open the quick-launch list; wheel-preview entries and start the last one about 1.2 s after scrolling stops |
-| Hover the taskbar bar | Show the control layer (artwork, text, and spectrum each keep their hover), with the text region blurred/dimmed; after collapsing it, the thin bar at the top of the text region opens the full layer |
-| Click / wheel the tray icon | Open the audio flyout / switch output devices by default; Shift + wheel adjusts the current media volume in 2% steps, and both are rebindable under Interaction → Tray icon |
-| Drag an empty part of the bar | Move the bar manually; dragging can be locked |
-| Switch mode cards under Display modes | Taskbar is the only runtime mode; Dynamic Island, Desktop Card, and Floating Orb are unimplemented placeholders that only change the page area and show a notice |
-
-A media app only appears once it publishes a GSMTC session; some players need "system media controls", "media keys", or "SMTC" enabled in their own settings. The track-change notification is not a queue or a "next track" preview — Windows SMTC exposes no up-next list, so the notification identifies a change from the source identifier plus the normalized title.
-
 ## Updating and Uninstalling
 
 ### Updating
@@ -121,7 +108,7 @@ About 20 seconds after launch the app reads the public version manifest (`docs/l
 
 The install log is written to `%LOCALAPPDATA%\AFMediaBar\updates\install-<version>.log`, and downloaded installers live in the same folder, cleaned up by version on the next launch.
 
-Preferences and window state live in `%LOCALAPPDATA%\AFMediaBar\settings.json` (schema-versioned JSON, atomic writes, backup recovery). Replacing the program files never loses settings, and the Application page opens the settings folder.
+Preferences and window state live in `%LOCALAPPDATA%\AFMediaBar\settings.json` (schema-numbered JSON, atomic writes, backup recovery). Replacing the program files within one version never loses settings, but **an upgrade across versions does not read the older settings file** (1.1.1 → 1.2.0 renames it to `settings.json.unsupported-<timestamp>` and starts from the defaults), and the Application page opens the settings folder.
 
 ### Uninstalling
 

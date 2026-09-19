@@ -13,15 +13,23 @@ namespace AFMediaBar.Classes.Services;
 public sealed class SettingsPersistenceService : IDisposable
 {
     /// <summary>
-    /// 当前设置文件 schema。**只在"旧文件必须换一种行为"时递增**（改字段含义、删除并替换字段、改默认值语义），
-    /// 纯新增字段不升版本：新字段在声明处带默认值，旧文件缺字段即取该默认值，`Normalize()` 再保证取值合法。
-    /// 迁移在加载时按需执行（`ReadEnvelope` 之后按 `SchemaVersion` 走迁移段），因此一次升级不会让用户在任何时候"手动迁移"。
-    /// Current settings schema. It **only moves when an older file has to behave differently** — a field whose meaning changed, a field removed
-    /// with a replacement, a default whose semantics changed. A purely additive field does not bump it: the field declares its default, an older
-    /// file that lacks it reads that default, and `Normalize()` keeps the value legal. Migration runs lazily while loading (the migration blocks
-    /// after `ReadEnvelope` key off `SchemaVersion`), so nothing ever asks the user to migrate by hand.
+    /// 当前设置文件 schema。**只在发布（release）批次里变更，开发批次不动它**：两次发布之间的中间构建共用同一个编号，
+    /// 因此"这份文件是谁写的"始终只有一个含义，而不是每加一个设置就换一个数字。
+    ///
+    /// 程序**只读取本编号的设置文件，不迁移更早的编号**：1.2.0 起，编号不同的文件一律被隔离改名，设置回到内置默认值，
+    /// 而不是被"尽力读进来"。理由是重建后的设置模型与旧模型已不是同一份东西——半对半错地读进来比回到默认值更难排查。
+    /// 将来某个发布若确实要读取上一版的文件，就在那个发布里显式写迁移，并同时改掉这段注释与 `ReadEnvelope` 的相等判断。
+    /// Current settings schema. It **changes only in a release batch, never in a development one**: intermediate builds between
+    /// two releases share one number, so "who wrote this file" keeps exactly one meaning instead of getting a new digit every time
+    /// a setting is added.
+    ///
+    /// The application reads a file carrying this number **only and never migrates an earlier one**: from 1.2.0 on, a file with a
+    /// different number is quarantined under a new name and the built-in defaults take over, rather than being read on a best-effort
+    /// basis. The rebuilt settings model is not the same object as the old one, and reading it half-right is harder to diagnose than
+    /// starting from the defaults. A future release that really has to read its predecessor's file writes an explicit migration
+    /// there, and changes both this comment and the equality check in `ReadEnvelope` at the same time.
     /// </summary>
-    public const int CurrentSchemaVersion = 14;
+    public const int CurrentSchemaVersion = 2;
     private readonly string _directoryPath;
     private readonly string _settingsPath;
     private readonly string _backupPath;
@@ -41,9 +49,6 @@ public sealed class SettingsPersistenceService : IDisposable
     private bool _initialized;
     private bool _disposed;
     private int? _loadedSchemaVersion;
-
-    /// <summary>schema 1–3 中等待启动阶段映射的旧任务栏显示器索引。 / Legacy taskbar-display index from schema 1–3 awaiting startup-time mapping.</summary>
-    public int? LegacyTaskbarMonitorIndex { get; private set; }
 
     /// <summary>创建设置存储服务；目录和防抖间隔可覆盖以便测试。 / Creates the settings store; directory and debounce can be overridden for tests.</summary>
     public SettingsPersistenceService(string? directoryPath = null, TimeSpan? debounce = null)
@@ -121,10 +126,11 @@ public sealed class SettingsPersistenceService : IDisposable
 
     /// <summary>
     /// 读取「我的默认设置」快照；文件不存在或不可读时返回 null。
-    /// 快照经过与设置文件相同的迁移与归一化，因此旧版本写入的快照在新版本里仍然可用，而不是被静默丢弃。
-    /// Reads the user-defaults snapshot, or null when the file is missing or unreadable. The snapshot goes through the same
-    /// migration and normalization as the settings file, so a snapshot written by an older version stays usable instead of being
-    /// silently discarded.
+    /// 快照与设置文件走同一条读取路径，因此编号不同的快照同样不被读取：文件改名留档（不删除），界面据此显示"未保存"，
+    /// 而不是拿一份读不准的旧快照去覆盖用户的设置。
+    /// Reads the user-defaults snapshot, or null when the file is missing or unreadable. The snapshot goes through the same read path
+    /// as the settings file, so a snapshot carrying a different schema number is not read either: the file is renamed and kept (never
+    /// deleted) and the page honestly shows "not saved", instead of using a snapshot it cannot read accurately to overwrite settings.
     /// </summary>
     public AppSettings? LoadUserDefaults()
     {
@@ -134,6 +140,11 @@ public sealed class SettingsPersistenceService : IDisposable
         try
         {
             return ReadEnvelope(_userDefaultsPath).Normalize();
+        }
+        catch (UnsupportedSettingsSchemaException)
+        {
+            Quarantine(_userDefaultsPath, "unsupported");
+            return null;
         }
         catch (Exception exception)
         {
@@ -191,8 +202,8 @@ public sealed class SettingsPersistenceService : IDisposable
 
     private void LoadCore()
     {
-        LegacyTaskbarMonitorIndex = null;
         _loadedSchemaVersion = null;
+
         AppSettings? loaded = null;
         if (File.Exists(_settingsPath))
         {
@@ -219,7 +230,7 @@ public sealed class SettingsPersistenceService : IDisposable
             "Settings",
             $"已加载设置 / settings loaded: schema {_loadedSchemaVersion?.ToString() ?? "none"} → {CurrentSchemaVersion}, " +
             $"file={(File.Exists(_settingsPath) ? _settingsPath : "<none>")}");
-        if (!File.Exists(_settingsPath) || loaded is null || _loadedSchemaVersion < CurrentSchemaVersion)
+        if (!File.Exists(_settingsPath) || loaded is null)
             SaveCore(SettingsManager.Current);
     }
 
@@ -236,189 +247,13 @@ public sealed class SettingsPersistenceService : IDisposable
         }
         var envelope = JsonSerializer.Deserialize<SettingsEnvelope>(node.ToJsonString(), _jsonOptions)
             ?? throw new JsonException("Settings envelope is empty.");
-        if (envelope.SchemaVersion is < 1 or > CurrentSchemaVersion)
+        // 只接受当前编号：编号不同的文件（含 1.1.1 写出的一切旧编号）既不读取也不改写，由调用方隔离后回到内置默认值。
+        // Only the current number is accepted: a file carrying a different one — including everything 1.1.1 wrote — is neither read
+        // nor rewritten; the caller quarantines it and the built-in defaults take over.
+        if (envelope.SchemaVersion != CurrentSchemaVersion)
             throw new UnsupportedSettingsSchemaException(envelope.SchemaVersion);
         _loadedSchemaVersion = envelope.SchemaVersion;
-        var result = envelope.Settings ?? new AppSettings();
-        if (envelope.SchemaVersion == 1)
-        {
-            // The redesigned interaction model intentionally starts from its new defaults.
-            // Stable appearance, lyric, taskbar-placement, and window-mode fields are retained.
-            result.Interaction = GlobalInteractionSettings.Default;
-            result.TaskbarExperience = TaskbarExperienceSettings.Default;
-            result.TaskbarSurface = ModeSurfaceSettings.Default;
-            result.DynamicIslandSurface = ModeSurfaceSettings.Default;
-            result.LyricsTextAlignment = LyricsTextAlignment.Center;
-        }
-        else if (envelope.SchemaVersion == 2)
-        {
-            // Schema 2 had no full-panel group visibility. Preserve its all-visible experience.
-            result.TaskbarExperience = result.TaskbarExperience with
-            {
-                FullPanel = TaskbarFullPanelSettings.Default
-            };
-        }
-        if (envelope.SchemaVersion <= 3)
-        {
-            // Schema 4 introduces an opt-in notification and stable display identifiers.
-            // The legacy taskbar index is retained in memory until startup can map it against
-            // the live monitor topology without moving Win32 discovery into the I/O service.
-            result.TrackChangeNotification = TrackChangeNotificationSettings.Default;
-            LegacyTaskbarMonitorIndex = node["settings"]?["taskbarBarSelectedMonitor"] is JsonValue legacyIndexNode &&
-                                        legacyIndexNode.TryGetValue<int>(out var legacyIndex)
-                ? Math.Max(0, legacyIndex)
-                : 0;
-        }
-        if (envelope.SchemaVersion <= 4)
-        {
-            // Schema 5 adds taskbar length behavior. Existing users retain the previous
-            // content-following layout instead of receiving a new fixed width implicitly.
-            result.TaskbarExperience = result.TaskbarExperience with
-            {
-                LengthMode = TaskbarLengthMode.FollowContent,
-                FixedLengthDip = TaskbarExperienceSettings.Default.FixedLengthDip
-            };
-        }
-        if (envelope.SchemaVersion <= 5)
-        {
-            // Schema 6 adds opt-in source filtering, an explicit quick-launch list, and
-            // always-on taskbar spectrum/performance component parameters.
-            result.SmtcSourceFilter = SmtcSourceFilterSettings.Default;
-            result.QuickLaunch = QuickLaunchSettings.Default;
-            result.SpectrumComponent = SpectrumComponentSettings.Default;
-            result.PerformanceComponent = PerformanceComponentSettings.Default;
-        }
-        if (envelope.SchemaVersion <= 6)
-        {
-            // Schema 7 replaces interaction presets with explicit bindings and makes the
-            // redesigned display-mode picker taskbar-only at runtime.
-            var legacyExperience = result.TaskbarExperience.Normalize();
-            var legacyLayoutNode = node["settings"]?["taskbarExperience"]?["contentLayout"];
-            var legacyLayoutText = legacyLayoutNode?.ToJsonString().Trim('"');
-            var legacyCenteredLayout = legacyExperience.ContentLayout == TaskbarContentLayout.CenteredStack ||
-                                       string.Equals(legacyLayoutText, nameof(TaskbarContentLayout.CenteredStack), StringComparison.OrdinalIgnoreCase) ||
-                                       legacyLayoutText == ((int)TaskbarContentLayout.CenteredStack).ToString() ||
-                                       legacyLayoutNode is JsonValue layoutValue &&
-                                       ((layoutValue.TryGetValue<string>(out var layoutName) &&
-                                         string.Equals(layoutName, nameof(TaskbarContentLayout.CenteredStack), StringComparison.OrdinalIgnoreCase)) ||
-                                        (layoutValue.TryGetValue<int>(out var layoutNumber) &&
-                                         layoutNumber == (int)TaskbarContentLayout.CenteredStack));
-            result.WindowMode = WindowMode.Taskbar;
-            result.Interaction = GlobalInteractionSettings.Default;
-            result.TaskbarExperience = legacyExperience with
-            {
-                ContentLayout = legacyCenteredLayout
-                    ? TaskbarContentLayout.AdaptiveStack
-                    : legacyExperience.ContentLayout,
-                MediaTextAlignment = legacyCenteredLayout
-                    ? TaskbarMediaTextAlignment.Center
-                    : TaskbarMediaTextAlignment.Left,
-                SpectrumVisible = true,
-                PerformanceVisible = true,
-                HoverControls = TaskbarHoverControlsSettings.Default
-            };
-        }
-        if (envelope.SchemaVersion <= 7)
-        {
-            // Schema 8 adds the rest-layer media font-size scale. Older files keep the previous
-            // text sizes instead of inheriting a new default scale.
-            // schema 8 新增静置层媒体文字字号缩放；旧设置文件保持原有文字大小，而不是继承新的默认缩放。
-            result.TaskbarExperience = result.TaskbarExperience with
-            {
-                MediaFontSizePercent = TaskbarExperienceSettings.Default.MediaFontSizePercent
-            };
-        }
-        if (envelope.SchemaVersion <= 8)
-        {
-            // Schema 9 新增更新下载器设置。旧设置文件里没有这一段，反序列化后字段保留声明处的默认值，
-            // 但这里仍然显式赋值：迁移意图必须写在代码里，而不是依赖"缺字段时恰好等于默认值"这种巧合。
-            // 默认开启自动检查与自动下载安装，与全新安装后的行为一致。
-            // Schema 9 adds the update-downloader settings. Older files have no such section, and deserialization
-            // keeps the declared default of the backing field; the assignment is explicit anyway, because a
-            // migration intent belongs in code rather than in the coincidence that a missing field equals a
-            // default. Automatic checking and automatic download/install are on, matching a fresh installation.
-            result.Update = UpdateSettings.Default;
-        }
-        if (envelope.SchemaVersion <= 9)
-        {
-            // Schema 10 让频谱柱数与尺寸相关（9–24 根）并新增频谱样式。旧文件的柱数可能落在新区间之外，
-            // 由 Normalize 夹到 9；样式在该文件里没有对应字段，取值即柱状图，与迁移前的观感一致。
-            // 性能组件的采样间隔同时收敛到 0.5–5 秒，旧取值由 Normalize 吸附到 0.5 秒网格并夹取。
-            // 「点击性能组件时打开任务管理器」改为默认开启：该开关此前虽然存在，但点击被任务栏拖动逻辑吞掉，
-            // 因此没有任何用户能在它关闭的状态下做出有效选择，旧文件里的 false 不代表用户意图。
-            // Schema 10 ties the spectrum bar count to its size (9–24) and adds spectrum styles. Bars from an older file may
-            // fall outside the new range and are clamped to nine by Normalize, while the style has no field in those files and
-            // therefore reads as bars, matching the pre-migration appearance. The performance sampling interval narrows to
-            // 0.5–5 seconds at the same time; Normalize snaps older values onto the 0.5-second grid and clamps them. Opening
-            // Task Manager on click becomes the default: the switch existed before but the click was swallowed by the taskbar
-            // drag logic, so no user could have made a meaningful choice while it was off and a stored false is not intent.
-            result.SpectrumComponent = result.SpectrumComponent with { Style = SpectrumStyle.Bars };
-            result.PerformanceComponent = result.PerformanceComponent with { OpenTaskManagerOnClick = true };
-        }
-        if (envelope.SchemaVersion <= 10)
-        {
-            // Schema 11 新增「完整层入口」与「静置层进度显示」两个开关，并让字体粗细改用 100–900 的真实字重、频谱灵敏度按 10 步进。
-            // 旧文件没有这两个开关字段，迁移时显式写入开启，保持"细杠与悬停按钮都在、静置层底部有进度条"的既有行为；
-            // 粗细与灵敏度由各自的 Normalize 吸附与夹取，这里不再重复。
-            // Schema 11 adds the full-layer entry and rest-layer progress switches and moves the font weight onto the nine real
-            // weights from 100 to 900 while the spectrum sensitivity steps by ten. Older files have neither switch, so the
-            // migration writes both as enabled and keeps the previous behaviour where the thin bar, the hover button, and the
-            // rest-layer progress bar were all present; the weight and the sensitivity are snapped and clamped by their own
-            // Normalize, so they are not repeated here.
-            result.TaskbarExperience = result.TaskbarExperience with
-            {
-                FullPanelEntryVisible = true,
-                RestProgressVisible = true
-            };
-        }
-        if (envelope.SchemaVersion <= 11)
-        {
-            // Schema 12 新增「随 Windows 登录自动启动」设置段。旧文件里没有这一段，反序列化会保留声明处的默认值，
-            // 这里仍然显式赋值：默认开启是产品决定，必须写在迁移里而不是依赖"缺字段恰好等于默认值"。
-            // Schema 12 adds the run-at-startup setting. Older files have no such field and deserialization would keep the declared
-            // default; the assignment is explicit anyway, because "on by default" is a product decision that belongs in the
-            // migration instead of resting on the coincidence that a missing field equals a default.
-            result.LaunchAtStartup = true;
-        }
-        if (envelope.SchemaVersion <= 12)
-        {
-            // Schema 13 新增界面语言。旧文件里没有该字段，反序列化会保留声明处的默认值，这里仍然显式赋值：
-            // 默认「跟随系统」是产品决定，而不是"缺字段恰好等于枚举值 0"这种巧合；同时它保证旧用户不会被
-            // 悄悄固定到某一种语言上——他们的系统是什么语言，界面就是什么语言。
-            // Schema 13 adds the interface language. Older files have no such field and deserialization would keep the
-            // declared default; the assignment is explicit anyway, because "follow the system" is a product decision
-            // rather than the coincidence that a missing field reads as enum value zero. It also keeps an existing user
-            // from being silently pinned to one language: their interface follows whatever their system speaks.
-            result.InterfaceLanguage = InterfaceLanguage.System;
-        }
-        if (envelope.SchemaVersion <= 13)
-        {
-            // Schema 14 新增五项歌词设置。旧文件里没有这些字段，反序列化会保留声明处的默认值，这里仍然逐项显式赋值：
-            // 每一项都要与升级前的实际行为一致（逐字擦亮开着、底色层 0.45、信息行过滤开着、匹配等级 High、全部来源按
-            // 默认顺序），而不是依赖"缺字段恰好等于默认值"——尤其是来源列表：空列表必须是"全部来源"，绝不能读成
-            // "一首歌都取不到歌词"。
-            // Schema 14 adds five lyric settings. Older files have no such fields and deserialization would keep the declared
-            // defaults; every one is assigned explicitly anyway, because each has to match the behaviour that was in effect before
-            // the setting existed (highlight on, base layer at 0.45, info-line filter on, match level High, every source in the
-            // default order) instead of resting on the coincidence that a missing field equals a default — especially the source
-            // list, where an empty list has to mean "all sources" and must never read as "no lyrics at all".
-            result.LyricsSyllableHighlightEnabled = true;
-            result.LyricsUnsungOpacityPercent = LyricsUnsungOpacity.DefaultPercent;
-            result.LyricsInfoLineFilterEnabled = true;
-            result.LyricsMatchStrictness = LyricsMatchStrictness.Balanced;
-            result.LyricsSource = LyricsSourceSettings.Default;
-        }
-        if (envelope.SchemaVersion <= 14)
-        {
-            // Schema 15 起不再为"新增字段"加迁移段：新字段都在声明处给了默认值，旧文件缺字段时反序列化保留该默认值，
-            // 而 `Normalize()` 会把它归一化到合法区间，因此不需要额外的迁移代码。只有"旧文件必须换一种行为"的改动
-            // （改字段含义、删除字段并替换、改默认值语义）才升版本并在这里写迁移。
-            // From schema 15 on, plain new fields no longer get a migration block: every new field declares its default, an older file that
-            // lacks it deserializes to that default, and `Normalize()` clamps it into range, so no migration code is needed. Only a change
-            // that makes an older file behave differently — a field whose meaning changed, a removed field with a replacement, a default whose
-            // semantics changed — bumps the version and gets a block here.
-        }
-        return result.Normalize();
+        return (envelope.Settings ?? new AppSettings()).Normalize();
     }
 
     private void SaveCore(AppSettings settings)
@@ -504,9 +339,7 @@ public sealed class SettingsPersistenceService : IDisposable
                 typeof(TEnum) == typeof(PlayerForegroundMode) ? PlayerForegroundMode.Automatic :
                 typeof(TEnum) == typeof(ApplicationThemeMode) ? ApplicationThemeMode.Automatic :
                 typeof(TEnum) == typeof(ApplicationBackdropMode) ? ApplicationBackdropMode.Mica :
-                typeof(TEnum) == typeof(MediaInteractionMode) ? MediaInteractionMode.Hybrid :
                 typeof(TEnum) == typeof(WheelAction) ? WheelAction.PreviousNext :
-                typeof(TEnum) == typeof(MouseChordButton) ? MouseChordButton.Left :
                 typeof(TEnum) == typeof(PlayerClickAction) ? PlayerClickAction.TogglePlayPause :
                 typeof(TEnum) == typeof(InteractionModifier) ? InteractionModifier.Shift :
                 typeof(TEnum) == typeof(TrayClickAction) ? TrayClickAction.OpenAudioControl :

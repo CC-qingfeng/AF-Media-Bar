@@ -9,12 +9,13 @@ namespace AFMediaBar.Classes.Services.Lyrics;
 /// 把任意来源的原始歌词文本解析成统一的歌词文档。
 /// Parses raw lyric text from any source into the unified lyric document.
 ///
-/// 解析由 Lyricify 承担：先用 <see cref="TypeHelper"/> 按内容识别真实格式（LRC、YRC、QRC、KRC、Lyricify Syllable、TTML 等），
+/// 解析由 Lyricify 承担：先用 <see cref="LyricsFormatDetector.Detect"/> 按内容识别真实格式（LRC、YRC、QRC、KRC、Lyricify Syllable、TTML 等），
 /// 再用 <see cref="ParseHelper"/> 得到行与音节模型，最后在这里映射成项目的不可变模型，并在映射过程中完成三件事：
 /// 1. 丢弃作者/作曲/制作等信息行（静置层只有两行位置，见 <see cref="LyricInfoLinePolicy"/>）；
 /// 2. 把独立传入的译文与音译文本按时间戳贴到对应行（容差 500 毫秒，对不上就不沿用上一句）；
 /// 3. 补齐行与音节的结束时间（<see cref="LyricTimingPolicy"/>）。
-/// The heavy lifting belongs to Lyricify: <see cref="TypeHelper"/> detects the real format from the content, <see cref="ParseHelper"/>
+/// The heavy lifting belongs to Lyricify: <see cref="LyricsFormatDetector.Detect"/> identifies the real format from the content and
+/// <see cref="ParseHelper"/>
 /// yields the line and syllable model, and this type maps that into the project's immutable model while doing three things:
 /// dropping credit lines (the rest layer only has two rows, see <see cref="LyricInfoLinePolicy"/>), attaching separately supplied
 /// translation and romanization text by timestamp with a 500 ms tolerance (never carrying a previous line forward), and

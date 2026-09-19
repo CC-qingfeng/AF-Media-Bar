@@ -169,8 +169,14 @@ public sealed class SettingsPersistenceServiceTests
     [TestMethod]
     public void MissingFieldsUseDefaultsAndInvalidValuesNormalize()
     {
+        // 缺字段取声明处的默认值，写坏的值由 Normalize() 夹回合法区间；显式写出的 null 不参与反序列化
+        // （这五个字段在模型里是非空数值，JSON null 会让反序列化直接失败）。
+        // A missing field takes the declared default and a corrupt one is clamped back into range by Normalize(); an explicit JSON null
+        // is dropped before deserialization, because those five fields are non-nullable numbers in the model.
         Directory.CreateDirectory(_directory);
-        File.WriteAllText(Path.Combine(_directory, "settings.json"), "{\"schemaVersion\":1,\"settings\":{\"layoutLengthScalePercent\":999,\"layoutThicknessScalePercent\":null,\"taskbarBarCrossAxisOffsetDip\":-999,\"dynamicIslandLeft\":-1,\"windowMode\":\"bad\",\"trayWheelBehavior\":\"bad\"}}");
+        File.WriteAllText(
+            Path.Combine(_directory, "settings.json"),
+            $"{{\"schemaVersion\":{SettingsPersistenceService.CurrentSchemaVersion},\"settings\":{{\"layoutLengthScalePercent\":999,\"layoutThicknessScalePercent\":null,\"taskbarBarCrossAxisOffsetDip\":-999,\"dynamicIslandLeft\":-1,\"windowMode\":\"bad\",\"trayWheelBehavior\":\"bad\"}}}}");
         using var service = new SettingsPersistenceService(_directory);
         service.Initialize();
 
@@ -182,24 +188,22 @@ public sealed class SettingsPersistenceServiceTests
         Assert.AreEqual(TrayWheelBehavior.SwitchOutputDevice, SettingsManager.Current.TrayWheelBehavior);
         Assert.IsTrue(SettingsManager.Current.LyricsEnabled);
         Assert.AreEqual(GlobalInteractionSettings.Default, SettingsManager.Current.Interaction);
-        Assert.AreEqual(TaskbarFullPanelSettings.Full, SettingsManager.Current.TaskbarExperience.FullPanel);
     }
 
     [TestMethod]
-    public void AppearanceAccentAndMaterialFieldsNormalizeWithoutASchemaMigration()
+    public void AppearanceAccentAndMaterialFieldsNormalizeWithoutRelyingOnMissingFields()
     {
-        // 这三项是纯新增字段：旧文件里没有它们，因此反序列化后必须是文档化的默认值（跟随系统、默认色、浓度 60%），
+        // 外观这三项是纯新增字段：文件里没有它们，因此必须是文档化的默认值（跟随系统、默认色、浓度 60%），
         // 而写坏的值必须在 `Normalize()` 里被夹回合法区间，不靠"缺字段恰好等于 0"这种巧合——浓度尤其危险：
-        // 缺字段给的是 null，若按 0 处理会被夹到下限 30%，用户升级后会看到与默认观感不同的窗口。
-        // These three fields are purely additive: an older file has none of them, so they must deserialize to the documented
-        // defaults (follow the system, the default colour, 60% concentration), and corrupt values must be clamped back into range
-        // rather than resting on the coincidence that a missing field equals zero. The concentration is the dangerous one: a
-        // missing field hands over null, and treating that as 0 would clamp to the 30% floor, so an upgrade would show a different
-        // window appearance than the documented default.
+        // 缺字段给的是 null，若按 0 处理会被夹到下限 30%，用户会看到与文档默认值不同的窗口。
+        // These three appearance fields are purely additive: a file that lacks them must produce the documented defaults (follow the
+        // system, the default colour, 60% concentration), and corrupt values must be clamped back into range rather than resting on the
+        // coincidence that a missing field equals zero. The concentration is the dangerous one: a missing field hands over null, and
+        // treating that as 0 would clamp to the 30% floor, so the window would not look like the documented default.
         Directory.CreateDirectory(_directory);
         File.WriteAllText(
             Path.Combine(_directory, "settings.json"),
-            "{\"schemaVersion\":14,\"settings\":{\"appearance\":{\"latinFont\":\"SegoeUi\",\"cjkFont\":\"SystemDefault\",\"fontWeight\":700,\"playerForegroundMode\":\"Automatic\",\"enhancedReadability\":false,\"applicationThemeMode\":\"Dark\",\"backdropMode\":\"Acrylic\"}}}");
+            $"{{\"schemaVersion\":{SettingsPersistenceService.CurrentSchemaVersion},\"settings\":{{\"appearance\":{{\"latinFont\":\"SegoeUi\",\"cjkFont\":\"SystemDefault\",\"fontWeight\":700,\"playerForegroundMode\":\"Automatic\",\"enhancedReadability\":false,\"applicationThemeMode\":\"Dark\",\"backdropMode\":\"Acrylic\"}}}}}}");
         using var service = new SettingsPersistenceService(_directory);
         service.Initialize();
 
@@ -238,16 +242,18 @@ public sealed class SettingsPersistenceServiceTests
     }
 
     [TestMethod]
-    public void CorruptMainRecoversBackupAndQuarantinesMain()
+    public void CorruptMainRecoversBackupAtTheCurrentSchemaAndQuarantinesMain()
     {
         Directory.CreateDirectory(_directory);
         var main = Path.Combine(_directory, "settings.json");
         File.WriteAllText(main, "not-json");
-        File.WriteAllText(main + ".bak", "{\"schemaVersion\":1,\"settings\":{\"lyricsEnabled\":false}}");
+        File.WriteAllText(
+            main + ".bak",
+            $"{{\"schemaVersion\":{SettingsPersistenceService.CurrentSchemaVersion},\"settings\":{{\"lyricsEnabled\":false}}}}");
         using var service = new SettingsPersistenceService(_directory);
         service.Initialize();
 
-        Assert.IsFalse(SettingsManager.Current.LyricsEnabled);
+        Assert.IsFalse(SettingsManager.Current.LyricsEnabled, "损坏的主文件必须回退到当前编号的备份。");
         Assert.IsTrue(Directory.GetFiles(_directory, "settings.json.invalid-*").Length == 1);
         Assert.IsTrue(File.Exists(main));
     }
@@ -266,20 +272,74 @@ public sealed class SettingsPersistenceServiceTests
         StringAssert.Contains(File.ReadAllText(main), $"\"schemaVersion\": {SettingsPersistenceService.CurrentSchemaVersion}");
     }
 
+    /// <summary>
+    /// 编号不同的设置文件整份不读取：文件改名留档（不删除），内存里是内置默认值，磁盘上随即写回当前编号的新文件。
+    /// 取 14 作为样本是刻意的——1.1.1 写出的就是 14，它比当前编号"大"，因此这条用例同时证明了拦截不是靠"编号太小"。
+    /// A settings file with a different number is not read at all: the file is renamed and kept (never deleted), memory holds the
+    /// built-in defaults, and a fresh file at the current number is written straight away. The sample number 14 is deliberate —
+    /// 1.1.1 wrote 14, which is larger than the current number, so this also proves the rejection is not "the number was too small".
+    /// </summary>
     [TestMethod]
-    public void Schema2MigratesFullPanelVisibilityToFullPreset()
+    public void PreviousSchemaIsQuarantinedAndNeverRead()
     {
         Directory.CreateDirectory(_directory);
+        var main = Path.Combine(_directory, "settings.json");
         File.WriteAllText(
-            Path.Combine(_directory, "settings.json"),
-            "{\"schemaVersion\":2,\"settings\":{\"taskbarExperience\":{\"hoverLayerEnabled\":false,\"fullLayerEnabled\":true,\"density\":\"Information\",\"contentLayout\":\"CenteredStack\"}}}");
+            main,
+            "{\"schemaVersion\":14,\"settings\":{\"lyricsEnabled\":false,\"interfaceLanguage\":\"TraditionalChinese\",\"windowMode\":\"DynamicIsland\",\"launchAtStartup\":false}}");
 
         using var service = new SettingsPersistenceService(_directory);
         service.Initialize();
 
-        Assert.IsFalse(SettingsManager.Current.TaskbarExperience.HoverLayerEnabled);
-        Assert.AreEqual(TaskbarInformationDensity.Information, SettingsManager.Current.TaskbarExperience.Density);
-        Assert.AreEqual(TaskbarFullPanelSettings.Full, SettingsManager.Current.TaskbarExperience.FullPanel);
+        Assert.IsTrue(SettingsManager.Current.LyricsEnabled, "旧编号文件里的取值不得参与读取。");
+        Assert.AreEqual(InterfaceLanguage.System, SettingsManager.Current.InterfaceLanguage);
+        Assert.AreEqual(WindowMode.Taskbar, SettingsManager.Current.WindowMode);
+        Assert.IsTrue(SettingsManager.Current.LaunchAtStartup);
+
+        var quarantined = Directory.GetFiles(_directory, "settings.json.unsupported-*");
+        Assert.AreEqual(1, quarantined.Length, "旧文件必须改名留档，而不是被删除。");
+        StringAssert.Contains(
+            File.ReadAllText(quarantined[0]),
+            "\"schemaVersion\":14",
+            "留档文件仍应是用户原来那份内容，可以手工找回。");
+        StringAssert.Contains(File.ReadAllText(main), $"\"schemaVersion\": {SettingsPersistenceService.CurrentSchemaVersion}");
+    }
+
+    [TestMethod]
+    public void StaleBackupInAnOlderSchemaIsNotUsed()
+    {
+        Directory.CreateDirectory(_directory);
+        var main = Path.Combine(_directory, "settings.json");
+        File.WriteAllText(main, "not-json");
+        File.WriteAllText(main + ".bak", "{\"schemaVersion\":14,\"settings\":{\"lyricsEnabled\":false}}");
+        using var service = new SettingsPersistenceService(_directory);
+        service.Initialize();
+
+        Assert.IsTrue(
+            SettingsManager.Current.LyricsEnabled,
+            "编号不同的备份不得顶上主文件：宁可回到默认值，也不要读一份读不准的旧设置。");
+        Assert.AreEqual(1, Directory.GetFiles(_directory, "settings.json.invalid-*").Length);
+    }
+
+    /// <summary>
+    /// 已经是当前编号的文件在加载后**不被重写**：每次启动都重写用户文件，除了一次多余的磁盘写入，还会把文件里
+    /// 那些无关的空白与顺序抹掉，让"用户自己改过什么"再也看不出来。
+    /// A file that already carries the current number is **not rewritten** on load: rewriting the user's file on every start costs a
+    /// needless write and erases the incidental spacing and ordering that show what the user changed by hand.
+    /// </summary>
+    [TestMethod]
+    public void CurrentSchemaFileIsLeftUntouchedOnLoad()
+    {
+        Directory.CreateDirectory(_directory);
+        var main = Path.Combine(_directory, "settings.json");
+        var original = $"{{\"schemaVersion\":{SettingsPersistenceService.CurrentSchemaVersion},   \"settings\":{{\"lyricsEnabled\":false}}}}";
+        File.WriteAllText(main, original);
+
+        using var service = new SettingsPersistenceService(_directory);
+        service.Initialize();
+
+        Assert.IsFalse(SettingsManager.Current.LyricsEnabled, "当前编号的文件必须被读取。");
+        Assert.AreEqual(original, File.ReadAllText(main), "当前编号的文件不得在加载时被重写。");
     }
 
     [TestMethod]
@@ -293,33 +353,12 @@ public sealed class SettingsPersistenceServiceTests
     }
 
     [TestMethod]
-    public void Schema3AllHiddenFullPanelValueFallsBackToCompactPreset()
+    public void InvalidNotificationValuesNormalizeToSafeDefaults()
     {
         Directory.CreateDirectory(_directory);
         File.WriteAllText(
             Path.Combine(_directory, "settings.json"),
-            "{\"schemaVersion\":3,\"settings\":{\"taskbarBarSelectedMonitor\":1,\"taskbarExperience\":{\"hoverLayerEnabled\":true,\"fullLayerEnabled\":true,\"density\":\"Balanced\",\"contentLayout\":\"AdaptiveStack\",\"fullPanel\":{\"mediaInfoVisible\":false,\"mediaControlsVisible\":false,\"audioControlsVisible\":false,\"performanceVisible\":false}}}}");
-
-        using var service = new SettingsPersistenceService(_directory);
-        service.Initialize();
-
-        Assert.AreEqual(TaskbarFullPanelSettings.Compact, SettingsManager.Current.TaskbarExperience.FullPanel);
-        Assert.AreEqual(TrackChangeNotificationSettings.Default, SettingsManager.Current.TrackChangeNotification);
-        Assert.AreEqual(1, service.LegacyTaskbarMonitorIndex);
-        Assert.AreEqual(
-            "DISPLAY2",
-            DisplayTargetPolicy.ResolveLegacyDeviceId(
-                [Monitor("DISPLAY1", true), Monitor("DISPLAY2", false)],
-                service.LegacyTaskbarMonitorIndex!.Value));
-    }
-
-    [TestMethod]
-    public void Schema4InvalidNotificationValuesNormalizeToSafeDefaults()
-    {
-        Directory.CreateDirectory(_directory);
-        File.WriteAllText(
-            Path.Combine(_directory, "settings.json"),
-            "{\"schemaVersion\":4,\"settings\":{\"trackChangeNotification\":{\"enabled\":true,\"showWhenFullscreen\":false,\"durationMilliseconds\":60000,\"position\":\"bad\",\"targetMode\":99,\"fixedMonitorDeviceId\":\"  DISPLAY2  \"}}}");
+            $"{{\"schemaVersion\":{SettingsPersistenceService.CurrentSchemaVersion},\"settings\":{{\"trackChangeNotification\":{{\"enabled\":true,\"showWhenFullscreen\":false,\"durationMilliseconds\":60000,\"position\":\"bad\",\"targetMode\":99,\"fixedMonitorDeviceId\":\"  DISPLAY2  \"}}}}}}");
 
         using var service = new SettingsPersistenceService(_directory);
         service.Initialize();
@@ -329,18 +368,15 @@ public sealed class SettingsPersistenceServiceTests
         Assert.AreEqual(TrackChangeNotificationPosition.BottomLeft, SettingsManager.Current.TrackChangeNotification.Position);
         Assert.AreEqual(NotificationTargetMode.Fixed, SettingsManager.Current.TrackChangeNotification.TargetMode);
         Assert.AreEqual("DISPLAY2", SettingsManager.Current.TrackChangeNotification.FixedMonitorDeviceId);
-        Assert.AreEqual(TaskbarLengthMode.FollowContent, SettingsManager.Current.TaskbarExperience.LengthMode);
-        Assert.AreEqual(TaskbarExperienceSettings.Default.FixedLengthDip, SettingsManager.Current.TaskbarExperience.FixedLengthDip);
-        StringAssert.Contains(File.ReadAllText(service.SettingsPath), $"\"schemaVersion\": {SettingsPersistenceService.CurrentSchemaVersion}");
     }
 
     [TestMethod]
-    public void Schema4PartialNotificationUsesDocumentedDefaults()
+    public void PartialSectionsUseDocumentedDefaults()
     {
         Directory.CreateDirectory(_directory);
         File.WriteAllText(
             Path.Combine(_directory, "settings.json"),
-            "{\"schemaVersion\":4,\"settings\":{\"trackChangeNotification\":{\"enabled\":true}}}");
+            $"{{\"schemaVersion\":{SettingsPersistenceService.CurrentSchemaVersion},\"settings\":{{\"trackChangeNotification\":{{\"enabled\":true}}}}}}");
 
         using var service = new SettingsPersistenceService(_directory);
         service.Initialize();
@@ -350,21 +386,26 @@ public sealed class SettingsPersistenceServiceTests
         Assert.AreEqual(1000, SettingsManager.Current.TrackChangeNotification.DurationMilliseconds);
         Assert.AreEqual(TrackChangeNotificationPosition.BottomLeft, SettingsManager.Current.TrackChangeNotification.Position);
         Assert.AreEqual(NotificationTargetMode.Fixed, SettingsManager.Current.TrackChangeNotification.TargetMode);
+        Assert.AreEqual(TaskbarLengthMode.FollowContent, SettingsManager.Current.TaskbarExperience.LengthMode);
+        Assert.AreEqual(TaskbarExperienceSettings.Default.FixedLengthDip, SettingsManager.Current.TaskbarExperience.FixedLengthDip);
     }
 
     [TestMethod]
-    public void Schema5MissingLengthFieldsUseDocumentedDefaults()
+    public void MissingSectionsTakeTheirDeclaredDefaultsInsteadOfBeingInferredAsOff()
     {
         Directory.CreateDirectory(_directory);
         File.WriteAllText(
             Path.Combine(_directory, "settings.json"),
-            "{\"schemaVersion\":5,\"settings\":{\"taskbarExperience\":{\"hoverLayerEnabled\":true,\"fullLayerEnabled\":true,\"density\":\"Balanced\",\"contentLayout\":\"AdaptiveStack\",\"fullPanel\":{\"mediaInfoVisible\":true,\"mediaControlsVisible\":true}}}}}");
+            $"{{\"schemaVersion\":{SettingsPersistenceService.CurrentSchemaVersion},\"settings\":{{\"taskbarExperience\":{{\"density\":\"Information\"}}}}}}");
 
         using var service = new SettingsPersistenceService(_directory);
         service.Initialize();
 
-        Assert.AreEqual(TaskbarLengthMode.FollowContent, SettingsManager.Current.TaskbarExperience.LengthMode);
-        Assert.AreEqual(TaskbarExperienceSettings.Default.FixedLengthDip, SettingsManager.Current.TaskbarExperience.FixedLengthDip);
+        Assert.AreEqual(TaskbarInformationDensity.Information, SettingsManager.Current.TaskbarExperience.Density);
+        Assert.IsTrue(
+            SettingsManager.Current.Update.AutoCheckEnabled,
+            "文件里没有更新设置时必须取默认值（自动检查开启），而不是被推断成关闭。");
+        Assert.AreEqual(UpdateSettings.Default, SettingsManager.Current.Update);
         Assert.AreEqual(SmtcSourceFilterSettings.Default, SettingsManager.Current.SmtcSourceFilter);
         Assert.AreEqual(SpectrumComponentSettings.Default, SettingsManager.Current.SpectrumComponent);
         CollectionAssert.AreEqual(
@@ -373,161 +414,46 @@ public sealed class SettingsPersistenceServiceTests
         Assert.AreEqual(2500, SettingsManager.Current.PerformanceComponent.RefreshIntervalMilliseconds);
     }
 
-    [TestMethod]
-    public void Schema6MigratesToTaskbarBindingsAndSeparatesMetadataAlignment()
-    {
-        Directory.CreateDirectory(_directory);
-        File.WriteAllText(
-            Path.Combine(_directory, "settings.json"),
-            """
-            {"schemaVersion":6,"settings":{"windowMode":"DynamicIsland","taskbarExperience":{"hoverLayerEnabled":true,"fullLayerEnabled":true,"density":"Balanced","contentLayout":"CenteredStack","fullPanel":{"mediaInfoVisible":true,"mediaControlsVisible":true}}}}
-            """);
-
-        using var service = new SettingsPersistenceService(_directory);
-        service.Initialize();
-
-        Assert.AreEqual(WindowMode.Taskbar, SettingsManager.Current.WindowMode);
-        Assert.AreEqual(GlobalInteractionSettings.Default, SettingsManager.Current.Interaction);
-        Assert.AreEqual(TaskbarContentLayout.AdaptiveStack, SettingsManager.Current.TaskbarExperience.ContentLayout);
-        Assert.AreEqual(TaskbarMediaTextAlignment.Center, SettingsManager.Current.TaskbarExperience.MediaTextAlignment);
-        Assert.AreEqual(TaskbarHoverControlsSettings.Default, SettingsManager.Current.TaskbarExperience.HoverControls);
-    }
-
-    [TestMethod]
-    public void Schema7KeepsPreviousTextSizesInsteadOfAdoptingTheNewFontScale()
-    {
-        Directory.CreateDirectory(_directory);
-        File.WriteAllText(
-            Path.Combine(_directory, "settings.json"),
-            """
-            {"schemaVersion":7,"settings":{"taskbarExperience":{"hoverLayerEnabled":true,"fullLayerEnabled":true,"density":"Information","contentLayout":"AdaptiveStack","fullPanel":{"mediaInfoVisible":true,"mediaControlsVisible":true},"lengthMode":"Fixed","fixedLengthDip":420}}}
-            """);
-
-        using var service = new SettingsPersistenceService(_directory);
-        service.Initialize();
-
-        Assert.AreEqual(TaskbarExperienceSettings.Default.MediaFontSizePercent,
-            SettingsManager.Current.TaskbarExperience.MediaFontSizePercent);
-        Assert.AreEqual(TaskbarInformationDensity.Information, SettingsManager.Current.TaskbarExperience.Density);
-        Assert.AreEqual(TaskbarLengthMode.Fixed, SettingsManager.Current.TaskbarExperience.LengthMode);
-        Assert.AreEqual(420, SettingsManager.Current.TaskbarExperience.FixedLengthDip);
-        StringAssert.Contains(File.ReadAllText(service.SettingsPath), $"\"schemaVersion\": {SettingsPersistenceService.CurrentSchemaVersion}");
-    }
-
-    [TestMethod]
-    public void Schema8KeepsItsOwnValuesAndReceivesTheUpdateDefaults()
-    {
-        Directory.CreateDirectory(_directory);
-        File.WriteAllText(
-            Path.Combine(_directory, "settings.json"),
-            """
-            {"schemaVersion":8,"settings":{"taskbarExperience":{"hoverLayerEnabled":true,"fullLayerEnabled":true,"density":"Balanced","contentLayout":"AdaptiveStack","fullPanel":{"mediaInfoVisible":true,"mediaControlsVisible":true},"mediaFontSizePercent":125}}}
-            """);
-
-        using var service = new SettingsPersistenceService(_directory);
-        service.Initialize();
-
-        Assert.AreEqual(
-            125,
-            SettingsManager.Current.TaskbarExperience.MediaFontSizePercent,
-            "新增更新设置的迁移不得覆盖 schema 8 已有的字号。");
-        Assert.AreEqual(
-            UpdateSettings.Default,
-            SettingsManager.Current.Update,
-            "schema 8 的文件没有更新设置，必须取默认值，而不是被推断成关闭。");
-        Assert.IsTrue(SettingsManager.Current.Update.AutoCheckEnabled);
-        StringAssert.Contains(File.ReadAllText(service.SettingsPath), $"\"schemaVersion\": {SettingsPersistenceService.CurrentSchemaVersion}");
-    }
-
     /// <summary>
-    /// schema 9 的文件里，频谱柱数可能低于新的下限、采样间隔可能落在旧的 250–60000 毫秒区间上，
-    /// 而「点击性能组件时打开任务管理器」在旧版本中因为点击被拖动逻辑吞掉而从未真正生效过。
-    /// 迁移必须把柱数抬到 9、把间隔吸附并夹取到 0.5–5 秒，并把该开关当作新默认值处理。
-    /// A schema 9 file may hold a bar count below the new minimum and a sampling interval anywhere in the old
-    /// 250–60000 ms range, and its "open Task Manager on click" switch never actually worked because the click was
-    /// swallowed by the drag logic. The migration must lift the bar count to nine, snap and clamp the interval into
-    /// 0.5–5 seconds, and treat that switch as the new default.
+    /// 偏离网格的取值由各自的 Normalize 吸附与夹取，与文件编号无关；未定义的枚举值回落到柱状图。
+    /// Off-grid values are snapped and clamped by their own Normalize regardless of the file's number, and an undefined enum value
+    /// falls back to bars.
     /// </summary>
     [TestMethod]
-    public void Schema9MigrationWidensSpectrumBarsAndResetsTheTaskManagerClickDefault()
+    public void OffGridSpectrumAndFontWeightValuesAreSnappedAndClamped()
     {
         Directory.CreateDirectory(_directory);
         File.WriteAllText(
             Path.Combine(_directory, "settings.json"),
-            """
-            {"schemaVersion":9,"settings":{"spectrumComponent":{"bandCount":3,"refreshRateHz":25,"sensitivityPercent":180},"performanceComponent":{"metrics":["SystemCpu"],"refreshIntervalMilliseconds":250,"openTaskManagerOnClick":false}}}
-            """);
+            $"{{\"schemaVersion\":{SettingsPersistenceService.CurrentSchemaVersion},\"settings\":{{\"appearance\":{{\"fontWeight\":350}},\"spectrumComponent\":{{\"bandCount\":3,\"refreshRateHz\":25,\"sensitivityPercent\":7}},\"performanceComponent\":{{\"metrics\":[\"SystemCpu\"],\"refreshIntervalMilliseconds\":250}}}}}}");
 
         using var service = new SettingsPersistenceService(_directory);
         service.Initialize();
 
         var spectrum = SettingsManager.Current.SpectrumComponent;
-        Assert.AreEqual(SpectrumComponentSettings.MinimumBandCount, spectrum.BandCount);
-        Assert.AreEqual(SpectrumStyle.Bars, spectrum.Style, "旧文件没有样式字段，必须保持柱状图观感。");
+        Assert.AreEqual(SpectrumComponentSettings.MinimumBandCount, spectrum.BandCount, "柱数 3 必须抬到下限 9。");
         Assert.AreEqual(25, spectrum.RefreshRateHz);
-        Assert.AreEqual(180, spectrum.SensitivityPercent);
-        Assert.AreEqual(500, SettingsManager.Current.PerformanceComponent.RefreshIntervalMilliseconds);
-        Assert.IsTrue(
-            SettingsManager.Current.PerformanceComponent.OpenTaskManagerOnClick,
-            "该开关在旧版本里从未生效，旧的 false 不代表用户意图，必须取新的默认值。");
-        StringAssert.Contains(File.ReadAllText(service.SettingsPath), $"\"schemaVersion\": {SettingsPersistenceService.CurrentSchemaVersion}");
-    }
-
-    /// <summary>
-    /// schema 10 的文件没有「完整层入口」字段：迁移必须显式写回开启，保持细杠与悬停按钮都在的既有行为；
-    /// 同一批次里字体粗细改用九个真实字重、灵敏度按 10 步进，旧文件里的非网格取值由各自的 Normalize 吸附。
-    /// A schema 10 file has no full-layer entry field: the migration must write it back as enabled so the thin bar and the hover
-    /// button stay present. In the same batch the font weight moved onto the nine real weights and the sensitivity onto a ten-step
-    /// grid, so off-grid values from an older file are snapped by their own Normalize.
-    /// </summary>
-    [TestMethod]
-    public void Schema10MigrationKeepsTheFullPanelEntryAndSnapsWeightAndSensitivity()
-    {
-        Directory.CreateDirectory(_directory);
-        File.WriteAllText(
-            Path.Combine(_directory, "settings.json"),
-            """
-            {"schemaVersion":10,"settings":{"appearance":{"fontWeight":350},"spectrumComponent":{"bandCount":12,"refreshRateHz":20,"sensitivityPercent":7}}}
-            """);
-
-        using var service = new SettingsPersistenceService(_directory);
-        service.Initialize();
-
-        Assert.IsTrue(
-            SettingsManager.Current.TaskbarExperience.FullPanelEntryVisible,
-            "旧文件没有入口开关，迁移后必须仍然显示完整层入口。");
+        Assert.AreEqual(10, spectrum.SensitivityPercent, "灵敏度 7 必须抬到步进下限 10。");
+        Assert.AreEqual(500, SettingsManager.Current.PerformanceComponent.RefreshIntervalMilliseconds, "250 毫秒必须吸附到 0.5 秒网格。");
         Assert.AreEqual(400, SettingsManager.Current.Appearance.FontWeight, "350 必须吸附到最近的真实字重 400。");
-        Assert.AreEqual(10, SettingsManager.Current.SpectrumComponent.SensitivityPercent, "7 必须抬到步进下限 10。");
-        Assert.AreEqual(12, SettingsManager.Current.SpectrumComponent.BandCount);
-        StringAssert.Contains(File.ReadAllText(service.SettingsPath), $"\"schemaVersion\": {SettingsPersistenceService.CurrentSchemaVersion}");
+        Assert.AreEqual(
+            SpectrumStyle.Bars,
+            (new SpectrumComponentSettings(12, 20, 100) { Style = (SpectrumStyle)99 }).Normalize().Style,
+            "未定义的样式值回落到柱状图。");
     }
 
     /// <summary>
-    /// schema 11 的文件没有「开机自动启动」字段：默认开启是产品决定，迁移必须显式写回 true，
-    /// 而不是依赖"缺字段恰好等于声明处的默认值"。同时确认「我的默认设置」快照能保存、读回与清除。
-    /// A schema 11 file has no run-at-startup field: "on by default" is a product decision, so the migration writes true explicitly
-    /// instead of resting on a missing field equalling the declared default. The same test covers saving, reading back, and clearing
-    /// the user-defaults snapshot.
+    /// 「我的默认设置」快照保存、读回与清除；编号不同的快照与设置文件一样不被读取，且改名留档而不是删除。
+    /// The user-defaults snapshot saves, reads back, and clears; a snapshot with a different number is not read, exactly like the
+    /// settings file, and it is renamed rather than deleted.
     /// </summary>
     [TestMethod]
-    public void Schema11MigrationEnablesRunAtStartupAndUserDefaultsSurviveARoundTrip()
+    public void UserDefaultsSnapshotRoundTripsAndAnOlderSchemaIsIgnored()
     {
         Directory.CreateDirectory(_directory);
-        File.WriteAllText(
-            Path.Combine(_directory, "settings.json"),
-            """
-            {"schemaVersion":11,"settings":{"launchAtStartup":false,"spectrumComponent":{"bandCount":12,"refreshRateHz":20,"sensitivityPercent":150}}}
-            """);
-
         using var service = new SettingsPersistenceService(_directory);
         service.Initialize();
 
-        Assert.IsTrue(
-            SettingsManager.Current.LaunchAtStartup,
-            "旧文件里没有开机自启字段，迁移后必须取新的默认值（开启）。");
-
-        // 保存当前设置作为默认值：快照写入独立文件，并从磁盘读回时仍然可用。
-        // Saving the current settings as the defaults writes its own file, and reading it back from disk still works.
         SettingsManager.Current.TaskbarExperience = SettingsManager.Current.TaskbarExperience with { SpectrumVisible = false };
         Assert.IsNull(service.SaveCurrentAsUserDefaults());
         Assert.IsNotNull(SettingsManager.UserDefaults);
@@ -542,6 +468,12 @@ public sealed class SettingsPersistenceServiceTests
             SettingsManager.Current.TaskbarExperience.SpectrumVisible,
             "重置必须回到用户保存的默认设置。");
 
+        // 旧编号的快照：不读取、改名留档，页面据此显示"未保存"。
+        var snapshotPath = Path.Combine(_directory, "user-defaults.json");
+        File.WriteAllText(snapshotPath, "{\"schemaVersion\":14,\"settings\":{\"lyricsEnabled\":false}}");
+        Assert.IsNull(service.LoadUserDefaults(), "旧编号的快照不得被读成当前默认值。");
+        Assert.AreEqual(1, Directory.GetFiles(_directory, "user-defaults.json.unsupported-*").Length);
+
         Assert.IsNull(service.ClearUserDefaults());
         Assert.IsNull(SettingsManager.UserDefaults);
         SettingsManager.ResetDisplayModes();
@@ -549,39 +481,6 @@ public sealed class SettingsPersistenceServiceTests
             SettingsManager.Current.TaskbarExperience.SpectrumVisible,
             "清除快照之后重置必须回到程序内置默认值。");
     }
-
-    /// <summary>
-    /// schema 12 的文件没有界面语言字段：迁移必须显式写成「跟随系统」，而不是依赖"缺字段恰好等于枚举值 0"
-    /// 这种巧合，也不能因为默认值恰好相同就把用户固定在某一种具体语言上。同一条测试顺带确认迁移链的第二半：
-    /// schema 12 已经写入的字段（这里是关掉的开机自启）必须原样保留，不能被更早的迁移规则改写。
-    /// A schema 12 file has no interface-language field: the migration writes "follow the system" explicitly instead of resting
-    /// on the coincidence that a missing field reads as enum value zero, and it must not pin the user to a concrete language just
-    /// because that default happens to match. The same test covers the other half of the chain: a field a schema 12 file already
-    /// carries — here run-at-startup turned off — has to survive untouched by the earlier migration rules.
-    /// </summary>
-    [TestMethod]
-    public void Schema12MigrationEnablesFollowTheSystemWithoutPinningALanguage()
-    {
-        Directory.CreateDirectory(_directory);
-        File.WriteAllText(
-            Path.Combine(_directory, "settings.json"),
-            """
-            {"schemaVersion":12,"settings":{"launchAtStartup":false}}
-            """);
-
-        using var service = new SettingsPersistenceService(_directory);
-        service.Initialize();
-
-        Assert.AreEqual(
-            InterfaceLanguage.System,
-            SettingsManager.Current.InterfaceLanguage,
-            "旧文件里没有界面语言字段，迁移后必须是「跟随系统」。");
-        Assert.IsFalse(
-            SettingsManager.Current.LaunchAtStartup,
-            "schema 12 已经写入的开机自启取值必须保留，不能被 schema 11 之前的迁移规则改写。");
-        StringAssert.Contains(File.ReadAllText(service.SettingsPath), $"\"schemaVersion\": {SettingsPersistenceService.CurrentSchemaVersion}");
-    }
-
     [TestMethod]
     public void UnimplementedDisplayModeSelectionDoesNotChangeRuntimeModeOrTaskbarSettings()
     {

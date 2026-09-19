@@ -262,26 +262,12 @@ namespace AFMediaBar
             var startupFailure = startupRegistration.Apply(SettingsManager.Current.LaunchAtStartup);
             if (startupFailure is not null)
                 Debug.WriteLine($"[App] Run-at-startup registration failed: {startupFailure}");
+            // 目标显示器直接按设备标识解析：设置文件只读取当前 schema，旧的"排序索引"不会再出现在内存里，
+            // 因此这里不需要（也没有）等待显示器拓扑就绪再迁移一次的启动路径。
+            // The target display resolves straight from its device identifier: the settings file only reads the current schema, so a
+            // legacy sorted index never reaches memory and there is no startup-time migration waiting for the monitor topology.
             var displayMonitorService = Services.GetRequiredService<IDisplayMonitorService>();
-            EventHandler? legacyMigrationHandler = null;
-            if (settingsPersistenceService.LegacyTaskbarMonitorIndex is { } legacyMonitorIndex)
-            {
-                legacyMigrationHandler = (_, _) =>
-                {
-                    if (TryMigrateLegacyTaskbarMonitor(displayMonitorService, legacyMonitorIndex))
-                        displayMonitorService.MonitorsChanged -= legacyMigrationHandler;
-                };
-                displayMonitorService.MonitorsChanged += legacyMigrationHandler;
-            }
-
             displayMonitorService.Refresh();
-            if (legacyMigrationHandler is not null &&
-                TryMigrateLegacyTaskbarMonitor(
-                    displayMonitorService,
-                    settingsPersistenceService.LegacyTaskbarMonitorIndex!.Value))
-            {
-                displayMonitorService.MonitorsChanged -= legacyMigrationHandler;
-            }
 
             // 更新在"这一次启动之前"安装。
             //
@@ -334,23 +320,6 @@ namespace AFMediaBar
             _debugLyricsDiagnostics = new DebugLyricsDiagnostics();
             Services.GetRequiredService<MediaSessionService>().SnapshotChanged += _debugLyricsDiagnostics.OnSnapshotChanged;
 #endif
-        }
-
-        private static bool TryMigrateLegacyTaskbarMonitor(
-            IDisplayMonitorService displayMonitorService,
-            int legacyMonitorIndex)
-        {
-            if (!string.IsNullOrWhiteSpace(SettingsManager.Current.TaskbarTargetMonitorDeviceId))
-                return true;
-
-            var monitors = displayMonitorService.GetMonitors();
-            if (monitors.Count == 0)
-                return false;
-
-            var migratedDeviceId = DisplayTargetPolicy.ResolveLegacyDeviceId(monitors, legacyMonitorIndex);
-            if (!string.IsNullOrWhiteSpace(migratedDeviceId))
-                SettingsManager.Current.TaskbarTargetMonitorDeviceId = migratedDeviceId;
-            return true;
         }
 
         /// <summary>

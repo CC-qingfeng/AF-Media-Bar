@@ -174,6 +174,16 @@
                 -->
                 <components:SettingsGroup Header="{DynamicResource Loc.Common.Group.Support}" Icon="{ui:SymbolIcon Heart24}">
                     <StackPanel>
+                        <!--
+                            赞助门槛写在这里而不是只写进说明文档：收款码就在下方，用户正是在看到收款码的同一屏里决定要不要在备注里留 id 的。
+                            The sponsorship threshold sits here rather than only in the documentation: the payment codes are right below, and this is the
+                            very screen on which the user decides whether to leave an ID in the note.
+                        -->
+                        <components:SettingsCallout
+                            Margin="0,0,0,12"
+                            IsAccent="True"
+                            Symbol="Info24"
+                            Text="{DynamicResource Loc.About.Support.SponsorNote}" />
                         <ItemsControl ItemsSource="{Binding ViewModel.SupportEntries}">
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate>
