@@ -85,6 +85,23 @@ public static class WheelTooltipPolicy
         Translations.Get(delta > 0 ? "Common.PreviousTrack" : "Common.NextTrack");
 
     /// <summary>
+    /// 无媒体时在音符上滚动快速启动列表的提示：显示当前候选，与切换输出设备的提示同一种形式。
+    ///
+    /// 与设备切换一样，用户需要的是"滚一下就看到现在是哪一项"，而不是滚完之后去菜单里核对；候选名字由宿主给出，
+    /// 因此这里只负责拼文案，不参与列表状态。
+    /// The tooltip for wheeling the quick-launch list over the note while there is no media: it shows the current candidate, in the same shape
+    /// as the output-device tooltip.
+    ///
+    /// As with device switching, what the user needs is "scroll once and see which entry is selected now" rather than checking the menu
+    /// afterwards; the host supplies the candidate name, so this only composes the text and holds no list state.
+    /// </summary>
+    /// <param name="displayName">当前候选的显示名。/ Display name of the current candidate.</param>
+    public static string BuildQuickLaunchPreview(string? displayName) =>
+        string.IsNullOrWhiteSpace(displayName)
+            ? Translations.Get("Panel.QuickLaunch.Title")
+            : Translations.Format("Panel.QuickLaunch.Preview", displayName.Trim());
+
+    /// <summary>
     /// 在提示后面附上当前值。悬停时用户既要知道手势会做什么，也要知道它此刻的值，
     /// 例如「普通滚轮：切换输出设备（当前：扬声器）」；没有可读值时只留提示。
     /// Appends the current value to a hint. While hovering the user needs both what the gesture does and where it currently stands,

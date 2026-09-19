@@ -60,6 +60,21 @@ public sealed class WheelTooltipAndStartupPolicyTests
     }
 
     /// <summary>
+    /// 无媒体时在音符上滚轮挑播放器，提示要显示当前候选的名字；没有名字时退回"快速启动"本身，
+    /// 而不是显示一个后面什么都没有的冒号或空字符串。
+    /// Wheeling over the note to pick a player while there is no media shows the current candidate's name; with no name it falls back to
+    /// "quick launch" itself instead of a dangling colon or an empty string.
+    /// </summary>
+    [TestMethod]
+    public void QuickLaunchPreviewNamesTheCandidate()
+    {
+        Assert.AreEqual("快速启动：网易云音乐", WheelTooltipPolicy.BuildQuickLaunchPreview("网易云音乐"));
+        Assert.AreEqual("快速启动：网易云音乐", WheelTooltipPolicy.BuildQuickLaunchPreview("  网易云音乐  "));
+        Assert.AreEqual("快速启动", WheelTooltipPolicy.BuildQuickLaunchPreview(null));
+        Assert.AreEqual("快速启动", WheelTooltipPolicy.BuildQuickLaunchPreview("   "));
+    }
+
+    /// <summary>
     /// 组合键判定只有一处：媒体栏与托盘各自提供输入状态，但必须得到同一个结论。
     /// The chord rule lives in one place: the media bar and the tray supply their own input state and must reach the same conclusion.
     /// </summary>

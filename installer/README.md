@@ -27,6 +27,10 @@ pwsh -NoProfile -File .\installer\build-installer.ps1 -EnsureIscc
 
 要求：Windows 10 1809 或更高、.NET 10 SDK、[Inno Setup 6](https://jrsoftware.org/isinfo.php) **6.3 或更高版本**（`ArchitecturesAllowed=x64compatible` 需要 6.3+；安装方式 `winget install --id JRSoftware.InnoSetup -e`，CI 用 `choco install innosetup`）。脚本会校验发布目录里恰好只有 `AFMediaBar.exe`；发布模式一旦退化（例如丢失 `PublishSingleFile`）就在这里失败，而不是在安装包里悄悄塞进整个运行时。
 
+**简体中文语言文件**：`ChineseSimplified.isl` 属于 Inno Setup 的"非官方语言包"，官方安装程序、winget 与 choco **都不带**它，因此 `.iss` 里不能写 `compiler:Languages\ChineseSimplified.isl`（CI 上必然报 `Couldn't open include file`）。脚本按这个顺序解析并把它作为 `/DChineseMessagesFile` 传给 ISCC：**本机 Inno 安装目录 → 仓库缓存 `installer\languages\ChineseSimplified.isl` → 从上游 `jrsoftware/issrc` 下载到该缓存目录**（raw 优先、jsDelivr 备用）。下载失败时会报错并给出放置路径，而不是继续产出一个只有英文向导的安装包。
+
+`.iss` 与脚本都必须保存为 **UTF-8 with BOM**：Inno Setup 在没有 BOM 时按 ANSI 读取，注释里的中文只是难看，但一旦中文落进会被显示的值（任务说明、自定义消息）就会在向导里变成乱码；PowerShell 5.1 对无 BOM 的 UTF-8 更是直接语法错误。仓库里有一条测试扫描所有 `.ps1` 与 `.iss` 来守住这一点。
+
 安装包的下限是 `MinVersion=10.0.17763`（Windows 10 1809）：这是**程序自身**的下限，与 README 的口径一致。注意 .NET 10 官方只支持 Windows 10 的长期服务版与企业版（1809 E、21H2 E），消费版 Windows 10 不在 .NET 支持列表内，因此这个下限表示"能装能跑"，不等同于"受 Microsoft 支持"。
 
 产物：

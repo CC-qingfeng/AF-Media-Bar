@@ -1,4 +1,4 @@
-; AF Media Bar 安装脚本 / AF Media Bar installer script
+﻿; AF Media Bar 安装脚本 / AF Media Bar installer script
 ;
 ; 构建入口：installer\build-installer.ps1（本地与 CI 共用）。
 ; 版本号必须由外部传入，避免出现"安装包版本与程序集版本不一致"的静默错误。
@@ -11,6 +11,24 @@
 
 #ifndef PublishDir
   #define PublishDir "..\artifacts\publish"
+#endif
+
+; 简体中文的语言文件由 build-installer.ps1 解析后通过 /DChineseMessagesFile 传入。
+;
+; 它**不能**写成 "compiler:Languages\ChineseSimplified.isl"：简体中文属于 Inno Setup 的"非官方语言包"，
+; 官方安装程序、winget 与 choco 安装都不带这个文件，于是 CI 上必然报
+; Couldn't open include file "...\Languages\ChineseSimplified.isl"（这个失败真实发生过）。
+; 解析顺序是：本机 Inno 安装目录 → 仓库缓存 installer\languages\ → 下载到该缓存目录。
+; 单独调用 ISCC 时用下面的默认值指向仓库缓存，因此先由脚本跑过一次即可。
+; The Simplified Chinese messages file is resolved by build-installer.ps1 and passed in as /DChineseMessagesFile.
+;
+; It must **not** be written as "compiler:Languages\ChineseSimplified.isl": Simplified Chinese lives in Inno Setup's "unofficial
+; languages" set, which neither the official installer nor winget nor choco ships, so CI inevitably fails with
+; Couldn't open include file "...\Languages\ChineseSimplified.isl" (a failure that really happened).
+; The order is: the local Inno installation, then the repository cache installer\languages\, then a download into that cache.
+; A bare ISCC invocation uses the default below, which points at the repository cache, so running the script once is enough.
+#ifndef ChineseMessagesFile
+  #define ChineseMessagesFile "languages\ChineseSimplified.isl"
 #endif
 
 #define MyAppName "AF Media Bar"
@@ -86,13 +104,14 @@ SetupLogging=yes
 ; install (the automatic update) never shows that dialog: Inno matches the system language and otherwise falls back
 ; to the first entry in this list.
 ;
-; 注意 MessagesFile 的对应关系：英文用编译器自带的 Default.isl，中文必须指向 Languages\ChineseSimplified.isl。
+; 注意 MessagesFile 的对应关系：英文用编译器自带的 Default.isl，中文必须指向简体中文的语言文件（路径见文件开头的说明）。
 ; 早期版本把简体中文也指向 Default.isl，于是"中文"向导里的所有内建文案（按钮、页面标题、任务与图标说明）
 ; 全是英文。
 ; Note which MessagesFile each language uses: English uses the compiler's own Default.isl while Chinese must point
-; at Languages\ChineseSimplified.isl. An earlier version pointed the Chinese entry at Default.isl as well, so every
-; built-in string (buttons, page titles, task and icon descriptions) came out in English inside the "Chinese" wizard.
-Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
+; at the Simplified Chinese messages file (see the note at the top of this file for its path). An earlier version pointed
+; the Chinese entry at Default.isl as well, so every built-in string (buttons, page titles, task and icon descriptions)
+; came out in English inside the "Chinese" wizard.
+Name: "chinesesimplified"; MessagesFile: "{#ChineseMessagesFile}"
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Setup]

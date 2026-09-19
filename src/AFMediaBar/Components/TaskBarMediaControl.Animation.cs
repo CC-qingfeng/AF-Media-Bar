@@ -1031,8 +1031,16 @@ public partial class TaskBarMediaControl
     private void SongImageBorder_MouseEnter(object sender, MouseEventArgs e) =>
         AnimateComponentHover(SongImageHoverOverlay, true);
 
-    private void SongImageBorder_MouseLeave(object sender, MouseEventArgs e) =>
+    private void SongImageBorder_MouseLeave(object sender, MouseEventArgs e)
+    {
         AnimateComponentHover(SongImageHoverOverlay, false);
+
+        // 快速启动提示是手动打开的（滚轮预览需要它在指针不动时也出现），因此离开音符时要显式收起，
+        // 否则它会留在屏幕上直到下一次交互。
+        // The quick-launch tooltip is opened by hand, because a wheel preview has to appear while the pointer is stationary, so it is closed
+        // explicitly when the pointer leaves; otherwise it would stay on screen until the next interaction.
+        _quickLaunchTooltip.IsOpen = false;
+    }
 
     private void TaskbarSpectrumHoverSurface_MouseEnter(object sender, MouseEventArgs e) =>
         AnimateComponentHover(TaskbarSpectrumHoverSurface, true);

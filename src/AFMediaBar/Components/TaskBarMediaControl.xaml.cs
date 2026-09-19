@@ -125,6 +125,12 @@ namespace AFMediaBar.Components
             // One tooltip instance carries the text, which is rewritten live as the gesture and its result change.
             _wheelTooltip = new ToolTip { Placement = System.Windows.Controls.Primitives.PlacementMode.Top };
             InteractionSurface.ToolTip = _wheelTooltip;
+            // 无媒体时的高频动作是"在音符上滚轮挑播放器"，因此音符也持一个自己的提示实例：只有实例固定，
+            // 内容才能在不关闭气泡的情况下改写（见 SetQuickLaunchPreview）。
+            // With no media the frequent action is "pick a player by wheeling over the note", so the note carries a tooltip instance of its own:
+            // only a fixed instance lets the content change without closing the bubble (see SetQuickLaunchPreview).
+            _quickLaunchTooltip = new ToolTip { Placement = System.Windows.Controls.Primitives.PlacementMode.Top };
+            SongImageBorder.ToolTip = _quickLaunchTooltip;
             // 进度条计时器按"当前是否处于剪枝档位"启动：窗口可能在档位已经生效时才加载出来（任务栏在屏幕关闭期间重建），
             // 那时直接 Start 会让剪枝白做。
             // The progress timer starts according to whether a prune level is in effect: the window can be loaded while the level already holds —
@@ -180,6 +186,9 @@ namespace AFMediaBar.Components
         private static readonly TimeSpan HoverHideFallbackMargin = TimeSpan.FromMilliseconds(150);
         private readonly DispatcherTimer _wheelTooltipTimer;
         private readonly ToolTip _wheelTooltip;
+
+        /// <summary>音符上的快速启动提示；与滚轮提示一样只改内容、不换实例。/ The quick-launch tooltip on the note; like the wheel tooltip its content changes while the instance stays put.</summary>
+        private readonly ToolTip _quickLaunchTooltip;
         private WheelGestureSlot? _appliedWheelSlot;
         private bool _wheelResultShown;
 
@@ -295,11 +304,49 @@ namespace AFMediaBar.Components
         /// <summary>更新音符的快速启动预览提示。 / Updates the note tooltip with the quick-launch preview.</summary>
         // 文案在指针悬停的这一刻取：控件是可复用的，拿不到依赖注入，而宿主每次悬停都会重新调用这里，
         // 因此语言变化后提示自然跟着变，不需要控件自己订阅语言事件。
+        // 提示只改**同一个 ToolTip 实例的内容**，并在这里重新打开气泡：给 SongImageBorder.ToolTip 直接赋字符串会先关掉
+        // 已经打开的气泡，而滚轮停下之后指针不会移动，于是"滚一下看候选"的提示根本不会出现（这正是"快速启动没有提示"的原因）。
+        // 实现与整条媒体栏的滚轮提示一致。
         // The text is read at the moment the pointer hovers: the control is reusable and receives no dependency injection, and
         // the host calls this again on every hover, so the tooltip follows a language change on its own without the control
         // subscribing to any language event.
-        public void SetQuickLaunchPreview(QuickLaunchEntry entry) =>
-            SongImageBorder.ToolTip = Translations.Format("Panel.QuickLaunch.Preview", entry.DisplayName);
+        // Only the **content of one ToolTip instance** changes, and the bubble is reopened here: assigning a string straight to
+        // SongImageBorder.ToolTip first closes the bubble that is already open, and since the pointer does not move after the wheel stops, the
+        // "scroll once and see the candidate" tooltip never appeared at all — which is exactly why quick launch felt like it had no tooltip.
+        // This matches the wheel tooltip used for the rest of the bar.
+        public void SetQuickLaunchPreview(QuickLaunchEntry entry)
+        {
+            var text = WheelTooltipPolicy.BuildQuickLaunchPreview(entry.DisplayName);
+            if (_quickLaunchTooltip.Content as string != text)
+            {
+                _quickLaunchTooltip.Content = text;
+            }
+
+            ReassertQuickLaunchTooltip();
+        }
+
+        /// <summary>
+        /// 指针仍在音符上时重新打开快速启动提示气泡。
+        ///
+        /// 指针不动就没有新的鼠标事件，气泡在内容改写或鼠标按下之后不会自己回来；滚轮预览因此必须每次主动重申一次。
+        /// Reopens the quick-launch bubble while the pointer is still over the note.
+        ///
+        /// A stationary pointer produces no new mouse events, so the bubble does not come back by itself after its content is rewritten or a mouse
+        /// button is pressed; a wheel preview therefore has to re-assert it on every step.
+        /// </summary>
+        private void ReassertQuickLaunchTooltip()
+        {
+            if (!SongImageBorder.IsMouseOver)
+            {
+                return;
+            }
+
+            _quickLaunchTooltip.PlacementTarget = SongImageBorder;
+            if (!_quickLaunchTooltip.IsOpen)
+            {
+                _quickLaunchTooltip.IsOpen = true;
+            }
+        }
 
         /// <summary>
         /// 刷新整条媒体栏的滚轮提示。悬停时说明当前绑定的滚轮动作，按住组合键后换成组合滚轮的动作，

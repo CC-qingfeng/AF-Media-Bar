@@ -120,12 +120,87 @@ then rerun this script (or pass -IsccPath <path to ISCC.exe>, or -EnsureIscc on 
 '@
 }
 
+function Resolve-ChineseMessagesFile {
+    <#
+    .SYNOPSIS
+    找到（必要时下载）简体中文的语言文件，并返回它的完整路径。
+    Locates the Simplified Chinese messages file — downloading it when necessary — and returns its full path.
+
+    .DESCRIPTION
+    简体中文属于 Inno Setup 的"非官方语言包"：官方安装程序、winget 与 choco 都不带它，因此把 MessagesFile 写成
+    "compiler:Languages\ChineseSimplified.isl" 在 CI 上必然失败（真实发生过）。查找顺序：
+      1. 本机 Inno Setup 安装目录（有人手工装过语言包时直接用）；
+      2. 仓库缓存 installer\languages\ChineseSimplified.isl（CI 与离线构建都能复用）；
+      3. 从上游仓库下载到该缓存目录（raw 优先、jsDelivr 备用）。
+    下载失败时抛出带明确指引的错误，而不是让 ISCC 报一句"找不到 include 文件"。
+    Simplified Chinese lives in Inno Setup's "unofficial languages" set, which neither the official installer nor winget nor
+    choco ships, so writing MessagesFile as "compiler:Languages\ChineseSimplified.isl" always fails on CI (it really happened).
+    The search order is the local Inno installation, then the repository cache installer\languages\, then a download into that
+    cache (raw first, jsDelivr as a fallback). A failed download throws an error with explicit instructions instead of letting
+    ISCC report a missing include file.
+    #>
+    param([string]$IsccPath)
+
+    $cacheDirectory = Join-Path $PSScriptRoot 'languages'
+    $cachePath = Join-Path $cacheDirectory 'ChineseSimplified.isl'
+
+    if (Test-Path -LiteralPath $cachePath) {
+        Write-Host "Chinese messages file: $cachePath (repository cache)"
+        return (Resolve-Path -LiteralPath $cachePath).Path
+    }
+
+    # 本机 Inno 安装目录里可能已有该文件（例如用户自己装过语言包）。
+    # The local Inno installation may already carry the file (a user who installed the language pack by hand).
+    $installed = Join-Path (Split-Path -Parent $IsccPath) 'Languages\ChineseSimplified.isl'
+    if (Test-Path -LiteralPath $installed) {
+        Write-Host "Chinese messages file: $installed (installed Inno Setup)"
+        return (Resolve-Path -LiteralPath $installed).Path
+    }
+
+    $sources = @(
+        'https://raw.githubusercontent.com/jrsoftware/issrc/main/Files/Languages/Unofficial/ChineseSimplified.isl'
+        'https://cdn.jsdelivr.net/gh/jrsoftware/issrc@main/Files/Languages/Unofficial/ChineseSimplified.isl'
+    )
+
+    New-Item -ItemType Directory -Force -Path $cacheDirectory | Out-Null
+    foreach ($source in $sources) {
+        try {
+            Write-Host "> downloading Chinese messages file from $source"
+            $temporary = "$cachePath.tmp"
+            Invoke-WebRequest -Uri $source -OutFile $temporary -UseBasicParsing
+            if (-not (Test-Path -LiteralPath $temporary) -or (Get-Item -LiteralPath $temporary).Length -lt 1024) {
+                throw 'the downloaded file is missing or implausibly small.'
+            }
+
+            Move-Item -LiteralPath $temporary -Destination $cachePath -Force
+            $hash = (Get-FileHash -LiteralPath $cachePath -Algorithm SHA256).Hash.ToLowerInvariant()
+            Write-Host "Chinese messages file: $cachePath (downloaded, SHA-256 $hash)"
+            return (Resolve-Path -LiteralPath $cachePath).Path
+        }
+        catch {
+            Write-Warning "Could not fetch the Chinese messages file from $source : $($_.Exception.Message)"
+        }
+    }
+
+    throw @"
+The Simplified Chinese messages file could not be located or downloaded.
+
+Installers compiled without it would show an English wizard, which is why this fails instead of continuing.
+Place the file manually at:
+  $cachePath
+and rerun this script. Either copy it from an Inno Setup installation that has the language pack
+(<Inno Setup>\Languages\ChineseSimplified.isl) or download it from:
+  https://raw.githubusercontent.com/jrsoftware/issrc/main/Files/Languages/Unofficial/ChineseSimplified.isl
+"@
+}
+
 $appVersion = Resolve-Version
 Write-Host "AF Media Bar version: $appVersion"
 
 # 先找编译器再发布：缺工具的失败应当是即时的，而不是等完整发布跑完才报错。
 # The compiler is located before publishing so a missing tool fails immediately instead of after a full publish.
 $iscc = Resolve-Iscc
+$chineseMessagesFile = Resolve-ChineseMessagesFile -IsccPath $iscc
 
 if (-not $SkipPublish) {
     if (-not $NoRestore) {
@@ -160,8 +235,8 @@ if ($publishedFiles.Count -ne 1 -or $publishedFiles[0].Name -ne $exeName) {
 Write-Host "Inno Setup compiler: $iscc"
 
 New-Item -ItemType Directory -Force -Path $outputPath | Out-Null
-Write-Host "> ISCC.exe /DMyAppVersion=$appVersion /DPublishDir=$publishPath"
-& $iscc "/DMyAppVersion=$appVersion" "/DPublishDir=$publishPath" $issPath
+Write-Host "> ISCC.exe /DMyAppVersion=$appVersion /DPublishDir=$publishPath /DChineseMessagesFile=$chineseMessagesFile"
+& $iscc "/DMyAppVersion=$appVersion" "/DPublishDir=$publishPath" "/DChineseMessagesFile=$chineseMessagesFile" $issPath
 if ($LASTEXITCODE -ne 0) {
     throw "ISCC failed with exit code $LASTEXITCODE."
 }
