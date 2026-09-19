@@ -9,7 +9,7 @@
 
   <br><br>
 
-  <img src="docs/assets/af-media-bar.png" alt="AF Media Bar" width="160" height="160">
+  <img src="src\AFMediaBar\Assets\icon_dark.png" alt="AF Media Bar" width="160" height="160">
 
   <h1>AF Media Bar</h1>
 
