@@ -64,6 +64,36 @@ public sealed class TaskbarOccupiedAreaServiceTests
     }
 
     [TestMethod]
+    public void CompletedResultsRemainIndependentForTwoTaskbars()
+    {
+        var probe = new FakeTaskbarOccupiedAreaProbe();
+        var service = new TaskbarOccupiedAreaService(probe);
+        var firstRect = CreateRect(0, 0, 1000, 48);
+        var secondRect = CreateRect(1000, 0, 2200, 48);
+
+        service.GetSafePrimaryRanges((IntPtr)1, firstRect, LayoutOrientation.Horizontal, 1, 20);
+        probe.SucceedNext([new TaskbarPrimaryRange(100, 800)]);
+        service.GetSafePrimaryRanges((IntPtr)2, secondRect, LayoutOrientation.Horizontal, 1.5, 30);
+        probe.SucceedNext([new TaskbarPrimaryRange(200, 900)]);
+
+        var first = service.GetSafePrimaryRanges((IntPtr)1, firstRect, LayoutOrientation.Horizontal, 1, 20);
+        var second = service.GetSafePrimaryRanges((IntPtr)2, secondRect, LayoutOrientation.Horizontal, 1.5, 30);
+        Assert.AreEqual(new TaskbarPrimaryRange(100, 800), first.Single());
+        Assert.AreEqual(new TaskbarPrimaryRange(200, 900), second.Single());
+        Assert.AreEqual(2, probe.StartCount);
+    }
+
+    [TestMethod]
+    public void OnlyShellOwnedOverlaysCanBecomeTaskbarOccupiedAreas()
+    {
+        Assert.IsTrue(TaskbarOverlayOwnerPolicy.IsShellOwned("explorer"));
+        Assert.IsTrue(TaskbarOverlayOwnerPolicy.IsShellOwned("SearchHost.exe"));
+        Assert.IsFalse(TaskbarOverlayOwnerPolicy.IsShellOwned("SnippingTool"));
+        Assert.IsFalse(TaskbarOverlayOwnerPolicy.IsShellOwned("ShareX.exe"));
+        Assert.IsFalse(TaskbarOverlayOwnerPolicy.IsShellOwned(null));
+    }
+
+    [TestMethod]
     public void InProgressProbePreventsConcurrentPlatformProbe()
     {
         var probe = new FakeTaskbarOccupiedAreaProbe();

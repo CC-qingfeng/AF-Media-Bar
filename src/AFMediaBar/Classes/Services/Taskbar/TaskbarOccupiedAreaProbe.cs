@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Diagnostics;
 using System.Windows.Automation;
 using AFMediaBar.Classes.Abstractions;
 using AFMediaBar.Classes.Interop;
@@ -185,6 +186,17 @@ public sealed class TaskbarOccupiedAreaProbe : ITaskbarOccupiedAreaProbe
 
             if (TaskbarOverlayRangePolicy.TryResolve(windowRect, taskbarRect, orientation, out var range, out var rejection))
             {
+                // 几何只能说明“有一个窄窗口盖在任务栏带上”，无法区分 Windows 10 搜索框与截图工具的浮动工具条。
+                // 只有 Windows Shell 自己的体验进程可以进入占用区；普通应用覆盖任务栏时不应让媒体栏折叠或跳位。
+                // Geometry only says that a narrow window overlaps the taskbar band; it cannot distinguish the Windows 10 search box
+                // from a capture tool's floating toolbar. Only Windows Shell experience processes may become occupancy, because an
+                // ordinary application covering the taskbar must not collapse or move the media bar.
+                if (!TaskbarOverlayOwnerPolicy.IsShellOwned(TryGetProcessName(processId)))
+                {
+                    rejected.Add((candidate, TaskbarOverlayRejection.NotShellOwned));
+                    return;
+                }
+
                 accepted.Add((candidate, range));
                 occupied.Add(range);
                 return;
@@ -293,7 +305,32 @@ public sealed class TaskbarOccupiedAreaProbe : ITaskbarOccupiedAreaProbe
         _ = GetClassName(handle, className, className.Capacity);
         _ = GetWindowThreadProcessId(handle, out var processId);
         GetWindowRect(handle, out var rect);
-        return $"{className} pid={processId} rect=({rect.Left},{rect.Top})-({rect.Right},{rect.Bottom})";
+        var processName = TryGetProcessName(processId) ?? "?";
+        return $"{className} process={processName} pid={processId} rect=({rect.Left},{rect.Top})-({rect.Right},{rect.Bottom})";
+    }
+
+    private static string? TryGetProcessName(int processId)
+    {
+        if (processId <= 0)
+            return null;
+
+        try
+        {
+            using var process = Process.GetProcessById(processId);
+            return process.ProcessName;
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            return null;
+        }
     }
 
     private static bool IsDescendantOf(IntPtr handle, IntPtr ancestor)
