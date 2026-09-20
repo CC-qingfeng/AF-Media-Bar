@@ -70,11 +70,6 @@ public partial class TaskbarWindow : Window
     private IntPtr _windowHandle;
     private bool _positionUpdateInProgress;
 
-    /// <summary>
-    /// 上一次"宿主窗口与任务栏矩形不一致"写进日志时的任务栏矩形指纹（内容去重）。
-    /// Signature of the taskbar rectangle the last "host rect corrected" line was written for, so identical occurrences are not repeated.
-    /// </summary>
-    private string? _loggedHostRectSignature;
     private bool _isClosing;
     private bool _isEnvironmentSuspended;
     private bool _isDetachedFromTaskbar;
@@ -89,6 +84,7 @@ public partial class TaskbarWindow : Window
     private bool _isTaskManagerClickPending;
     private DateTime _suppressContextMenuUntilUtc;
     private DateTime _skipOccupiedAreaProbeUntilUtc;
+    private TaskbarSafeRangeSnapshot? _lastStableSafeRange;
     private WindowMode? _appliedWindowMode;
     private LayoutOrientation? _appliedOrientation;
     private double _appliedLengthScalePercent = double.NaN;
@@ -195,7 +191,9 @@ public partial class TaskbarWindow : Window
         _timer.Tick += PositionTimer_Tick;
         _timer.Start();
 
-        _taskbarMotionSettleTimer = new DispatcherTimer { Interval = TaskbarMotionSampleInterval };
+        // Shell 展开期间 Background 优先级可能被布局与合成工作饿住，表现成任务栏已经出现而媒体栏迟到近一秒。
+        // Input priority keeps the bounded stability probe responsive without running it at re-entrant Send priority.
+        _taskbarMotionSettleTimer = new DispatcherTimer(DispatcherPriority.Input) { Interval = TaskbarMotionSampleInterval };
         _taskbarMotionSettleTimer.Tick += (_, _) => ObserveTaskbarMotion();
         _taskbarHiddenTrimTimer = new DispatcherTimer { Interval = TaskbarHiddenTrimDelay };
         _taskbarHiddenTrimTimer.Tick += (_, _) =>
@@ -353,10 +351,10 @@ public partial class TaskbarWindow : Window
     }
 
     /// <summary>
-    /// 观察 Shell 任务栏的物理矩形。只要矩形仍在变化，就冻结本窗口的尺寸、位置、采样和输入；连续四个样本稳定后再一次性恢复
+    /// 观察 Shell 任务栏的物理矩形。只要矩形仍在变化，就冻结本窗口的尺寸、位置、采样和输入；连续两个样本稳定后再一次性恢复
     /// （含重新断言几何与显隐，因此调用方不需要区分"钩子触发"与"计时器采样"）。
     /// Observes the Shell taskbar's physical rectangle. Any continuing change freezes this window's size, position, sampling, and input;
-    /// ordinary work resumes in one step only after four consecutive stable samples, geometry and visibility included, so callers do not have to
+    /// ordinary work resumes in one step only after two consecutive stable samples, geometry and visibility included, so callers do not have to
     /// tell hook events and timer samples apart.
     /// </summary>
     private void ObserveTaskbarMotion()
@@ -428,9 +426,8 @@ public partial class TaskbarWindow : Window
                 _taskbarHiddenTrimTimer.Stop();
             }
 
-            // 收起稳定时这里把窗口隐藏掉；从收起转为展开时这里立刻恢复显示（判据见 ApplyMediaBarVisibility）。
-            // This hides the window once the taskbar is settled at the edge, and shows it again the moment the taskbar starts revealing; the
-            // rule lives in ApplyMediaBarVisibility.
+            // 显隐判据在 ApplyMediaBarVisibility 只有一处：收起、展开与稳定隐藏整段都不呈现宿主。
+            // ApplyMediaBarVisibility is the sole visibility authority: the host is not presented anywhere in the hide, reveal, or settled-hidden span.
             ApplyMediaBarVisibility();
             return;
         }
@@ -438,7 +435,10 @@ public partial class TaskbarWindow : Window
         _taskbarHiddenTrimTimer.Stop();
         if (previous.IsHidden || previous.IsMoving)
             AppLogService.Current?.Info("Taskbar", $"任务栏动画稳定，宿主恢复 / taskbar motion settled; host resumed: {_targetMonitorDeviceId}");
-        ApplyMediaBarVisibility();
+
+        // 先恢复定位、输入区与长度，最后才显示窗口。反过来会先画出收起位置的旧帧，用户看到的就是屏幕边缘卡出一截。
+        // Restore placement, input region, and length before making the window visible. Reversing the order paints one old hidden-position frame,
+        // which is exactly the sliver seen stuck at the screen edge.
         ResumeOperationalTimers();
 
         if (_pendingSizeRequest is { } request && _appliedOrientation is { } orientation)
@@ -448,13 +448,12 @@ public partial class TaskbarWindow : Window
         }
         else
         {
-            // 恢复时 MUST 重新断言一次几何：收起期间窗口的位置、输入区域与长度夹取都没有更新，而任务栏展开后的矩形
-            // （避让区间、长度上限）可能已经变过；只把它交给"子窗口跟着父窗口运动"会在展开后留下错位或被裁掉的一截。
-            // The geometry MUST be asserted again on resume: while the taskbar was hidden neither the window's position nor its input region
-            // nor the length clamp was updated, and the revealed taskbar's rectangle (free ranges, length ceiling) may have changed in the
-            // meantime; leaving that to "the child follows its parent" is what leaves the bar misplaced or clipped after a reveal.
+            // 收起期间窗口的位置、输入区域与长度夹取都没有更新；恢复前 MUST 用稳定矩形重新断言一次几何。
+            // Placement, input region, and length clamping do not update while hidden; geometry MUST be asserted against the stable rectangle before reveal.
             UpdatePosition();
         }
+
+        ApplyMediaBarVisibility();
     }
 
     private IntPtr WindowProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
@@ -672,27 +671,8 @@ public partial class TaskbarWindow : Window
                 return;
 
             // Cover the whole taskbar with the child window (taskbar-relative coordinates)
-            var corrected = _taskBarService.SetWindowPosition(taskbarWindowHandle, taskbarHandle, taskbarRect,
+            _taskBarService.SetWindowPosition(taskbarWindowHandle, taskbarHandle, taskbarRect,
                 taskbarWidth, taskbarHeight);
-            if (corrected)
-            {
-                // 写入的矩形与实际落地的不一致：这就是"媒体栏顶边越过任务栏顶边被裁切"的现场。记下两边的数字，
-                // 下一次出现时可以直接判断是容器原点、父窗口客户区原点还是尺寸不一致造成的。
-                // The written rectangle and the one that actually landed disagree: this is the scene of "the bar's top edge crosses the taskbar's top edge and
-                // is clipped". Both sets of numbers are recorded so the next occurrence can be traced to the container origin, the parent's client origin,
-                // or a size mismatch.
-                var log = AppLogService.Current;
-                var signature = $"host-rect {taskbarRect.Left},{taskbarRect.Top},{taskbarRect.Right},{taskbarRect.Bottom}";
-                if (!string.Equals(signature, _loggedHostRectSignature, StringComparison.Ordinal))
-                {
-                    _loggedHostRectSignature = signature;
-                    log?.Info(
-                        "Taskbar",
-                        $"宿主窗口与任务栏矩形不一致，已纠正 / host rect corrected: taskbar=" +
-                        $"({taskbarRect.Left},{taskbarRect.Top})-({taskbarRect.Right},{taskbarRect.Bottom}) " +
-                        $"dpi={dpiScale:0.##} host={taskbarWidth}x{taskbarHeight} monitor={_targetMonitorDeviceId}");
-                }
-            }
 
             // Place the bar on the canvas and clip the window to it
             RECT barRect = PositionBar(taskbarRect, dpiScale);
@@ -1044,14 +1024,11 @@ public partial class TaskbarWindow : Window
     }
 
     /// <summary>
-    /// 把控件算出的"整条媒体栏是否应当隐藏"与任务栏运动状态一起落到窗口上，并只在真正从隐藏变回可见时补一次背景采样。
-    /// 判据只有一处（<see cref="TaskbarHostVisibilityPolicy"/>）：任务栏稳定收起时隐藏由宿主自己做，不能只依赖"子窗口跟着父窗口运动"；
-    /// 收起动画进行中保持现状（父窗口正带着我们走）；从收起转为展开时立刻恢复显示，否则媒体栏会比任务栏慢半拍出现。
-    /// Applies the control's verdict on whether the whole bar should hide together with the taskbar's motion state to the window, refreshing
-    /// background sampling only when it actually goes from hidden back to visible. The rule has one home
-    /// (<see cref="TaskbarHostVisibilityPolicy"/>): while the taskbar is settled at the screen edge the host hides its own window instead of
-    /// relying on the child following its parent, the hide animation leaves things alone (the parent is carrying us), and the moment the
-    /// taskbar starts revealing the bar is shown again so that it does not appear a beat after the taskbar does.
+    /// 把控件算出的"整条媒体栏是否应当隐藏"与任务栏运动状态一起落到窗口上，并只在稳定可见后补一次背景采样。
+    /// 判据只有一处（<see cref="TaskbarHostVisibilityPolicy"/>）：收起、展开和稳定隐藏期间都隐藏宿主，可见矩形稳定后才恢复。
+    /// Applies the control's whole-bar visibility verdict together with taskbar motion state, refreshing background sampling only after the host is
+    /// stably visible. <see cref="TaskbarHostVisibilityPolicy"/> is the sole authority: the host remains hidden while the taskbar hides, reveals, or
+    /// stays auto-hidden, and returns only after the visible rectangle settles.
     /// </summary>
     private void ApplyMediaBarVisibility()
     {
@@ -1767,13 +1744,36 @@ public partial class TaskbarWindow : Window
         var fallback = new TaskbarPrimaryRange(
             Math.Min(EdgePadding, primaryLength),
             Math.Max(Math.Min(EdgePadding, primaryLength), primaryLength - EdgePadding));
+        var position = SettingsManager.Current.Position;
 
-        if (!SettingsManager.Current.TaskbarBarAvoidIcons ||
-            _lastTaskbarHandle == IntPtr.Zero ||
-            _hostActions.IsEnvironmentRecovering ||
+        if (!SettingsManager.Current.TaskbarBarAvoidIcons)
+        {
+            _lastStableSafeRange = null;
+            return fallback;
+        }
+
+        if (_lastTaskbarHandle == IntPtr.Zero)
+            return fallback;
+
+        // 自动隐藏后会短暂冻结占用区探测；这时不能把媒体栏退回整条任务栏的保守区间，否则 Start 定位会立即跳到左侧 20 px，
+        // 然后只能等下一次 1.5 s 定位轮询才回到原位。同一任务栏、主轴长度、DPI、方向和位置偏好下，上一个已发布的安全区间比保守回退更安全。
+        // Auto-hide briefly freezes occupied-area probing. Falling back to the whole taskbar here would immediately move Start placement to the left 20 px
+        // and leave it there until the next 1.5 s position tick. For the same taskbar, primary length, DPI, orientation, and position preference, the last
+        // published safe range is safer than that fallback.
+        if (_hostActions.IsEnvironmentRecovering ||
             IsTaskbarPresentationSuspended ||
             DateTime.UtcNow < _skipOccupiedAreaProbeUntilUtc)
-            return fallback;
+        {
+            return TryReuseStableSafeRange(
+                primaryLength,
+                orientation,
+                dpiScale,
+                position,
+                requiredPrimaryPixels,
+                out var stableRange)
+                ? stableRange
+                : fallback;
+        }
 
         var ranges = _occupiedAreaService.GetSafePrimaryRanges(
             _lastTaskbarHandle,
@@ -1782,12 +1782,57 @@ public partial class TaskbarWindow : Window
             dpiScale,
             EdgePadding);
         if (ranges.Count == 0)
-            return fallback;
+        {
+            return TryReuseStableSafeRange(
+                primaryLength,
+                orientation,
+                dpiScale,
+                position,
+                requiredPrimaryPixels,
+                out var stableRange)
+                ? stableRange
+                : fallback;
+        }
 
         // 选区间 MUST 用纯策略：空闲区间里可能有比媒体栏还窄的缝隙，"最左边那条"会把媒体栏压细并钉在缝里。
         // The range MUST be chosen by the pure policy: the free ranges can hold a gap narrower than the bar itself, and "the leftmost
         // one" would squash the bar into that sliver.
-        return TaskbarFreeRangeCalculator.Select(ranges, SettingsManager.Current.Position, requiredPrimaryPixels);
+        var selected = TaskbarFreeRangeCalculator.Select(ranges, position, requiredPrimaryPixels);
+        _lastStableSafeRange = new TaskbarSafeRangeSnapshot(
+            _lastTaskbarHandle,
+            primaryLength,
+            orientation,
+            dpiScale,
+            position,
+            selected);
+        return selected;
+    }
+
+    private bool TryReuseStableSafeRange(
+        int primaryLength,
+        LayoutOrientation orientation,
+        double dpiScale,
+        TaskbarBarPosition position,
+        int requiredPrimaryPixels,
+        out TaskbarPrimaryRange range)
+    {
+        range = default;
+        if (_lastStableSafeRange is not { } snapshot ||
+            snapshot.TaskbarHandle != _lastTaskbarHandle ||
+            snapshot.PrimaryLength != primaryLength ||
+            snapshot.Orientation != orientation ||
+            !snapshot.DpiScale.Equals(dpiScale) ||
+            snapshot.Position != position ||
+            snapshot.Range.Start < 0 ||
+            snapshot.Range.End > primaryLength ||
+            snapshot.Range.Length <= 0 ||
+            requiredPrimaryPixels > 0 && snapshot.Range.Length < requiredPrimaryPixels)
+        {
+            return false;
+        }
+
+        range = snapshot.Range;
+        return true;
     }
 
     private void AdvanceSizeAnimation()
@@ -1904,4 +1949,12 @@ public partial class TaskbarWindow : Window
     private FrameworkElement GetActiveControl() => MediaControl;
 
     private void ApplyPrimaryLength(double primaryLength) => MediaControl.ApplyPrimaryLength(primaryLength);
+
+    private readonly record struct TaskbarSafeRangeSnapshot(
+        IntPtr TaskbarHandle,
+        int PrimaryLength,
+        LayoutOrientation Orientation,
+        double DpiScale,
+        TaskbarBarPosition Position,
+        TaskbarPrimaryRange Range);
 }

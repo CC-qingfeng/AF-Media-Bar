@@ -221,58 +221,26 @@ public class TaskbarDockService : ITaskbarDockService
     }
 
     /// <summary>
-    /// 将屏幕物理坐标转换为任务栏客户区坐标，并异步定位已停靠窗口；写入后核对一次实际落地矩形，发现偏差就纠正。
-    /// Converts physical screen coordinates into taskbar client coordinates and positions the docked window, then verifies the rectangle that actually
-    /// landed and repairs any drift.
-    ///
-    /// 为什么必须核对：宿主窗口的屏幕矩形 MUST 与任务栏矩形一致，这是"媒体栏永远不出现在任务栏上方"的唯一保证。写入用的是**容器原点
-    /// 转换 + 任务栏尺寸**，只要容器原点在两次调用之间变化、父窗口的客户区原点与窗口原点不一致（带非客户区的任务栏），或窗口当前的
-    /// 尺寸与这次要写的不符，落地的矩形就会与任务栏错开——错开的那一次正好表现为媒体栏顶边越过任务栏顶边、并被任务栏裁掉一截。
-    /// 这里读回实际矩形，按差值再写一次，并把"是否纠正过"交给调用方写日志（正常路径下它恒为 false，因此这条日志一旦出现就是现场证据）。
-    /// Why the verification is required: the host window's screen rectangle MUST equal the taskbar's, and that is the only thing that keeps the media bar
-    /// from ever appearing above the taskbar. The write uses **container-origin conversion plus the taskbar's size**, so the rectangle can land offset from
-    /// the taskbar whenever the container origin changed between two calls, the parent's client origin differs from its window origin (a taskbar with a
-    /// non-client area), or the window's current size is not what is being written — and an offset write is exactly what shows up as the bar's top edge
-    /// crossing the taskbar's top edge and being clipped. This reads the actual rectangle back, writes once more with the difference, and reports whether
-    /// anything had to be corrected so the caller can log it (false on the normal path, so a line here is on-site evidence).
+    /// 将屏幕物理坐标转换为任务栏客户区坐标，并定位已停靠窗口。调用在窗口所属的 UI 线程上同步完成，
+    /// 不强制显示窗口；定位与显隐因此可以保持"先落地稳定几何，再恢复显示"的顺序。
+    /// Converts physical screen coordinates to taskbar-client coordinates and positions the docked window. The call completes synchronously on the UI
+    /// thread that owns the window and never forces it visible, preserving the ordering "land stable geometry first, then restore visibility".
     /// </summary>
-    public bool SetWindowPosition(IntPtr windowHandle, IntPtr taskbarHandle, RECT taskbarRect, int width, int height)
+    public void SetWindowPosition(IntPtr windowHandle, IntPtr taskbarHandle, RECT taskbarRect, int width, int height)
     {
         if (windowHandle == IntPtr.Zero || taskbarHandle == IntPtr.Zero)
-            return false;
+            return;
 
         // SetWindowPos positions the child relative to its parent, so convert screen coords first.
         POINT containerPos = new() { X = taskbarRect.Left, Y = taskbarRect.Top };
         if (!ScreenToClient(taskbarHandle, ref containerPos))
-            return false;
+            return;
 
-        ApplyWindowPosition(windowHandle, containerPos.X, containerPos.Y, width, height);
-
-        if (!GetWindowRect(windowHandle, out var actual))
-            return false;
-
-        var deltaX = taskbarRect.Left - actual.Left;
-        var deltaY = taskbarRect.Top - actual.Top;
-        var deltaWidth = taskbarRect.Right - taskbarRect.Left - (actual.Right - actual.Left);
-        var deltaHeight = taskbarRect.Bottom - taskbarRect.Top - (actual.Bottom - actual.Top);
-        if (deltaX == 0 && deltaY == 0 && deltaWidth == 0 && deltaHeight == 0)
-            return false;
-
-        // 纠正值本身就是差值：客户端坐标是物理像素，读回来的屏幕矩形也是物理像素，因此两者可以相减。
-        // The correction is the difference itself: client coordinates are physical pixels and so is the screen rectangle read back, so the two can be
-        // subtracted directly.
-        ApplyWindowPosition(
-            windowHandle,
-            containerPos.X + deltaX,
-            containerPos.Y + deltaY,
-            width + deltaWidth,
-            height + deltaHeight);
-        return true;
+        SetWindowPos(windowHandle, 0,
+            containerPos.X, containerPos.Y,
+            width, height,
+            SWP_NOZORDER | SWP_NOACTIVATE);
     }
-
-    private static void ApplyWindowPosition(IntPtr windowHandle, int x, int y, int width, int height) =>
-        SetWindowPos(windowHandle, 0, x, y, width, height,
-            SWP_NOZORDER | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS | SWP_SHOWWINDOW);
 
     /// <summary>
     /// 合并给定物理矩形并转移 GDI 区域所有权给窗口，以限制任务栏子窗口的可交互范围。

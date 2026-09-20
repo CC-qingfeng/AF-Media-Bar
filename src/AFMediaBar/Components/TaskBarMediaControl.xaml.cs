@@ -1407,7 +1407,7 @@ namespace AFMediaBar.Components
             _isHostVisibilitySuspended = suspended;
             if (suspended)
             {
-                HideTaskbarHoverLayer(immediate: true);
+                SettleTaskbarPointerVisuals();
             }
             else
             {

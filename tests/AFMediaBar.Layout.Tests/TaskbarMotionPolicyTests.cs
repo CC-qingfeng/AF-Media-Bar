@@ -11,13 +11,13 @@ namespace AFMediaBar.Layout.Tests;
 public sealed class TaskbarMotionPolicyTests
 {
     [TestMethod]
-    public void AChangedRectangleStaysMovingUntilFourStableSamplesArrive()
+    public void FirstRectangleIsTheStableBaselineAndAChangeWaitsForRequiredStableSamples()
     {
         var monitor = new Rect(0, 0, 1920, 1080);
         var visible = Rect(0, 1032, 1920, 1080);
         var moving = Rect(0, 1040, 1920, 1088);
         var state = TaskbarMotionPolicy.Observe(default, visible, monitor, LayoutOrientation.Horizontal);
-        Assert.IsTrue(state.IsMoving, "the first observation waits for a stable window instead of writing geometry immediately");
+        Assert.IsFalse(state.IsMoving, "the first valid observation is already the current stable taskbar baseline");
 
         state = TaskbarMotionPolicy.Observe(state, moving, monitor, LayoutOrientation.Horizontal);
         Assert.IsTrue(state.IsMoving);
@@ -30,6 +30,20 @@ public sealed class TaskbarMotionPolicyTests
 
         state = TaskbarMotionPolicy.Observe(state, moving, monitor, LayoutOrientation.Horizontal);
         Assert.IsFalse(state.IsMoving);
+    }
+
+    [TestMethod]
+    public void FirstHiddenRectangleIsASettledHiddenBaseline()
+    {
+        var state = TaskbarMotionPolicy.Observe(
+            default,
+            Rect(0, 1078, 1920, 1126),
+            new Rect(0, 0, 1920, 1080),
+            LayoutOrientation.Horizontal);
+
+        Assert.IsFalse(state.IsMoving);
+        Assert.IsTrue(state.IsHidden);
+        Assert.AreEqual(TaskbarMotionPolicy.RequiredStableSamples, state.StableSamples);
     }
 
     [TestMethod]
@@ -48,16 +62,12 @@ public sealed class TaskbarMotionPolicyTests
     }
 
     /// <summary>
-    /// 宿主窗口显隐的判定：任务栏**稳定收起**时 MUST 由宿主自己隐藏窗口（只靠"子窗口跟着父窗口运动"偶尔会失败，
-    /// 随后展开时留在原地的那条媒体栏会被任务栏边缘裁掉）；**从收起转为展开**时立刻恢复显示，不等动画稳定；
-    /// 收起动画进行中保持静置层自己的判据（父窗口正带着我们走）。
-    /// The host window's visibility rule: while the taskbar is **settled at the screen edge** the host MUST hide its own window (relying only on
-    /// "the child follows its parent" occasionally fails, and the bar left behind is then clipped by the taskbar edge on reveal); the moment the
-    /// taskbar starts **revealing** the bar is shown again without waiting for the motion to settle; and while the hide animation runs the rest
-    /// layer's own rule stands, because the parent is carrying us.
+    /// 宿主窗口显隐的判定：任务栏收起、展开或稳定隐藏时都 MUST 由宿主自己隐藏窗口；只有可见任务栏重新稳定后才显示。
+    /// The host visibility rule: the host MUST hide itself while the taskbar hides, reveals, or remains hidden, and may become visible only after
+    /// the visible taskbar has settled again.
     /// </summary>
     [TestMethod]
-    public void HostWindowHidesWithASettledTaskbarAndReturnsAsSoonAsItReveals()
+    public void HostWindowStaysHiddenForTheWholeTaskbarMotion()
     {
         Assert.AreEqual(
             TaskbarHostVisibility.Collapsed,
@@ -65,14 +75,14 @@ public sealed class TaskbarMotionPolicyTests
             "a settled hidden taskbar must hide the host window itself, not rely on the child following its parent");
 
         Assert.AreEqual(
-            TaskbarHostVisibility.Visible,
+            TaskbarHostVisibility.Collapsed,
             TaskbarHostVisibilityPolicy.Resolve(Revealing(), restLayerEmpty: false),
-            "the reveal must not wait for the motion to settle, otherwise the bar appears a beat after the taskbar");
+            "the hidden-position frame must not be painted while the taskbar reveals");
 
         Assert.AreEqual(
-            TaskbarHostVisibility.Visible,
+            TaskbarHostVisibility.Collapsed,
             TaskbarHostVisibilityPolicy.Resolve(Hiding(), restLayerEmpty: false),
-            "while the hide animation runs the bar rides along with its parent and must not be collapsed mid-motion");
+            "a cross-process child must not be trusted to follow the Shell composition animation frame by frame");
 
         Assert.AreEqual(
             TaskbarHostVisibility.Visible,

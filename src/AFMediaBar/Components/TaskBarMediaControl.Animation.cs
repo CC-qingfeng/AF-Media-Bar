@@ -962,7 +962,7 @@ public partial class TaskBarMediaControl
     }
 
     /// <summary>复用原 TaskBarMediaControl 的 hover 色彩和节奏，但将效果限制在单个组件。</summary>
-    private void AnimateComponentHover(Border surface, bool isHovered)
+    private void AnimateComponentHover(Border surface, bool isHovered, bool immediate = false)
     {
         if (isHovered && !CanUseTaskbarComponentHover())
             return;
@@ -988,7 +988,7 @@ public partial class TaskBarMediaControl
         }
 
         var motion = CurrentMotion;
-        if (!motion.UseTransitions)
+        if (immediate || !motion.UseTransitions)
         {
             background.BeginAnimation(SolidColorBrush.ColorProperty, null);
             background.BeginAnimation(SolidColorBrush.OpacityProperty, null);
@@ -1182,9 +1182,9 @@ public partial class TaskBarMediaControl
                                (SongInfoStackPanel.IsMouseOver || TaskbarDirectFullPanelHandle.IsMouseOver);
         if (immediate || HoverRevealHost.Visibility != Visibility.Visible)
         {
-            FinishTaskbarHoverLayerHide();
+            FinishTaskbarHoverLayerHide(immediate);
             AnimateSongInfoCovered(false, immediate: true);
-            AnimateComponentHover(SongInfoHoverOverlay, keepRegularHover);
+            AnimateComponentHover(SongInfoHoverOverlay, keepRegularHover, immediate);
             AnimateDirectFullPanelHandle(keepRegularHover, immediate: true);
             return;
         }
@@ -1224,7 +1224,7 @@ public partial class TaskBarMediaControl
     /// Finishes hiding the hover layer: zeroes the clip and the width, hides it, and drops hit testing. It is safe to call repeatedly,
     /// since both the animation callback and the fallback timer land here.
     /// </summary>
-    private void FinishTaskbarHoverLayerHide()
+    private void FinishTaskbarHoverLayerHide(bool immediate = false)
     {
         _hoverHideFallbackTimer.Stop();
         HoverRevealClip.BeginAnimation(RectangleGeometry.RectProperty, null);
@@ -1235,9 +1235,32 @@ public partial class TaskBarMediaControl
         _isTaskbarHoverVisible = false;
         if (!SongInfoStackPanel.IsMouseOver && !TaskbarDirectFullPanelHandle.IsMouseOver)
         {
-            AnimateComponentHover(SongInfoHoverOverlay, false);
-            AnimateDirectFullPanelHandle(false);
+            AnimateComponentHover(SongInfoHoverOverlay, false, immediate);
+            AnimateDirectFullPanelHandle(false, immediate);
         }
+    }
+
+    /// <summary>
+    /// 立即结束所有任务栏指针反馈，不留任何 Blur、裁剪、颜色动画或手动打开的提示窗继续跑。
+    /// Immediately settles every taskbar pointer visual, leaving no blur, clip, color animation, or manually opened tooltip running.
+    /// </summary>
+    private void SettleTaskbarPointerVisuals()
+    {
+        _hoverOpenTimer.Stop();
+        _hoverCloseTimer.Stop();
+        _hoverHideFallbackTimer.Stop();
+        _wheelTooltipTimer.Stop();
+        CloseWheelTooltips();
+        _quickLaunchTooltip.IsOpen = false;
+        HideTaskbarHoverLayer(immediate: true);
+        AnimateSongInfoCovered(false, immediate: true);
+        AnimateDirectFullPanelHandle(false, immediate: true);
+        AnimateComponentHover(SongImageHoverOverlay, false, immediate: true);
+        AnimateComponentHover(SongInfoHoverOverlay, false, immediate: true);
+        AnimateComponentHover(TaskbarSpectrumHoverSurface, false, immediate: true);
+        AnimateComponentHover(TaskbarPerformanceHoverSurface, false, immediate: true);
+        AnimateComponentHover(TaskbarOutputDeviceHoverSurface, false, immediate: true);
+        AnimateComponentHover(TaskbarVolumeHoverSurface, false, immediate: true);
     }
 
     /// <summary>
@@ -1248,14 +1271,12 @@ public partial class TaskBarMediaControl
     /// </summary>
     private void InteractionSurface_MouseLeave(object sender, MouseEventArgs e)
     {
-        _hoverOpenTimer.Stop();
-        if (!_isTaskbarHoverVisible && HoverRevealHost.Visibility != Visibility.Visible)
-        {
-            _hoverCloseTimer.Stop();
-            return;
-        }
-
-        HideTaskbarHoverLayer();
+        // 这个通知发生在 Shell 因指针离开任务栏而开始自动收起之前，是唯一个能在动画前清掉文字区 Blur 与裁剪动画的时机。
+        // 等任务栏矩形开始变化后再清理已经太晚，WPF 与 Shell 会同时提交合成帧，这正是“交互后离开才偶发留角”的条件。
+        // This notification arrives before the Shell starts auto-hiding after the pointer leaves the taskbar, making it the only point where the text
+        // blur and clip animation can be cleared ahead of that motion. Waiting for the taskbar rectangle to change is too late: WPF and the Shell then
+        // submit composition frames together, which is precisely why the sliver occurs only after interacting with and leaving the bar.
+        SettleTaskbarPointerVisuals();
     }
 
 }

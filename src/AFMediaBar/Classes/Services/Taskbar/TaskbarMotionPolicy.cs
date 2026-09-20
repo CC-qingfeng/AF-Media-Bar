@@ -4,14 +4,15 @@ using AFMediaBar.Classes.Models.Layout;
 namespace AFMediaBar.Classes.Services;
 
 /// <summary>
-/// 任务栏自动隐藏动画的纯状态机：矩形变化时进入移动态，连续若干次不变后才重新开放宿主交互。
-/// Pure state machine for taskbar auto-hide motion: a rectangle change enters the moving state and interaction is restored only
-/// after several identical observations.
+/// 任务栏自动隐藏动画的纯状态机：首个有效矩形是当前稳定基线，后续矩形变化才进入移动态，
+/// 并在连续若干次不变后重新开放宿主交互。
+/// Pure state machine for taskbar auto-hide motion: the first valid rectangle is the current stable baseline; only a later rectangle change enters
+/// the moving state, and interaction is restored after several identical observations.
 /// </summary>
 public static class TaskbarMotionPolicy
 {
     /// <summary>确认显隐动画结束所需的连续稳定样本数。/ Consecutive stable samples required before a reveal or hide is considered complete.</summary>
-    public const int RequiredStableSamples = 4;
+    public const int RequiredStableSamples = 2;
 
     /// <summary>任务栏只在屏幕边缘留下不超过这些物理像素时视为已自动隐藏。/ Maximum visible physical pixels that count as auto-hidden.</summary>
     public const int HiddenEdgePixels = 4;
@@ -31,8 +32,8 @@ public static class TaskbarMotionPolicy
             return new TaskbarMotionState(
                 true,
                 taskbarRect,
-                0,
-                true,
+                RequiredStableSamples,
+                false,
                 IsHidden(taskbarRect, monitorBounds, orientation));
         }
 

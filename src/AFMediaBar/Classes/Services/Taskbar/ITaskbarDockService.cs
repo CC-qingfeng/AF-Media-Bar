@@ -83,19 +83,18 @@ public interface ITaskbarDockService
     void UndockWindow(IntPtr windowHandle);
 
     /// <summary>
-    /// 定位并调整子窗口的大小，覆盖整个任务栏；写入后核对实际矩形，发现偏差时纠正并返回真。
-    /// Positions and sizes the child window over the taskbar, verifies the rectangle that actually landed, and returns true when it had to be corrected.
+    /// 定位并调整子窗口的大小，覆盖整个任务栏。
+    /// Positions and sizes the child window over the taskbar.
     ///
     /// 坐标转换 Coordinate Conversion:
     /// 屏幕坐标 → 任务栏客户端坐标（ScreenToClient）后调用 SetWindowPos。
     /// Coordinates are converted from screen space to taskbar-client space (ScreenToClient) before SetWindowPos.
     ///
-    /// 返回值 MUST 为真时写一条日志：宿主窗口与任务栏错开正是"媒体栏顶边越过任务栏顶边被裁切"的直接原因，而正常路径下它恒为假。
-    /// A true return value MUST be logged: the host window sitting offset from the taskbar is the direct cause of "the bar's top edge crossing the taskbar's
-    /// top edge and being clipped", and on the normal path it is always false.
+    /// 这条路径只写任务栏客户区坐标；MUST NOT 在 Shell 自动隐藏期间把子窗口屏幕矩形与一个已经过期的父窗口屏幕矩形做二次纠偏。
+    /// This path writes taskbar-client coordinates only; it MUST NOT apply a second screen-space correction against a parent rectangle that may already
+    /// be stale during the Shell auto-hide animation.
     /// </summary>
-    /// <returns>是否因为实际矩形与任务栏矩形不一致而重新写入过一次。/ Whether it had to write again because the actual rectangle differed from the taskbar's.</returns>
-    bool SetWindowPosition(IntPtr windowHandle, IntPtr taskbarHandle, RECT taskbarRect, int width, int height);
+    void SetWindowPosition(IntPtr windowHandle, IntPtr taskbarHandle, RECT taskbarRect, int width, int height);
 
     /// <summary>
     /// 应用输入区域，使窗口仅在指定矩形区域可见和可交互（SetWindowRgn）。
