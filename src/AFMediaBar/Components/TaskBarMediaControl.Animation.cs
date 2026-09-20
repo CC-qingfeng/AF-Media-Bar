@@ -1122,12 +1122,27 @@ public partial class TaskBarMediaControl
 
     private void ShowTaskbarHoverLayer()
     {
+        // 宿主正在跟随任务栏动画时不开悬停层：展开会给整块文字区装上 BlurEffect 并播一段裁剪动画，
+        // 这两样都与 Shell 的任务栏动画抢同一条合成管线，正是"触边收起时卡顿"里最贵的那一笔。
+        // The hover layer is not opened while the host is following the taskbar animation: revealing it installs a BlurEffect on the whole text area and
+        // plays a clip animation, and both compete for the same compositing pipeline as the Shell's taskbar animation — the most expensive part of the
+        // jank seen when the taskbar hides right after a hover.
+        if (_isHostVisibilitySuspended)
+            return;
+
         if (!_isConnected || _currentMode != WindowMode.Taskbar || _isVertical ||
             !SettingsManager.Current.TaskbarExperience.HoverLayerEnabled ||
             (!SongInfoStackPanel.IsMouseOver && !HoverRevealHost.IsMouseOver))
             return;
 
-        ApplyTaskbarExperienceSettings();
+        // 展开只需要"跑马灯按当前文字区宽度重新判定一次"：媒体栏几何每次快照都会重算（悬停层宽度、文字宽度、各处 Margin 都在那里写入），
+        // 因此这里 MUST NOT 再跑一遍完整的体验设置——那会连带重建频谱、重排整条几何并走一次尺寸指纹，正好落在指针离开任务栏、
+        // Shell 准备开始收起动画的那一刻，而这一刻宿主的冻结请求还排在 UI 线程的队列里。
+        // The reveal only needs the marquee re-evaluated against the current text width: the bar's geometry is recomputed on every snapshot (the hover
+        // layer's width, the text width, and every margin are written there), so this MUST NOT run a full experience pass — that would rebuild the
+        // spectrum, re-lay out the whole bar, and run the size fingerprint exactly at the moment the pointer leaves the taskbar and the Shell is about to
+        // start its hide animation, when the host's freeze request is still queued behind that work on the UI thread.
+        ApplyMarqueeLayout(Math.Max(0, SongInfoStackPanel.Width));
         _isTaskbarHoverVisible = true;
         _hoverHideFallbackTimer.Stop();
         AnimateComponentHover(SongInfoHoverOverlay, true);

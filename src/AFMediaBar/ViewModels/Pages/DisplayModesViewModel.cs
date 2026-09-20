@@ -28,8 +28,11 @@ public partial class DisplayModesViewModel : ObservableObject
     private bool _isRefreshing;
     private DisplayModeSelection _selectedMode = DisplayModeSelection.Taskbar;
     private IReadOnlyList<DisplayMonitorOption> _monitorOptions = Array.Empty<DisplayMonitorOption>();
+    private IReadOnlyList<DisplayMonitorOption> _taskbarMonitorOptions = Array.Empty<DisplayMonitorOption>();
 
     public IReadOnlyList<DisplayMonitorOption> MonitorOptions => _monitorOptions;
+    /// <summary>任务栏目标列表，额外包含“所有任务栏”；通知目标仍只使用单个显示器列表。/ Taskbar target list with an extra “all taskbars” entry; notification targets keep the single-monitor list.</summary>
+    public IReadOnlyList<DisplayMonitorOption> TaskbarMonitorOptions => _taskbarMonitorOptions;
     public WindowMode CurrentWindowMode => SettingsManager.Current.WindowMode;
     public DisplayModeSelection SelectedMode => _selectedMode;
     public bool IsTaskbarMode => SelectedMode == DisplayModeSelection.Taskbar;
@@ -127,7 +130,13 @@ public partial class DisplayModesViewModel : ObservableObject
 
     public string? TaskbarTargetMonitorDeviceId
     {
-        get => SettingsManager.Current.TaskbarTargetMonitorDeviceId ?? _displayMonitorService.ResolveFixedMonitor(null)?.DeviceId;
+        get
+        {
+            var configured = SettingsManager.Current.TaskbarTargetMonitorDeviceId;
+            return TaskbarTargetPolicy.IsAllTaskbars(configured)
+                ? TaskbarTargetPolicy.AllTaskbarsDeviceId
+                : configured ?? _displayMonitorService.ResolveFixedMonitor(null)?.DeviceId;
+        }
         set
         {
             if (_isRefreshing || string.Equals(
@@ -800,32 +809,49 @@ public partial class DisplayModesViewModel : ObservableObject
         var primarySuffix = Translations.Get("Common.Monitor.PrimarySuffix");
         var disconnectedSuffix = Translations.Get("DisplayModes.Monitor.DisconnectedSuffix");
         var monitors = _displayMonitorService.GetMonitors();
-        var options = monitors
+        var availableOptions = monitors
             .Select((monitor, index) => new DisplayMonitorOption(
                 monitor.DeviceId,
                 $"{index + 1}. {monitor.DeviceName}{(monitor.IsPrimary ? primarySuffix : string.Empty)}",
                 monitor.IsPrimary))
             .ToList();
 
-        var preferredIds = new[]
+        var options = availableOptions.ToList();
+
+        var taskbarOptions = new List<DisplayMonitorOption>
         {
-            SettingsManager.Current.TaskbarTargetMonitorDeviceId,
-            NotificationSettings.FixedMonitorDeviceId
+            new(
+                TaskbarTargetPolicy.AllTaskbarsDeviceId,
+                Translations.Get("DisplayModes.Monitor.AllTaskbars"),
+                false)
         };
-        foreach (var preferredId in preferredIds.Where(id => !string.IsNullOrWhiteSpace(id)).Distinct(StringComparer.OrdinalIgnoreCase))
+        taskbarOptions.AddRange(availableOptions);
+
+        static void AddDisconnected(
+            List<DisplayMonitorOption> target,
+            IReadOnlyList<DisplayMonitorOption> available,
+            string? preferredId,
+            string suffix,
+            int index)
         {
-            if (options.All(option => !string.Equals(option.DeviceId, preferredId, StringComparison.OrdinalIgnoreCase)))
-            {
-                options.Insert(0, new DisplayMonitorOption(
-                    preferredId!,
-                    $"{preferredId}{disconnectedSuffix}",
-                    false,
-                    false));
-            }
+            if (string.IsNullOrWhiteSpace(preferredId) || TaskbarTargetPolicy.IsAllTaskbars(preferredId) ||
+                available.Any(option => string.Equals(option.DeviceId, preferredId, StringComparison.OrdinalIgnoreCase)))
+                return;
+
+            target.Insert(index, new DisplayMonitorOption(
+                preferredId,
+                $"{preferredId}{suffix}",
+                false,
+                false));
         }
 
+        AddDisconnected(options, availableOptions, NotificationSettings.FixedMonitorDeviceId, disconnectedSuffix, 0);
+        AddDisconnected(taskbarOptions, availableOptions, SettingsManager.Current.TaskbarTargetMonitorDeviceId, disconnectedSuffix, 1);
+
         _monitorOptions = options;
+        _taskbarMonitorOptions = taskbarOptions;
         OnPropertyChanged(nameof(MonitorOptions));
+        OnPropertyChanged(nameof(TaskbarMonitorOptions));
         OnPropertyChanged(nameof(TaskbarTargetMonitorDeviceId));
         OnPropertyChanged(nameof(TrackChangeNotificationFixedMonitorDeviceId));
     }

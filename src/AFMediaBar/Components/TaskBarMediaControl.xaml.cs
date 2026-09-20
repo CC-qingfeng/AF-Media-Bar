@@ -183,6 +183,7 @@ namespace AFMediaBar.Components
 
         /// <summary>宿主传达的后台剪枝档位；控件只据此停表，不自行查询电源状态。/ The background prune level the host publishes; the control only stops timers from it and never queries the power state itself.</summary>
         private MemoryPruneLevel _backgroundPruneLevel = MemoryPruneLevel.None;
+        private bool _isHostVisibilitySuspended;
 
         /// <summary>兜底收起比退出动画多等的余量，确保正常动画回调先跑。/ Extra margin the fallback waits beyond the exit animation, so the normal animation callback runs first.</summary>
         private static readonly TimeSpan HoverHideFallbackMargin = TimeSpan.FromMilliseconds(150);
@@ -1298,7 +1299,55 @@ namespace AFMediaBar.Components
         public void ApplyBackgroundPruneLevel(MemoryPruneLevel level)
         {
             _backgroundPruneLevel = level;
-            if (level == MemoryPruneLevel.None)
+            ApplyTimerSuspensionState();
+        }
+
+        /// <summary>
+        /// 在任务栏自动隐藏或显隐动画期间暂停不可见呈现与交互计时器；恢复时按当前媒体状态重新判定。
+        /// Suspends invisible presentation and interaction timers while the taskbar is auto-hidden or moving, then re-evaluates them from the current
+        /// media state when the host becomes visible again.
+        ///
+        /// 进入挂起时悬停层 MUST 立刻收干净：悬停展开会给整块文字区装上 `BlurEffect`（文字被渲染到中间表面再模糊，每帧的合成成本都落在与
+        /// 任务栏动画同一条 DWM 合成管线上），而"收起"原本只依赖 250 毫秒的悬停收起计时器——挂起恰好把它停掉，于是那块模糊会一直留到
+        /// 用户下一次把指针移回媒体栏。指针离开任务栏才会触发自动隐藏，所以这一刻悬停层本来就该收起来，立刻收起既省掉了这段成本，
+/// 也与预期行为一致。
+        /// On suspension the hover layer MUST be collapsed at once: revealing it installs a `BlurEffect` on the whole text area (the text is rendered into
+        /// an intermediate surface and blurred, and that per-frame compositing cost lands on the same DWM pipeline as the taskbar animation), while the
+        /// collapse otherwise depends only on a 250 ms hover-close timer — which the suspension stops, so the blur would stay until the user next moved the
+        /// pointer back onto the bar. Auto-hide only starts once the pointer has left the taskbar, so the layer should be closing at that moment anyway;
+        /// collapsing it immediately both removes that cost and matches the intended behaviour.
+        /// </summary>
+        /// <param name="suspended">宿主当前是否不可见或正在移动。/ Whether the host is currently invisible or moving.</param>
+        public void ApplyHostVisibilitySuspension(bool suspended)
+        {
+            if (_isHostVisibilitySuspended == suspended)
+                return;
+
+            _isHostVisibilitySuspended = suspended;
+            if (suspended)
+            {
+                HideTaskbarHoverLayer(immediate: true);
+            }
+            else
+            {
+                // 悬停层在挂起时被立刻收掉了，没有走它自己的收起计时器；恢复后指针若还停在文字区上，就把它重新排进队列，
+                // 否则用户要先把指针移开再移回来才会看到悬停按钮。
+                // The hover layer was collapsed outright on suspension instead of through its own close timer; if the pointer is still over the text
+                // region when the host comes back, queue it again, otherwise the user has to move the pointer away and back to see the hover buttons.
+                if (SettingsManager.Current.TaskbarExperience.Normalize().HoverLayerEnabled &&
+                    (SongInfoStackPanel.IsMouseOver || HoverRevealHost.IsMouseOver))
+                {
+                    _hoverOpenTimer.Stop();
+                    _hoverOpenTimer.Start();
+                }
+            }
+
+            ApplyTimerSuspensionState();
+        }
+
+        private void ApplyTimerSuspensionState()
+        {
+            if (!_isHostVisibilitySuspended && _backgroundPruneLevel == MemoryPruneLevel.None)
             {
                 ResumeBackgroundTimers();
                 return;
@@ -1312,7 +1361,7 @@ namespace AFMediaBar.Components
             // wheel-tooltip timers are left alone: they run only while the pointer rests on the bar, which means the mouse has just moved and the level
             // is about to return to normal anyway.
             _progressTimer.Stop();
-            if (level < MemoryPruneLevel.DisplayOff)
+            if (!_isHostVisibilitySuspended && _backgroundPruneLevel < MemoryPruneLevel.DisplayOff)
             {
                 StopLyricHighlight();
                 ReapplyLyricMarquee();
@@ -1324,11 +1373,11 @@ namespace AFMediaBar.Components
             _wheelTooltipTimer.Stop();
 
             // 推进类计时器交给各自的判定路径收尾：停表的条件同时也是"把窗口文字还原成原文"的条件，因此这里重新判定一次，
-            // 而不是直接停表、把半个滚动窗口留在那里。擦亮的停表同样要走它自己的路径，否则 `_lyricHighlightActive` 会停在"开启"上，
+            // 而不是直接停表、把半个滚动窗口留在那里。歌词时间轴的停表同样要走它自己的路径，否则 `_lyricTimelineActive` 会停在"开启"上，
             // 恢复时便再也不会重新启动。
             // The advance timers are wound down through their own decision path: the condition that stops them is also the one that restores the
             // window text, so the decision is made again instead of stopping the timer and leaving half a scroll window behind. The reveal has to go
-            // through its own path as well, otherwise `_lyricHighlightActive` would stay on "enabled" and never start again after the restore.
+            // through its own path as well, otherwise `_lyricTimelineActive` would stay on "enabled" and never start again after the restore.
             StopLyricHighlight();
             ReapplyLyricMarquee();
         }
@@ -1355,7 +1404,8 @@ namespace AFMediaBar.Components
         }
 
         /// <summary>是否因宿主传达的后台剪枝档位而暂停推进类计时器。/ Whether the advance timers are paused by the prune level the host published.</summary>
-        private bool IsBackgroundPruned => _backgroundPruneLevel >= MemoryPruneLevel.DisplayOff;
+        private bool IsBackgroundPruned =>
+            _isHostVisibilitySuspended || _backgroundPruneLevel >= MemoryPruneLevel.DisplayOff;
 
         /// <summary>
         /// 是否连"推进类"（跑马灯、逐字擦亮）也一并停下：空闲档就停，显示器关闭与睡眠当然也停。
@@ -1368,7 +1418,8 @@ namespace AFMediaBar.Components
         /// once every 16 ms for somebody who is not at their desk, while the restore costs at most one evaluation period, since any input returns the level
         /// to normal.
         /// </summary>
-        private bool IsAdvancePruned => _backgroundPruneLevel != MemoryPruneLevel.None;
+        private bool IsAdvancePruned =>
+            _isHostVisibilitySuspended || _backgroundPruneLevel != MemoryPruneLevel.None;
 
         /// <summary>
         /// 设置竖向模式：任务栏在屏幕左侧或右侧时调整布局。

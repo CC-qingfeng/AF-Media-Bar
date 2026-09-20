@@ -570,10 +570,14 @@ public sealed class SettingsPersistenceServiceTests
         viewModel.TrackChangeNotificationPosition = TrackChangeNotificationPosition.TopCenter;
         viewModel.TrackChangeNotificationTargetMode = NotificationTargetMode.Fixed;
         viewModel.TrackChangeNotificationFixedMonitorDeviceId = "DISPLAY2";
-        viewModel.TaskbarTargetMonitorDeviceId = "DISPLAY1";
+        viewModel.TaskbarTargetMonitorDeviceId = TaskbarTargetPolicy.AllTaskbarsDeviceId;
 
         Assert.AreEqual("DISPLAY2", SettingsManager.Current.TrackChangeNotification.FixedMonitorDeviceId);
-        Assert.AreEqual("DISPLAY1", SettingsManager.Current.TaskbarTargetMonitorDeviceId);
+        Assert.AreEqual(TaskbarTargetPolicy.AllTaskbarsDeviceId, SettingsManager.Current.TaskbarTargetMonitorDeviceId);
+        Assert.IsTrue(viewModel.TaskbarMonitorOptions.Any(option =>
+            option.DeviceId == TaskbarTargetPolicy.AllTaskbarsDeviceId));
+        Assert.IsFalse(viewModel.MonitorOptions.Any(option =>
+            option.DeviceId == TaskbarTargetPolicy.AllTaskbarsDeviceId));
         Assert.AreEqual(6000, SettingsManager.Current.TrackChangeNotification.DurationMilliseconds);
         Assert.AreEqual(TrackChangeNotificationPosition.TopCenter, SettingsManager.Current.TrackChangeNotification.Position);
         Assert.IsTrue(SettingsManager.Current.TrackChangeNotification.ShowWhenFullscreen);

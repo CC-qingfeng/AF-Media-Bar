@@ -257,7 +257,7 @@
                                 Title="{DynamicResource Loc.Common.TargetMonitor}">
                                 <ComboBox
                                     DisplayMemberPath="DisplayName"
-                                    ItemsSource="{Binding ViewModel.MonitorOptions}"
+                                    ItemsSource="{Binding ViewModel.TaskbarMonitorOptions}"
                                     MinWidth="260"
                                     SelectedValue="{Binding ViewModel.TaskbarTargetMonitorDeviceId, Mode=TwoWay}"
                                     SelectedValuePath="DeviceId" />

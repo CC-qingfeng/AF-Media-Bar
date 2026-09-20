@@ -234,6 +234,7 @@ public sealed class MemoryPruneCoordinator : IDisposable
             MemoryTrimTrigger.PanelClosed => "浮层关闭 panel closed",
             MemoryTrimTrigger.ManualRequest => "用户手动请求 manual request",
             MemoryTrimTrigger.StartupSettled => "启动已安定 post-startup",
+            MemoryTrimTrigger.TaskbarHidden => "任务栏持续自动隐藏 taskbar stayed auto-hidden",
             _ => "进入空闲档 idle level entered"
         };
         var strength = result.Strength == MemoryTrimStrength.Deep ? "深度 deep" : "温和 gentle";

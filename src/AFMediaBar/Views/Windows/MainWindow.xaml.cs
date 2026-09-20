@@ -52,17 +52,18 @@ namespace AFMediaBar.Views.Windows
         private readonly Func<TrackChangeNotificationWindow> _trackChangeNotificationFactory;
         private readonly ShellTrayIconService _trayIconService;
         private readonly UpdateService _updateService;
+        private readonly DispatcherTimer _taskbarTopologyTimer;
 
         /// <summary>后台剪枝协调器：任务栏宿主订阅它的档位变化，因此这里只做转交，不在宿主里查询电源状态。
         /// The background prune coordinator: the taskbar host subscribes to its level changes, so this field only hands it over and the host never
         /// queries the power state itself.</summary>
         private readonly MemoryPruneCoordinator _memoryPruneCoordinator;
-        private TaskbarWindow? _taskbarWindow;
+        private readonly List<TaskbarWindow> _taskbarWindows = [];
         private DynamicIslandWindow? _dynamicIslandWindow;
         private SettingsWindow? _settingsWindow;
         private TaskbarFullPanelWindow? _fullPanelWindow;
         private TrackChangeNotificationWindow? _trackChangeNotificationWindow;
-        private string? _effectiveTaskbarMonitorDeviceId;
+        private string? _effectiveTaskbarTargetSignature;
         private DateTime _fullPanelClosedAtUtc;
         private int _taskbarCreatedMessage;
         private bool _isSystemThemeWatcherActive;
@@ -138,6 +139,18 @@ namespace AFMediaBar.Views.Windows
             _trayIconService = trayIconService;
             _updateService = updateService;
             _memoryPruneCoordinator = memoryPruneCoordinator;
+
+            // Shell 可能在 TaskbarCreated 之后才稍晚创建副任务栏，而且切换 Windows 的“在所有显示器上显示任务栏”不会改变显示器列表。
+            // 这个低成本监视只比较句柄、不观察任务栏矩形，因此能补齐拓扑，又不会让自动隐藏动画触发宿主重建。
+            // Shell may create a secondary taskbar slightly after TaskbarCreated, and toggling Windows' "show taskbar on all displays" does not change
+            // the monitor list. This inexpensive handle-only watcher repairs that topology without observing taskbar rectangles, so auto-hide motion
+            // never triggers a host rebuild.
+            _taskbarTopologyTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+            _taskbarTopologyTimer.Tick += (_, _) =>
+            {
+                if (!_isClosing && !TaskbarEnvironmentRecovering && SettingsManager.Current.WindowMode == WindowMode.Taskbar)
+                    ApplyEffectiveTaskbarMonitorChange();
+            };
 
             InitializeComponent();
             UpdateSystemThemeWatcher(SettingsManager.Current.Appearance);
@@ -222,6 +235,7 @@ namespace AFMediaBar.Views.Windows
                 return;
 
             _isClosing = true;
+            _taskbarTopologyTimer.Stop();
             _taskbarRecoveryCancellation?.Cancel();
             _taskbarRecoveryCancellation?.Dispose();
             _taskbarRecoveryCancellation = null;
@@ -230,7 +244,8 @@ namespace AFMediaBar.Views.Windows
             // ContextMenu Popup HWNDs are not Application.Windows entries. Close every
             // menu explicitly before the hidden host begins shutting down.
             TrayMenu.IsOpen = false;
-            _taskbarWindow?.ClosePlayerMenu();
+            foreach (var taskbarWindow in _taskbarWindows)
+                taskbarWindow.ClosePlayerMenu();
             if (_dynamicIslandWindow is not null)
                 _dynamicIslandWindow.ClosePlayerMenu();
 
@@ -248,7 +263,7 @@ namespace AFMediaBar.Views.Windows
                 _isSystemThemeWatcherActive = false;
             }
 
-            CloseTaskbarWindow();
+            CloseTaskbarWindows();
             var dynamicIslandWindow = _dynamicIslandWindow;
             _dynamicIslandWindow = null;
             dynamicIslandWindow?.Close();
@@ -332,7 +347,8 @@ namespace AFMediaBar.Views.Windows
                 return;
 
             TaskbarEnvironmentRecovering = true;
-            _taskbarWindow?.SuspendForEnvironmentRecovery();
+            foreach (var taskbarWindow in _taskbarWindows)
+                taskbarWindow.SuspendForEnvironmentRecovery();
 
             var previous = _taskbarRecoveryCancellation;
             _taskbarRecoveryCancellation = new CancellationTokenSource();
@@ -358,9 +374,7 @@ namespace AFMediaBar.Views.Windows
         private async Task RecoverTaskbarEnvironmentAsync(CancellationTokenSource recovery)
         {
             var stableSamples = 0;
-            IntPtr previousHandle = IntPtr.Zero;
-            RECT previousRect = default;
-            uint previousDpi = 0;
+            string? previousSignature = null;
             var recreated = false;
             try
             {
@@ -370,35 +384,20 @@ namespace AFMediaBar.Views.Windows
                     if (_isClosing || SettingsManager.Current.WindowMode != WindowMode.Taskbar)
                         return;
 
-                    var taskbarHandle = _taskBarService.GetSelectedTaskbarHandle(
-                        SettingsManager.Current.TaskbarTargetMonitorDeviceId, out _);
-                    if (taskbarHandle == IntPtr.Zero ||
-                        !_taskBarService.TryGetTaskbarRect(taskbarHandle, out var rect) ||
-                        rect.Right <= rect.Left || rect.Bottom <= rect.Top)
+                    if (!TryGetStableTaskbarEnvironmentSignature(out var signature))
                     {
                         stableSamples = 0;
                         continue;
                     }
 
-                    var dpi = GetDpiForWindow(taskbarHandle);
-                    if (dpi == 0)
-                    {
-                        stableSamples = 0;
-                        continue;
-                    }
-
-                    stableSamples = taskbarHandle == previousHandle &&
-                                    rect.Equals(previousRect) &&
-                                    dpi == previousDpi
+                    stableSamples = string.Equals(signature, previousSignature, StringComparison.Ordinal)
                         ? stableSamples + 1
                         : 1;
-                    previousHandle = taskbarHandle;
-                    previousRect = rect;
-                    previousDpi = dpi;
+                    previousSignature = signature;
                     if (stableSamples < TaskbarRecoveryPolicy.RequiredStableSamples)
                         continue;
 
-                    RecreateTaskbarWindow();
+                    RecreateTaskbarWindows();
                     recreated = true;
                     return;
                 }
@@ -413,10 +412,37 @@ namespace AFMediaBar.Views.Windows
                     _taskbarRecoveryCancellation = null;
                     TaskbarEnvironmentRecovering = false;
                     if (!recreated)
-                        _taskbarWindow?.ResumeAfterEnvironmentRecovery();
+                    {
+                        foreach (var taskbarWindow in _taskbarWindows)
+                            taskbarWindow.ResumeAfterEnvironmentRecovery();
+                    }
                     recovery.Dispose();
                 }
             }
+        }
+
+        private bool TryGetStableTaskbarEnvironmentSignature(out string signature)
+        {
+            var entries = new List<string>();
+            foreach (var target in ResolveTaskbarTargetDeviceIds())
+            {
+                var handle = _taskBarService.GetSelectedTaskbarHandle(target, out _);
+                if (handle == IntPtr.Zero ||
+                    !_taskBarService.TryGetTaskbarRect(handle, out var rect) ||
+                    rect.Right <= rect.Left || rect.Bottom <= rect.Top)
+                {
+                    continue;
+                }
+
+                var dpi = GetDpiForWindow(handle);
+                if (dpi == 0)
+                    continue;
+
+                entries.Add($"{handle.ToInt64():X}:{rect.Left},{rect.Top},{rect.Right},{rect.Bottom}:{dpi}");
+            }
+
+            signature = string.Join("|", entries.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal));
+            return entries.Count > 0;
         }
 
         #endregion
@@ -425,7 +451,9 @@ namespace AFMediaBar.Views.Windows
         /// Closes and re-creates the docked taskbar window (e.g. after Explorer restarted
         /// and destroyed the old taskbar together with our child window).
         /// </summary>
-        public void RecreateTaskbarWindow()
+        public void RecreateTaskbarWindow() => RecreateTaskbarWindows();
+
+        private void RecreateTaskbarWindows()
         {
             if (SettingsManager.Current.WindowMode != WindowMode.Taskbar)
             {
@@ -433,15 +461,15 @@ namespace AFMediaBar.Views.Windows
                 return;
             }
 
-            CloseTaskbarWindow();
-
-            _taskbarWindow = CreateTaskbarWindow();
-            _taskbarWindow.ApplyAppearanceSettings();
+            CloseTaskbarWindows();
+            CreateTaskbarWindows();
+            _effectiveTaskbarTargetSignature = ResolveEffectiveTaskbarTargetSignature();
 
             // Replay the latest snapshot; if none exists yet, force a synchronous refresh.
             if (_mediaSessionService.CurrentSnapshot is { } snapshot)
             {
-                _taskbarWindow.ApplySnapshot(snapshot);
+                foreach (var taskbarWindow in _taskbarWindows)
+                    taskbarWindow.ApplySnapshot(snapshot);
             }
             else
             {
@@ -449,25 +477,29 @@ namespace AFMediaBar.Views.Windows
             }
         }
 
-        private void CloseTaskbarWindow()
+        private void CloseTaskbarWindows()
         {
             // 先清除共享引用，避免重入的媒体回调访问已被 Explorer 或 Close() 销毁 HWND 的窗口。
             // Clear the published reference first so reentrant media callbacks cannot target
             // a Window whose HWND has already been destroyed by Explorer or Close().
-            var taskbarWindow = _taskbarWindow;
-            _taskbarWindow = null;
-            if (taskbarWindow is null)
+            var taskbarWindows = _taskbarWindows.ToArray();
+            _taskbarWindows.Clear();
+            if (taskbarWindows.Length == 0)
                 return;
 
-            taskbarWindow.SuspendForEnvironmentRecovery();
-            taskbarWindow.DetachFromTaskbar();
-            try
+            foreach (var taskbarWindow in taskbarWindows)
             {
-                taskbarWindow.Close();
-            }
-            catch (InvalidOperationException)
-            {
-                // Explorer may already have destroyed the cross-process child HWND.
+                taskbarWindow.OpenFullPanelRequested -= TaskbarWindow_OpenFullPanelRequested;
+                taskbarWindow.SuspendForEnvironmentRecovery();
+                taskbarWindow.DetachFromTaskbar();
+                try
+                {
+                    taskbarWindow.Close();
+                }
+                catch (InvalidOperationException)
+                {
+                    // Explorer may already have destroyed the cross-process child HWND.
+                }
             }
         }
 
@@ -476,7 +508,8 @@ namespace AFMediaBar.Views.Windows
             if (_isClosing)
                 return;
 
-            _taskbarWindow?.ApplySnapshot(snapshot);
+            foreach (var taskbarWindow in _taskbarWindows)
+                taskbarWindow.ApplySnapshot(snapshot);
             _dynamicIslandWindow?.ApplySnapshot(snapshot);
         }
 
@@ -485,7 +518,8 @@ namespace AFMediaBar.Views.Windows
             if (_isClosing)
                 return;
 
-            _taskbarWindow?.ApplySessions(options);
+            foreach (var taskbarWindow in _taskbarWindows)
+                taskbarWindow.ApplySessions(options);
             _dynamicIslandWindow?.ApplySessions(options);
             ApplyTraySessions(options);
         }
@@ -520,7 +554,8 @@ namespace AFMediaBar.Views.Windows
                     return;
 
                 ActivateWindowMode(e.WindowMode);
-                _taskbarWindow?.ApplyLayoutSettings(e.WindowMode, e.OrientationMode);
+                foreach (var taskbarWindow in _taskbarWindows)
+                    taskbarWindow.ApplyLayoutSettings(e.WindowMode, e.OrientationMode);
                 _dynamicIslandWindow?.ApplyLayoutSettings(e.OrientationMode);
                 _dynamicIslandWindow?.ApplyAppearanceSettings();
             });
@@ -534,7 +569,8 @@ namespace AFMediaBar.Views.Windows
                     return;
 
                 UpdateSystemThemeWatcher(e.Appearance);
-                _taskbarWindow?.ApplyAppearanceSettings();
+                foreach (var taskbarWindow in _taskbarWindows)
+                    taskbarWindow.ApplyAppearanceSettings();
                 _dynamicIslandWindow?.ApplyAppearanceSettings();
             });
         }
@@ -547,7 +583,8 @@ namespace AFMediaBar.Views.Windows
                     return;
 
                 var snapshot = _mediaSessionService.CurrentSnapshot ?? MediaSnapshot.Disconnected;
-                _taskbarWindow?.ApplySnapshot(snapshot);
+                foreach (var taskbarWindow in _taskbarWindows)
+                    taskbarWindow.ApplySnapshot(snapshot);
                 _dynamicIslandWindow?.ApplySnapshot(snapshot);
             });
         }
@@ -587,7 +624,7 @@ namespace AFMediaBar.Views.Windows
             {
                 _taskbarRecoveryCancellation?.Cancel();
                 TaskbarEnvironmentRecovering = false;
-                CloseTaskbarWindow();
+                CloseTaskbarWindows();
                 _dynamicIslandWindow ??= App.Services.GetRequiredService<DynamicIslandWindow>();
                 _dynamicIslandWindow.ApplyLayoutSettings(SettingsManager.Current.LayoutOrientationMode);
                 _dynamicIslandWindow.ApplyAppearanceSettings();
@@ -600,12 +637,14 @@ namespace AFMediaBar.Views.Windows
 
             _dynamicIslandWindow?.Close();
             _dynamicIslandWindow = null;
-            if (_taskbarWindow is null)
+            if (_taskbarWindows.Count == 0)
             {
-                _taskbarWindow = CreateTaskbarWindow();
-                _taskbarWindow.ApplyAppearanceSettings();
+                CreateTaskbarWindows();
                 if (_mediaSessionService.CurrentSnapshot is { } snapshot)
-                    _taskbarWindow.ApplySnapshot(snapshot);
+                {
+                    foreach (var taskbarWindow in _taskbarWindows)
+                        taskbarWindow.ApplySnapshot(snapshot);
+                }
                 else
                     _mediaSessionService.RefreshNow();
             }
@@ -617,8 +656,9 @@ namespace AFMediaBar.Views.Windows
             Visibility = Visibility.Collapsed;
 
             _displayMonitorService.Refresh();
-            _effectiveTaskbarMonitorDeviceId = ResolveEffectiveTaskbarMonitorDeviceId();
+            _effectiveTaskbarTargetSignature = ResolveEffectiveTaskbarTargetSignature();
             ActivateWindowMode(SettingsManager.Current.WindowMode);
+            _taskbarTopologyTimer.Start();
         }
 
         private void TrackChangeNotificationCoordinator_OnNotificationRequested(
@@ -643,7 +683,8 @@ namespace AFMediaBar.Views.Windows
             {
                 if (_isClosing)
                     return;
-                _taskbarWindow?.ApplyAppearanceSettings();
+                foreach (var taskbarWindow in _taskbarWindows)
+                    taskbarWindow.ApplyAppearanceSettings();
                 _dynamicIslandWindow?.ApplyAppearanceSettings();
             }, DispatcherPriority.Background);
         }
@@ -681,15 +722,15 @@ namespace AFMediaBar.Views.Windows
 
         private void ApplyEffectiveTaskbarMonitorChange()
         {
-            if (_isClosing)
+            if (_isClosing || TaskbarEnvironmentRecovering)
                 return;
 
-            var nextDeviceId = ResolveEffectiveTaskbarMonitorDeviceId();
-            if (string.Equals(_effectiveTaskbarMonitorDeviceId, nextDeviceId, StringComparison.OrdinalIgnoreCase))
+            var nextSignature = ResolveEffectiveTaskbarTargetSignature();
+            if (string.Equals(_effectiveTaskbarTargetSignature, nextSignature, StringComparison.OrdinalIgnoreCase))
                 return;
 
-            var hadPreviousTarget = !string.IsNullOrWhiteSpace(_effectiveTaskbarMonitorDeviceId);
-            _effectiveTaskbarMonitorDeviceId = nextDeviceId;
+            var hadPreviousTarget = !string.IsNullOrWhiteSpace(_effectiveTaskbarTargetSignature);
+            _effectiveTaskbarTargetSignature = nextSignature;
             if (!hadPreviousTarget || SettingsManager.Current.WindowMode != WindowMode.Taskbar)
                 return;
 
@@ -697,8 +738,20 @@ namespace AFMediaBar.Views.Windows
             RequestTaskbarEnvironmentRecovery();
         }
 
-        private string? ResolveEffectiveTaskbarMonitorDeviceId() =>
-            _displayMonitorService.ResolveFixedMonitor(SettingsManager.Current.TaskbarTargetMonitorDeviceId)?.DeviceId;
+        private string ResolveEffectiveTaskbarTargetSignature()
+        {
+            var targets = ResolveTaskbarTargetDeviceIds();
+            return string.Join("|", targets.Select(target =>
+            {
+                var handle = _taskBarService.GetSelectedTaskbarHandle(target, out _);
+                return $"{target}:{handle.ToInt64():X}";
+            }));
+        }
+
+        private IReadOnlyList<string> ResolveTaskbarTargetDeviceIds() =>
+            TaskbarTargetPolicy.ResolveDeviceIds(
+                _displayMonitorService.GetMonitors(),
+                SettingsManager.Current.TaskbarTargetMonitorDeviceId);
 
         private async void AudioControl_OnFlyoutToggleRequested(TrayIconBounds? bounds)
         {
@@ -723,10 +776,11 @@ namespace AFMediaBar.Views.Windows
 
         private async Task ShowTrayCompactMenuAsync(TaskbarCompactFlyoutMode mode, TrayIconBounds? bounds)
         {
-            if (_isClosing || _taskbarWindow is null)
+            var primaryTaskbarWindow = _taskbarWindows.FirstOrDefault();
+            if (_isClosing || primaryTaskbarWindow is null)
                 return;
 
-            await _taskbarWindow.ShowCompactMenuAsync(mode, bounds);
+            await primaryTaskbarWindow.ShowCompactMenuAsync(mode, bounds);
         }
 
         private void SettingsManager_OnTaskbarExperienceSettingsChanged(object? sender, EventArgs e)
@@ -734,14 +788,31 @@ namespace AFMediaBar.Views.Windows
             Dispatcher.BeginInvoke(() =>
             {
                 if (_isClosing) return;
-                _taskbarWindow?.ApplyExperienceSettings();
+                foreach (var taskbarWindow in _taskbarWindows)
+                    taskbarWindow.ApplyExperienceSettings();
             });
         }
 
-        private TaskbarWindow CreateTaskbarWindow()
+        private void CreateTaskbarWindows()
+        {
+            var seenTaskbars = new HashSet<IntPtr>();
+            foreach (var targetDeviceId in ResolveTaskbarTargetDeviceIds())
+            {
+                var handle = _taskBarService.GetSelectedTaskbarHandle(targetDeviceId, out _);
+                if (handle == IntPtr.Zero || !seenTaskbars.Add(handle))
+                    continue;
+
+                var window = CreateTaskbarWindow(targetDeviceId);
+                _taskbarWindows.Add(window);
+                window.ApplyAppearanceSettings();
+            }
+        }
+
+        private TaskbarWindow CreateTaskbarWindow(string targetDeviceId)
         {
             var window = new TaskbarWindow(
                 _taskBarService,
+                targetDeviceId,
                 ViewModel,
                 this,
                 _appearanceService,
@@ -898,7 +969,8 @@ namespace AFMediaBar.Views.Windows
                     return;
 
                 ContextMenuHelper.CloseIfOutside(TrayMenu, e.ScreenX, e.ScreenY);
-                _taskbarWindow?.CloseContextMenuIfOutside(e.ScreenX, e.ScreenY);
+                foreach (var taskbarWindow in _taskbarWindows)
+                    taskbarWindow.CloseContextMenuIfOutside(e.ScreenX, e.ScreenY);
                 _dynamicIslandWindow?.CloseContextMenuIfOutside(e.ScreenX, e.ScreenY);
             }, System.Windows.Threading.DispatcherPriority.Background);
         }

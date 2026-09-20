@@ -35,8 +35,12 @@ public partial class TaskbarWindow : Window
     // physical px offsets from the taskbar edges
     private const int EdgePadding = 20;
     private static readonly TimeSpan EnvironmentChangeProbeCooldown = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan TaskbarMotionProbeCooldown = TimeSpan.FromMilliseconds(400);
+    private static readonly TimeSpan TaskbarMotionSampleInterval = TimeSpan.FromMilliseconds(50);
+    private static readonly TimeSpan TaskbarHiddenTrimDelay = TimeSpan.FromSeconds(30);
 
     private readonly ITaskbarDockService _taskBarService;
+    private readonly string _targetMonitorDeviceId;
     private readonly TaskbarOccupiedAreaService _occupiedAreaService;
     private readonly TaskbarLengthConstraintsService _lengthConstraints;
     private readonly MainWindowViewModel _viewModel;
@@ -47,6 +51,8 @@ public partial class TaskbarWindow : Window
     private readonly DispatcherTimer _outputDeviceApplyTimer;
     private readonly DispatcherTimer _quickLaunchApplyTimer;
     private readonly DispatcherTimer _volumeApplyTimer;
+    private readonly DispatcherTimer _taskbarMotionSettleTimer;
+    private readonly DispatcherTimer _taskbarHiddenTrimTimer;
     private bool _spectrumActive;
     private readonly GlobalInteractionRouter _interactionRouter;
     private readonly AudioInteractionService _audioInteractionService;
@@ -63,10 +69,20 @@ public partial class TaskbarWindow : Window
     private IntPtr _lastTaskbarHandle;
     private IntPtr _windowHandle;
     private bool _positionUpdateInProgress;
+
+    /// <summary>
+    /// 上一次"宿主窗口与任务栏矩形不一致"写进日志时的任务栏矩形指纹（内容去重）。
+    /// Signature of the taskbar rectangle the last "host rect corrected" line was written for, so identical occurrences are not repeated.
+    /// </summary>
+    private string? _loggedHostRectSignature;
     private bool _isClosing;
     private bool _isEnvironmentSuspended;
     private bool _isDetachedFromTaskbar;
     private bool _setupComplete;
+    private TaskbarMotionState _taskbarMotionState;
+    private IntPtr _taskbarLocationHook;
+    private IntPtr _hookedTaskbarHandle;
+    private WinEventProc? _taskbarLocationCallback;
     private bool _environmentLayoutQueued;
     private bool _isDragging;
     private bool _isDragPending;
@@ -107,6 +123,7 @@ public partial class TaskbarWindow : Window
     /// </summary>
     public TaskbarWindow(
         ITaskbarDockService taskBarService,
+        string targetMonitorDeviceId,
         MainWindowViewModel viewModel,
         ITaskbarWindowHostActions hostActions,
         WindowAppearanceService appearanceService,
@@ -124,6 +141,7 @@ public partial class TaskbarWindow : Window
         WindowHelper.SetNoActivate(this);
         InitializeComponent();
 
+        _targetMonitorDeviceId = targetMonitorDeviceId;
         _mouseInputMonitor = mouseInputMonitor;
         DataContext = viewModel;
         ContextMenuHelper.AttachOutsideClickDismissal(PlayerMenu);
@@ -165,6 +183,7 @@ public partial class TaskbarWindow : Window
         _audioMonitorService = audioMonitorService;
         _sourceActivationService = sourceActivationService;
         _metricsMonitor = metricsMonitor;
+        _memoryPruneCoordinator = memoryPruneCoordinator;
         _foregroundSamplingSession = new AdaptiveForegroundSamplingSession(
             screenBackgroundSampler,
             Dispatcher,
@@ -176,6 +195,16 @@ public partial class TaskbarWindow : Window
         _timer.Tick += PositionTimer_Tick;
         _timer.Start();
 
+        _taskbarMotionSettleTimer = new DispatcherTimer { Interval = TaskbarMotionSampleInterval };
+        _taskbarMotionSettleTimer.Tick += (_, _) => ObserveTaskbarMotion();
+        _taskbarHiddenTrimTimer = new DispatcherTimer { Interval = TaskbarHiddenTrimDelay };
+        _taskbarHiddenTrimTimer.Tick += (_, _) =>
+        {
+            _taskbarHiddenTrimTimer.Stop();
+            if (!_isClosing && _taskbarMotionState.IsHidden && !_taskbarMotionState.IsMoving)
+                _memoryPruneCoordinator.RequestTrim(MemoryTrimTrigger.TaskbarHidden);
+        };
+
         // 后台剪枝：宿主自己订阅档位变化，按档位停掉或恢复自己的计时器与指标订阅。
         // 窗口由 MainWindow 构造（不是容器构造的），因此它不能作为参与者被注入，而是订阅协调器的事件——订阅在 OnClosed 里解除，
         // 否则每次重建任务栏（Explorer 重启）都会留下一个不会释放的窗口引用。
@@ -183,7 +212,6 @@ public partial class TaskbarWindow : Window
         // The window is built by MainWindow rather than by the container, so it cannot be injected as a participant; instead it subscribes to the
         // coordinator's event, and unsubscribes in OnClosed, because every taskbar rebuild after an Explorer restart would otherwise leave a window
         // reference behind that never gets released.
-        _memoryPruneCoordinator = memoryPruneCoordinator;
         _memoryPruneCoordinator.LevelChanged += MemoryPruneCoordinator_LevelChanged;
         _backgroundPruneLevel = _memoryPruneCoordinator.CurrentLevel;
 
@@ -200,7 +228,7 @@ public partial class TaskbarWindow : Window
             // session playing" term: a game, a player without SMTC, or a browser page without metadata all move the spectrum, as long as the
             // spectrum component is visible right now. While it is not visible nothing is captured at all — the only authority on rest-layer
             // visibility is TaskbarRestLayoutPolicy, and the host merely reads the verdict the control computed.
-            if (!_isClosing && _appliedOrientation == LayoutOrientation.Horizontal &&
+            if (!_isClosing && !IsTaskbarPresentationSuspended && _appliedOrientation == LayoutOrientation.Horizontal &&
                 MediaControl.IsSpectrumComponentVisible &&
                 _audioMonitorService.GetSpectrum(_spectrumBands, bandCount))
             {
@@ -284,6 +312,151 @@ public partial class TaskbarWindow : Window
         source.AddHook(WindowProc);
     }
 
+    /// <summary>任务栏正在自动隐藏/显示，或已经缩进屏幕边缘时，宿主不参与布局与输入。/ While the taskbar is moving or hidden at the screen edge, the host takes no part in layout or input.</summary>
+    private bool IsTaskbarPresentationSuspended => _taskbarMotionState.IsMoving || _taskbarMotionState.IsHidden;
+
+    private void RegisterTaskbarLocationHook(IntPtr taskbarHandle)
+    {
+        if (taskbarHandle == IntPtr.Zero || taskbarHandle == _hookedTaskbarHandle && _taskbarLocationHook != IntPtr.Zero)
+            return;
+
+        UnregisterTaskbarLocationHook();
+        _taskbarLocationCallback ??= (_, eventType, hwnd, objectId, _, _, _) =>
+        {
+            if (eventType != EVENT_OBJECT_LOCATIONCHANGE || hwnd != _lastTaskbarHandle || objectId != OBJID_WINDOW)
+                return;
+
+            Dispatcher.BeginInvoke(ObserveTaskbarMotion, DispatcherPriority.Send);
+        };
+
+        var threadId = GetWindowThreadProcessId(taskbarHandle, out var processId);
+        _taskbarLocationHook = SetWinEventHook(
+            EVENT_OBJECT_LOCATIONCHANGE,
+            EVENT_OBJECT_LOCATIONCHANGE,
+            IntPtr.Zero,
+            _taskbarLocationCallback,
+            unchecked((uint)processId),
+            threadId,
+            WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
+        if (_taskbarLocationHook != IntPtr.Zero)
+            _hookedTaskbarHandle = taskbarHandle;
+    }
+
+    private void UnregisterTaskbarLocationHook()
+    {
+        if (_taskbarLocationHook == IntPtr.Zero)
+            return;
+
+        UnhookWinEvent(_taskbarLocationHook);
+        _taskbarLocationHook = IntPtr.Zero;
+        _hookedTaskbarHandle = IntPtr.Zero;
+    }
+
+    /// <summary>
+    /// 观察 Shell 任务栏的物理矩形。只要矩形仍在变化，就冻结本窗口的尺寸、位置、采样和输入；连续四个样本稳定后再一次性恢复
+    /// （含重新断言几何与显隐，因此调用方不需要区分"钩子触发"与"计时器采样"）。
+    /// Observes the Shell taskbar's physical rectangle. Any continuing change freezes this window's size, position, sampling, and input;
+    /// ordinary work resumes in one step only after four consecutive stable samples, geometry and visibility included, so callers do not have to
+    /// tell hook events and timer samples apart.
+    /// </summary>
+    private void ObserveTaskbarMotion()
+    {
+        if (_isClosing || _isEnvironmentSuspended || _lastTaskbarHandle == IntPtr.Zero ||
+            !_taskBarService.TryGetTaskbarRect(_lastTaskbarHandle, out var taskbarRect))
+        {
+            return;
+        }
+
+        var previous = _taskbarMotionState;
+        var orientation = _appliedOrientation ??
+                          (taskbarRect.Bottom - taskbarRect.Top > taskbarRect.Right - taskbarRect.Left
+                              ? LayoutOrientation.Vertical
+                              : LayoutOrientation.Horizontal);
+        var monitorBounds = MonitorUtil.GetMonitor(_lastTaskbarHandle).monitorArea;
+        _taskbarMotionState = TaskbarMotionPolicy.Observe(previous, taskbarRect, monitorBounds, orientation);
+
+        if (_taskbarMotionState.IsMoving)
+        {
+            _skipOccupiedAreaProbeUntilUtc = DateTime.UtcNow + TaskbarMotionProbeCooldown;
+            _taskbarMotionSettleTimer.Stop();
+            _taskbarMotionSettleTimer.Start();
+        }
+        else
+        {
+            _taskbarMotionSettleTimer.Stop();
+        }
+
+        if (previous.IsMoving == _taskbarMotionState.IsMoving && previous.IsHidden == _taskbarMotionState.IsHidden)
+            return;
+
+        ApplyTaskbarPresentationState(previous);
+    }
+
+    private void ApplyTaskbarPresentationState(TaskbarMotionState previous)
+    {
+        var suspended = IsTaskbarPresentationSuspended;
+        MediaControl.ApplyHostVisibilitySuspension(suspended);
+        MediaControl.IsHitTestVisible = !suspended;
+        WindowHelper.SetInputTransparent(this, suspended);
+
+        if (suspended)
+        {
+            _sizeAnimationTimer.Stop();
+            _spectrumTimer.Stop();
+            _metricsSubscription?.Dispose();
+            _metricsSubscription = null;
+            _foregroundSamplingSession.Invalidate(clearDecision: false);
+            _compactFlyout.Dismiss();
+            PlayerMenu.IsOpen = false;
+            if (_isDragging || _isDragPending)
+            {
+                _isDragging = false;
+                _isDragPending = false;
+                if (MediaControl.IsMouseCaptured)
+                    MediaControl.ReleaseMouseCapture();
+            }
+
+            if (_taskbarMotionState.IsHidden && !_taskbarMotionState.IsMoving)
+            {
+                _taskbarHiddenTrimTimer.Stop();
+                _taskbarHiddenTrimTimer.Start();
+                if (!previous.IsHidden)
+                    AppLogService.Current?.Info("Taskbar", $"任务栏已自动隐藏，宿主暂停 / taskbar auto-hidden; host suspended: {_targetMonitorDeviceId}");
+            }
+            else
+            {
+                _taskbarHiddenTrimTimer.Stop();
+            }
+
+            // 收起稳定时这里把窗口隐藏掉；从收起转为展开时这里立刻恢复显示（判据见 ApplyMediaBarVisibility）。
+            // This hides the window once the taskbar is settled at the edge, and shows it again the moment the taskbar starts revealing; the
+            // rule lives in ApplyMediaBarVisibility.
+            ApplyMediaBarVisibility();
+            return;
+        }
+
+        _taskbarHiddenTrimTimer.Stop();
+        if (previous.IsHidden || previous.IsMoving)
+            AppLogService.Current?.Info("Taskbar", $"任务栏动画稳定，宿主恢复 / taskbar motion settled; host resumed: {_targetMonitorDeviceId}");
+        ApplyMediaBarVisibility();
+        ResumeOperationalTimers();
+
+        if (_pendingSizeRequest is { } request && _appliedOrientation is { } orientation)
+        {
+            _pendingSizeRequest = null;
+            ApplyDesiredSizeRequest(request, orientation);
+        }
+        else
+        {
+            // 恢复时 MUST 重新断言一次几何：收起期间窗口的位置、输入区域与长度夹取都没有更新，而任务栏展开后的矩形
+            // （避让区间、长度上限）可能已经变过；只把它交给"子窗口跟着父窗口运动"会在展开后留下错位或被裁掉的一截。
+            // The geometry MUST be asserted again on resume: while the taskbar was hidden neither the window's position nor its input region
+            // nor the length clamp was updated, and the revealed taskbar's rectangle (free ranges, length ceiling) may have changed in the
+            // meantime; leaving that to "the child follows its parent" is what leaves the bar misplaced or clipped after a reveal.
+            UpdatePosition();
+        }
+    }
+
     private IntPtr WindowProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
         if (msg == WM_NCDESTROY)
@@ -296,6 +469,9 @@ public partial class TaskbarWindow : Window
             _timer.Stop();
             _sizeAnimationTimer.Stop();
             _spectrumTimer.Stop();
+            _taskbarMotionSettleTimer.Stop();
+            _taskbarHiddenTrimTimer.Stop();
+            UnregisterTaskbarLocationHook();
             _metricsSubscription?.Dispose();
             _metricsSubscription = null;
             _outputDeviceApplyTimer.Stop();
@@ -353,6 +529,10 @@ public partial class TaskbarWindow : Window
         if (_isClosing || _isEnvironmentSuspended)
             return;
 
+        ObserveTaskbarMotion();
+        if (IsTaskbarPresentationSuspended)
+            return;
+
         if (!_isDragging &&
             DateTime.UtcNow >= _skipOccupiedAreaProbeUntilUtc &&
             _pendingSizeRequest is { } request &&
@@ -383,7 +563,7 @@ public partial class TaskbarWindow : Window
             IntPtr taskbarWindowHandle = interop.Handle;
 
             IntPtr taskbarHandle = _taskBarService.GetSelectedTaskbarHandle(
-                SettingsManager.Current.TaskbarTargetMonitorDeviceId, out _);
+                _targetMonitorDeviceId, out _);
             _lastTaskbarHandle = taskbarHandle;
 
             ApplyLayoutSettings(SettingsManager.Current.WindowMode, SettingsManager.Current.LayoutOrientationMode, taskbarHandle);
@@ -391,8 +571,10 @@ public partial class TaskbarWindow : Window
             // If this window is created faster than the taskbar is loaded, taskbarHandle will be NULL;
             // UpdatePosition will re-attach once the taskbar appears.
             _taskBarService.DockWindow(taskbarWindowHandle, taskbarHandle);
-
-            CalculateAndSetPosition(taskbarHandle, taskbarWindowHandle);
+            RegisterTaskbarLocationHook(taskbarHandle);
+            ObserveTaskbarMotion();
+            if (!IsTaskbarPresentationSuspended)
+                CalculateAndSetPosition(taskbarHandle, taskbarWindowHandle);
         }
         catch (Exception ex)
         {
@@ -402,7 +584,7 @@ public partial class TaskbarWindow : Window
 
     private void UpdatePosition()
     {
-        if (_isClosing || _isEnvironmentSuspended || _isDragging || _hostActions.IsEnvironmentRecovering)
+        if (_isClosing || _isEnvironmentSuspended || _isDragging || IsTaskbarPresentationSuspended || _hostActions.IsEnvironmentRecovering)
         {
             // Explorer 正在恢复时不更新旧宿主位置。
             // Do not reposition the old host while Explorer is recovering.
@@ -416,7 +598,12 @@ public partial class TaskbarWindow : Window
         {
             var interop = new WindowInteropHelper(this);
             IntPtr taskbarHandle = _taskBarService.GetSelectedTaskbarHandle(
-                SettingsManager.Current.TaskbarTargetMonitorDeviceId, out _);
+                _targetMonitorDeviceId, out _);
+            if (taskbarHandle != _lastTaskbarHandle)
+            {
+                _taskbarMotionState = default;
+                RegisterTaskbarLocationHook(taskbarHandle);
+            }
             _lastTaskbarHandle = taskbarHandle;
 
             ApplyLayoutSettings(SettingsManager.Current.WindowMode, SettingsManager.Current.LayoutOrientationMode, taskbarHandle);
@@ -463,7 +650,7 @@ public partial class TaskbarWindow : Window
     private void CalculateAndSetPosition(IntPtr taskbarHandle, IntPtr taskbarWindowHandle)
     {
         // Prevent overlapping updates - if a previous update is still running, skip this tick.
-        if (_positionUpdateInProgress)
+        if (_positionUpdateInProgress || IsTaskbarPresentationSuspended)
             return;
         _positionUpdateInProgress = true;
 
@@ -485,8 +672,27 @@ public partial class TaskbarWindow : Window
                 return;
 
             // Cover the whole taskbar with the child window (taskbar-relative coordinates)
-            _taskBarService.SetWindowPosition(taskbarWindowHandle, taskbarHandle, taskbarRect,
+            var corrected = _taskBarService.SetWindowPosition(taskbarWindowHandle, taskbarHandle, taskbarRect,
                 taskbarWidth, taskbarHeight);
+            if (corrected)
+            {
+                // 写入的矩形与实际落地的不一致：这就是"媒体栏顶边越过任务栏顶边被裁切"的现场。记下两边的数字，
+                // 下一次出现时可以直接判断是容器原点、父窗口客户区原点还是尺寸不一致造成的。
+                // The written rectangle and the one that actually landed disagree: this is the scene of "the bar's top edge crosses the taskbar's top edge and
+                // is clipped". Both sets of numbers are recorded so the next occurrence can be traced to the container origin, the parent's client origin,
+                // or a size mismatch.
+                var log = AppLogService.Current;
+                var signature = $"host-rect {taskbarRect.Left},{taskbarRect.Top},{taskbarRect.Right},{taskbarRect.Bottom}";
+                if (!string.Equals(signature, _loggedHostRectSignature, StringComparison.Ordinal))
+                {
+                    _loggedHostRectSignature = signature;
+                    log?.Info(
+                        "Taskbar",
+                        $"宿主窗口与任务栏矩形不一致，已纠正 / host rect corrected: taskbar=" +
+                        $"({taskbarRect.Left},{taskbarRect.Top})-({taskbarRect.Right},{taskbarRect.Bottom}) " +
+                        $"dpi={dpiScale:0.##} host={taskbarWidth}x{taskbarHeight} monitor={_targetMonitorDeviceId}");
+                }
+            }
 
             // Place the bar on the canvas and clip the window to it
             RECT barRect = PositionBar(taskbarRect, dpiScale);
@@ -514,7 +720,9 @@ public partial class TaskbarWindow : Window
             (int)Math.Round((orientation == LayoutOrientation.Horizontal ? barWidth : barHeight) * dpiScale));
         var maximumPrimary = preferredRange.Length / dpiScale;
         if (orientation == LayoutOrientation.Horizontal)
-            _lengthConstraints.Update(MediaControl.MinimumPrimaryLength, maximumPrimary);
+            _lengthConstraints.Update(this, MediaControl.MinimumPrimaryLength, maximumPrimary);
+        else
+            _lengthConstraints.Remove(this);
         if (DateTime.UtcNow >= _skipOccupiedAreaProbeUntilUtc && maximumPrimary > 0)
         {
             var currentPrimary = orientation == LayoutOrientation.Horizontal ? barWidth : barHeight;
@@ -530,6 +738,21 @@ public partial class TaskbarWindow : Window
         int physicalHeight = (int)Math.Round(barHeight * dpiScale);
 
         bool isVertical = _appliedOrientation == LayoutOrientation.Vertical;
+
+        // 横轴最后一道保证：媒体栏 MUST NOT 比任务栏更高（竖向任务栏则是更宽）。`ResolveTaskbarThicknessScalePercent`
+        // 正常时它本来就装得下——它按任务栏横轴尺寸与预设画布算出厚度上限；而它一旦读到错误的 DPI 或过期的任务栏矩形
+        // （自动隐藏动画期间与多显示器切换时都可能），算出来的上限就偏大，媒体栏于是比任务栏高。这里把寄主的框直接夹到
+        // 任务栏的横轴尺寸：宁可让内容在底部被裁掉，也绝不让顶边越过任务栏顶边——顶边越界正是用户看到的那种裁切。
+        // Last-resort guarantee on the cross axis: the bar MUST NOT be taller than the taskbar (nor wider, on a vertical taskbar).
+        // `ResolveTaskbarThicknessScalePercent` normally makes it fit — it derives the thickness ceiling from the taskbar's cross extent and the preset
+        // canvas — but once it reads a wrong DPI or a stale taskbar rectangle (both possible during the auto-hide animation and on multi-monitor switches)
+        // that ceiling comes out too large and the bar ends up taller than the taskbar. This clamps the host's own box to the taskbar's cross extent:
+        // content being cut at the bottom is preferable to the top edge crossing the taskbar's top edge, which is exactly the clipping reported.
+        if (isVertical)
+            physicalWidth = Math.Min(physicalWidth, Math.Max(1, taskbarWidth));
+        else
+            physicalHeight = Math.Min(physicalHeight, Math.Max(1, taskbarHeight));
+
         int primaryLength = isVertical ? taskbarHeight : taskbarWidth;
         int primarySize = isVertical ? physicalHeight : physicalWidth;
         int crossLength = isVertical ? taskbarWidth : taskbarHeight;
@@ -593,7 +816,7 @@ public partial class TaskbarWindow : Window
             _compactFlyout.Dismiss();
         }
 
-        if (!_timer.IsEnabled)
+        if (!_timer.IsEnabled && !IsTaskbarPresentationSuspended)
             _timer.Start();
 
         // Delegate UI update to the original media control and its taskbar-only overlay.
@@ -628,7 +851,7 @@ public partial class TaskbarWindow : Window
         if (taskbarHandle == IntPtr.Zero)
         {
             taskbarHandle = _taskBarService.GetSelectedTaskbarHandle(
-                SettingsManager.Current.TaskbarTargetMonitorDeviceId, out _);
+                _targetMonitorDeviceId, out _);
         }
 
         ApplyLayoutSettings(windowMode, orientationMode, taskbarHandle);
@@ -821,9 +1044,14 @@ public partial class TaskbarWindow : Window
     }
 
     /// <summary>
-    /// 把控件算出的"整条媒体栏是否应当隐藏"落到窗口上，并只在真正从隐藏变回可见时补一次背景采样。
-    /// Applies the control's verdict on whether the whole bar should hide to the window, refreshing background sampling only when it
-    /// actually goes from hidden back to visible.
+    /// 把控件算出的"整条媒体栏是否应当隐藏"与任务栏运动状态一起落到窗口上，并只在真正从隐藏变回可见时补一次背景采样。
+    /// 判据只有一处（<see cref="TaskbarHostVisibilityPolicy"/>）：任务栏稳定收起时隐藏由宿主自己做，不能只依赖"子窗口跟着父窗口运动"；
+    /// 收起动画进行中保持现状（父窗口正带着我们走）；从收起转为展开时立刻恢复显示，否则媒体栏会比任务栏慢半拍出现。
+    /// Applies the control's verdict on whether the whole bar should hide together with the taskbar's motion state to the window, refreshing
+    /// background sampling only when it actually goes from hidden back to visible. The rule has one home
+    /// (<see cref="TaskbarHostVisibilityPolicy"/>): while the taskbar is settled at the screen edge the host hides its own window instead of
+    /// relying on the child following its parent, the hide animation leaves things alone (the parent is carrying us), and the moment the
+    /// taskbar starts revealing the bar is shown again so that it does not appear a beat after the taskbar does.
     /// </summary>
     private void ApplyMediaBarVisibility()
     {
@@ -832,15 +1060,19 @@ public partial class TaskbarWindow : Window
             return;
         }
 
-        var wasHidden = Visibility != Visibility.Visible;
-        var target = MediaControl.ShouldHideTaskbarWindow ? Visibility.Collapsed : Visibility.Visible;
+        var resolved = TaskbarHostVisibilityPolicy.Resolve(_taskbarMotionState, MediaControl.ShouldHideTaskbarWindow);
+        var target = resolved == TaskbarHostVisibility.Collapsed ? Visibility.Collapsed : Visibility.Visible;
         if (Visibility == target)
         {
             return;
         }
 
+        var wasHidden = Visibility != Visibility.Visible;
         Visibility = target;
-        if (wasHidden && target == Visibility.Visible)
+        // 运动期间不请求背景采样：那一刻窗口正在被父窗口带着走，采样矩形没有意义，恢复后由位置计时器补一次。
+        // No background sampling is requested while the taskbar moves: the window is being carried by its parent at that moment, the sample
+        // rectangle means nothing, and the position timer asks for one after the motion settles.
+        if (wasHidden && target == Visibility.Visible && !_taskbarMotionState.IsMoving)
         {
             Dispatcher.BeginInvoke(_foregroundSamplingSession.RequestRefresh, DispatcherPriority.ContextIdle);
         }
@@ -868,9 +1100,12 @@ public partial class TaskbarWindow : Window
             return;
 
         _isEnvironmentSuspended = true;
+        UnregisterTaskbarLocationHook();
         _timer.Stop();
         _sizeAnimationTimer.Stop();
         _spectrumTimer.Stop();
+        _taskbarMotionSettleTimer.Stop();
+        _taskbarHiddenTrimTimer.Stop();
         _metricsSubscription?.Dispose();
         _metricsSubscription = null;
         _outputDeviceApplyTimer.Stop();
@@ -883,6 +1118,9 @@ public partial class TaskbarWindow : Window
         _pendingSizeRequest = null;
         PlayerMenu.IsOpen = false;
         _compactFlyout.Dismiss();
+        MediaControl.ApplyHostVisibilitySuspension(true);
+        MediaControl.IsHitTestVisible = false;
+        WindowHelper.SetInputTransparent(this, true);
     }
 
     internal void ResumeAfterEnvironmentRecovery()
@@ -891,7 +1129,11 @@ public partial class TaskbarWindow : Window
             return;
 
         _isEnvironmentSuspended = false;
-        ResumeOperationalTimers();
+        RegisterTaskbarLocationHook(_lastTaskbarHandle);
+        _taskbarMotionState = default;
+        ObserveTaskbarMotion();
+        if (!IsTaskbarPresentationSuspended)
+            ResumeOperationalTimers();
     }
 
     /// <summary>
@@ -953,9 +1195,12 @@ public partial class TaskbarWindow : Window
     /// </summary>
     private void ResumeOperationalTimers()
     {
-        if (_isClosing || _isEnvironmentSuspended || IsBackgroundPruned)
+        if (_isClosing || _isEnvironmentSuspended || IsBackgroundPruned || IsTaskbarPresentationSuspended)
             return;
 
+        MediaControl.ApplyHostVisibilitySuspension(false);
+        MediaControl.IsHitTestVisible = true;
+        WindowHelper.SetInputTransparent(this, false);
         if (!_timer.IsEnabled)
             _timer.Start();
         if (!_spectrumTimer.IsEnabled)
@@ -1270,7 +1515,7 @@ public partial class TaskbarWindow : Window
         // Whether to subscribe for metric sampling follows the performance component's visibility as the control computed it: the only authority on
         // rest-layer visibility is TaskbarRestLayoutPolicy, and reading PerformanceVisible here instead would keep sampling for nothing while the
         // performance component is not kept without media.
-        _metricsSubscription = !_isClosing && !_isEnvironmentSuspended && !IsBackgroundPruned &&
+        _metricsSubscription = !_isClosing && !_isEnvironmentSuspended && !IsBackgroundPruned && !IsTaskbarPresentationSuspended &&
                                MediaControl.IsPerformanceComponentVisible
             ? _metricsMonitor.Subscribe(
                 performance.Metrics!,
@@ -1281,7 +1526,7 @@ public partial class TaskbarWindow : Window
 
     private void ApplyMetricsSnapshot(SystemMetricsSnapshot snapshot)
     {
-        if (_isClosing || _isEnvironmentSuspended) return;
+        if (_isClosing || _isEnvironmentSuspended || IsTaskbarPresentationSuspended) return;
         var settings = SettingsManager.Current.PerformanceComponent.Normalize();
         var metrics = settings.Metrics ?? [MetricKind.SystemMemory];
         _metricSampleCount++;
@@ -1446,7 +1691,7 @@ public partial class TaskbarWindow : Window
             return;
 
         _lastDesiredSizeRequest = request;
-        if (_isDragging || DateTime.UtcNow < _skipOccupiedAreaProbeUntilUtc)
+        if (_isDragging || IsTaskbarPresentationSuspended || DateTime.UtcNow < _skipOccupiedAreaProbeUntilUtc)
         {
             _pendingSizeRequest = request;
             return;
@@ -1462,7 +1707,9 @@ public partial class TaskbarWindow : Window
             ? MediaControl.MinimumPrimaryLength
             : 1;
         if (orientation == LayoutOrientation.Horizontal)
-            _lengthConstraints.Update(minimum, maximum);
+            _lengthConstraints.Update(this, minimum, maximum);
+        else
+            _lengthConstraints.Remove(this);
         var target = TaskbarExperiencePolicy.ResolvePrimaryLength(
             request.PrimaryLength,
             minimum,
@@ -1524,6 +1771,7 @@ public partial class TaskbarWindow : Window
         if (!SettingsManager.Current.TaskbarBarAvoidIcons ||
             _lastTaskbarHandle == IntPtr.Zero ||
             _hostActions.IsEnvironmentRecovering ||
+            IsTaskbarPresentationSuspended ||
             DateTime.UtcNow < _skipOccupiedAreaProbeUntilUtc)
             return fallback;
 
@@ -1544,7 +1792,7 @@ public partial class TaskbarWindow : Window
 
     private void AdvanceSizeAnimation()
     {
-        if (_isClosing || _isDragging)
+        if (_isClosing || _isDragging || IsTaskbarPresentationSuspended)
         {
             _sizeAnimationTimer.Stop();
             return;
@@ -1622,6 +1870,10 @@ public partial class TaskbarWindow : Window
         _timer.Stop();
         _sizeAnimationTimer.Stop();
         _spectrumTimer.Stop();
+        _taskbarMotionSettleTimer.Stop();
+        _taskbarHiddenTrimTimer.Stop();
+        UnregisterTaskbarLocationHook();
+        _lengthConstraints.Remove(this);
         _metricsSubscription?.Dispose();
         _metricsSubscription = null;
         _outputDeviceApplyTimer.Stop();
