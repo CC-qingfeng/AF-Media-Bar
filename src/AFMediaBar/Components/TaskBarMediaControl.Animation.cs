@@ -89,14 +89,14 @@ public partial class TaskBarMediaControl
     /// <summary>
     /// 按当前内容与可用宽度决定一个文本元素用哪种方式推进，并把该写回的属性写回。
     ///
-    /// 正在逐字擦亮的歌词行用跟随式（只丢弃已唱过的字，已唱段始终是窗口前缀，擦亮因此永远精确）；
+    /// 正在按歌词时间轴推进的歌词行用跟随式（只丢弃已唱过的字，已唱段始终是窗口前缀）；擦亮层即使隐藏也沿用同一轨迹。
     /// 其余元素用轮转式（没有"唱到哪"的概念，循环滚动才能反复读到）。
     /// Decides how one text element advances for its current content and available width, and writes back the properties that belong to
     /// that decision.
     ///
-    /// A lyric line that is being revealed syllable by syllable uses the follow mode, which only discards characters that are already
-    /// sung and therefore keeps the sung run a prefix of the window, so the reveal stays exact. Everything else uses rotation, which
-    /// loops because it has no notion of "how far the singing has reached".
+    /// A lyric line advancing on its lyric timeline uses the follow mode, which only discards characters that are already sung and keeps
+    /// the sung run as a prefix of the window. Hiding the highlight layer keeps this same trajectory. Everything else uses rotation,
+    /// which loops because it has no notion of "how far the singing has reached".
     /// </summary>
     /// <param name="state">该元素的推进状态。/ Advance state of that element.</param>
     /// <param name="enabled">当前是否允许推进。/ Whether advancing is currently allowed.</param>
@@ -120,7 +120,7 @@ public partial class TaskBarMediaControl
         var overflow = enabled && available > 0
             ? TaskbarExperiencePolicy.CalculateMarqueeOverflow(measured, available)
             : 0;
-        var following = overflow > 1 && state.Base.Length > 0 && IsFollowMarqueeElement(element) && _lyricHighlightActive;
+        var following = overflow > 1 && state.Base.Length > 0 && IsFollowMarqueeElement(element) && _lyricTimelineActive;
         // 歌词行的推进属于亮区：暂停时亮区停住，歌词也 MUST NOT 改走轮转自己跑起来（那会让暂停中的歌词一直循环滚动），
         // 此时它按普通裁剪显示整行开头。标题与歌手没有"唱到哪"这种进度，暂停时照常轮转。
         // A lyric row advances with the reveal: while playback is paused the reveal stands still, and the row MUST NOT fall back to rotating
@@ -203,7 +203,7 @@ public partial class TaskBarMediaControl
     private static bool ShowsMarqueeWindow(MarqueeTextState state) =>
         string.Equals(state.Element.Text, state.Window, StringComparison.Ordinal);
 
-    /// <summary>该元素是否使用跟随式推进（正在逐字擦亮的歌词行）。 / Whether the element uses the follow mode, which means the lyric line currently being revealed.</summary>
+    /// <summary>该元素是否可使用歌词时间轴跟随推进。/ Whether the element can follow the lyric timeline.</summary>
     /// <param name="element">文本元素。/ Text element.</param>
     private bool IsFollowMarqueeElement(TextBlock element) => ReferenceEquals(element, SongLyrics);
 
@@ -377,9 +377,9 @@ public partial class TaskBarMediaControl
     }
 
     /// <summary>
-    /// 读取正在逐字擦亮的歌词行窗口：窗口内已唱段的裁剪宽度与窗口整体宽度。没有启用跟随时返回 false，
+    /// 读取按歌词时间轴跟随的主歌词行窗口：窗口内已唱段的裁剪宽度与窗口整体宽度。没有启用跟随时返回 false，
     /// 调用方按整行前缀换算擦亮。
-    /// Reads the window of the lyric line that is being revealed: the clip width of the sung run inside it and the window's total
+    /// Reads the window of the main lyric line that follows its timeline: the clip width of the sung run inside it and the window's total
     /// width. Returns false when the follow mode is off, in which case the caller converts the reveal from the whole line instead.
     /// </summary>
     /// <param name="sungWidthDip">窗口内已唱段的宽度（DIP）。/ Width of the sung run inside the window, in DIP.</param>

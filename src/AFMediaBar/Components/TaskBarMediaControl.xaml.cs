@@ -113,9 +113,9 @@ namespace AFMediaBar.Components
             AddMarqueeText(SongLyricsSecondary);
             _marqueeTimer = new DispatcherTimer(DispatcherPriority.Render) { Interval = MarqueeTiming.FrameInterval };
             _marqueeTimer.Tick += (_, _) => AdvanceMarqueeStep();
-            // 逐字擦亮按帧推进：只有"当前行带音节时间轴且正在播放"时才由呈现状态启动，其余状态在下一帧自停并还原外观。
-            // Syllable highlighting advances frame by frame: the presentation state starts it only while the active line carries
-            // a syllable timeline and playback runs, and it stops itself on the next frame otherwise, restoring the appearance.
+            // 擦亮视觉层按帧推进；歌词时间轴与跟随滚动独立于开关，关闭擦亮只停这支 33 ms 计时器，不改变滚动轨迹。
+            // The visual highlight layer advances frame by frame. The lyric timeline and follow scroll are independent of the switch,
+            // so hiding the highlight stops only this 33 ms timer without changing the scrolling trajectory.
             _lyricHighlightTimer = new DispatcherTimer(DispatcherPriority.Render)
             {
                 Interval = TimeSpan.FromMilliseconds(LyricHighlightFrameIntervalMilliseconds)
