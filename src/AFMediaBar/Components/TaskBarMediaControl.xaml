@@ -258,13 +258,22 @@
                          Maximum="1"
                          Style="{StaticResource AfAccentProgressBarStyle}"
                          Visibility="Collapsed" />
+            <!--
+                静置层的四个"小组件"（频谱、性能、输出设备、音量）都是同一种结构：外层悬停表面负责显隐、命中测试与 hover，
+                内层承载真正的外观。位置由 ApplyTaskbarSectionGeometry 按用户在静置层顺序里排的位置写入 Margin.Left，
+                因此这里 MUST 用 Left 对齐：改成 Right 会把它们钉在右边缘，顺序就再也排不出来了。
+                The rest layer's four "widgets" (spectrum, performance, output device, volume) share one shape: an outer hover surface owns
+                visibility, hit testing, and hover, while an inner one carries the actual look. Their position is written into Margin.Left by
+                ApplyTaskbarSectionGeometry according to the user's rest-layer order, so Left alignment is required here: Right alignment
+                would pin them to the right edge and the order could never be expressed.
+            -->
             <Border x:Name="TaskbarSpectrumHoverSurface"
                     Panel.ZIndex="4"
                     Width="36"
                     Height="32"
-                    Margin="0,0,4,0"
+                    Margin="0"
                     Padding="1"
-                    HorizontalAlignment="Right"
+                    HorizontalAlignment="Left"
                     VerticalAlignment="Center"
                     CornerRadius="5"
                     Background="Transparent"
@@ -293,9 +302,9 @@
                     Panel.ZIndex="4"
                     Width="76"
                     Height="32"
-                    Margin="0,0,4,0"
+                    Margin="0"
                     Padding="1"
-                    HorizontalAlignment="Right"
+                    HorizontalAlignment="Left"
                     VerticalAlignment="Center"
                     CornerRadius="5"
                     Background="Transparent"
@@ -313,6 +322,72 @@
                     <TextBlock x:Name="TaskbarPerformanceText" Text="MEM —" FontSize="11"
                                FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"
                                TextTrimming="CharacterEllipsis" IsHitTestVisible="False"/>
+                </Border>
+            </Border>
+            <!--
+                输出设备与音量按钮作为静置层小组件：内层是可点的圆形芯片，点击与滚轮复用悬停层同名按钮的处理，
+                因此菜单、提示与滚轮语义只有一处实现。Tag="MediaAction" 让宿主的拖动逻辑放过按下事件，
+                否则这次点击会被拖动路径标记为已处理，内层的 MouseLeftButtonUp 永远不会执行。
+                The output-device and volume buttons as rest-layer widgets: the inner chip is clickable and reuses the hover layer's handlers
+                for the same buttons, so the menu, the tooltips, and the wheel semantics have one implementation each. Tag="MediaAction" makes
+                the host's drag logic pass the press through, otherwise the drag path marks it handled and the inner MouseLeftButtonUp never runs.
+            -->
+            <Border x:Name="TaskbarOutputDeviceHoverSurface"
+                    Panel.ZIndex="4"
+                    Width="26"
+                    Height="32"
+                    Margin="0"
+                    Padding="1"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Center"
+                    CornerRadius="5"
+                    Background="Transparent"
+                    BorderBrush="Transparent"
+                    BorderThickness="0,1.25,0,0"
+                    Visibility="Collapsed"
+                    MouseEnter="TaskbarSpectrumHoverSurface_MouseEnter"
+                    MouseLeave="TaskbarSpectrumHoverSurface_MouseLeave">
+                <Border x:Name="TaskbarOutputDeviceSurface"
+                        Width="24" Height="24"
+                        HorizontalAlignment="Center" VerticalAlignment="Center"
+                        CornerRadius="12" Background="#16000000"
+                        Cursor="Hand" Tag="MediaAction" Visibility="Collapsed"
+                        MouseEnter="TaskbarOutputDeviceSurface_MouseEnter"
+                        PreviewMouseWheel="TaskbarOutputDeviceSurface_PreviewMouseWheel"
+                        MouseLeftButtonUp="TaskbarOutputDeviceSurface_MouseLeftButtonUp">
+                    <TextBlock x:Name="TaskbarOutputDeviceGlyph" Text="&#xE7F5;"
+                               FontFamily="{DynamicResource AppIconFontFamily}" FontSize="14"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                               IsHitTestVisible="False" />
+                </Border>
+            </Border>
+            <Border x:Name="TaskbarVolumeHoverSurface"
+                    Panel.ZIndex="4"
+                    Width="26"
+                    Height="32"
+                    Margin="0"
+                    Padding="1"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Center"
+                    CornerRadius="5"
+                    Background="Transparent"
+                    BorderBrush="Transparent"
+                    BorderThickness="0,1.25,0,0"
+                    Visibility="Collapsed"
+                    MouseEnter="TaskbarSpectrumHoverSurface_MouseEnter"
+                    MouseLeave="TaskbarSpectrumHoverSurface_MouseLeave">
+                <Border x:Name="TaskbarVolumeSurface"
+                        Width="24" Height="24"
+                        HorizontalAlignment="Center" VerticalAlignment="Center"
+                        CornerRadius="12" Background="#16000000"
+                        Cursor="Hand" Tag="MediaAction" Visibility="Collapsed"
+                        MouseEnter="TaskbarVolumeSurface_MouseEnter"
+                        PreviewMouseWheel="TaskbarVolumeSurface_PreviewMouseWheel"
+                        MouseLeftButtonUp="TaskbarVolumeSurface_MouseLeftButtonUp">
+                    <TextBlock x:Name="TaskbarVolumeGlyph" Text="&#xE767;"
+                               FontFamily="{DynamicResource AppIconFontFamily}" FontSize="14"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                               IsHitTestVisible="False" />
                 </Border>
             </Border>
 

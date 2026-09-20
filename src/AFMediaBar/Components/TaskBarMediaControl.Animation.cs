@@ -1042,11 +1042,15 @@ public partial class TaskBarMediaControl
         _quickLaunchTooltip.IsOpen = false;
     }
 
+    // 静置层的四个小组件（频谱、性能、输出设备、音量）共用这两个处理器，因此高亮必须落在事件源上：
+    // 写死频谱表面会让悬停设备按钮时亮起的是频谱。
+    // The rest layer's four widgets (spectrum, performance, output device, volume) share these two handlers, so the highlight has to land
+    // on the event source: naming the spectrum surface outright would light up the spectrum while the device button is hovered.
     private void TaskbarSpectrumHoverSurface_MouseEnter(object sender, MouseEventArgs e) =>
-        AnimateComponentHover(TaskbarSpectrumHoverSurface, true);
+        AnimateComponentHover((Border)sender, true);
 
     private void TaskbarSpectrumHoverSurface_MouseLeave(object sender, MouseEventArgs e) =>
-        AnimateComponentHover(TaskbarSpectrumHoverSurface, false);
+        AnimateComponentHover((Border)sender, false);
 
     private void TaskbarPerformanceHoverSurface_MouseEnter(object sender, MouseEventArgs e) =>
         AnimateComponentHover(TaskbarPerformanceHoverSurface, true);

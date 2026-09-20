@@ -193,9 +193,16 @@ public partial class TaskbarWindow : Window
         _spectrumTimer.Tick += (_, _) =>
         {
             var bandCount = SettingsManager.Current.SpectrumComponent.Normalize().BandCount;
+            // 采集的是"当前输出设备的全部声音"（WASAPI 回环），因此判据里没有"前台 SMTC 会话是否在播"这一项：
+            // 游戏、没有 SMTC 的播放器、浏览器里没有元数据的页面都会让频谱动起来，只要频谱组件当前可见。
+            // 组件不可见时连采集都不做——静置层显隐的唯一判据在 TaskbarRestLayoutPolicy 里，宿主只读控件算好的结论。
+            // What is captured is everything the current output device plays (WASAPI loopback), so the condition has no "is the foreground SMTC
+            // session playing" term: a game, a player without SMTC, or a browser page without metadata all move the spectrum, as long as the
+            // spectrum component is visible right now. While it is not visible nothing is captured at all — the only authority on rest-layer
+            // visibility is TaskbarRestLayoutPolicy, and the host merely reads the verdict the control computed.
             if (!_isClosing && _appliedOrientation == LayoutOrientation.Horizontal &&
-                SettingsManager.Current.TaskbarExperience.SpectrumVisible &&
-                MediaControl.IsPlaying && _audioMonitorService.GetSpectrum(_spectrumBands, bandCount))
+                MediaControl.IsSpectrumComponentVisible &&
+                _audioMonitorService.GetSpectrum(_spectrumBands, bandCount))
             {
                 _spectrumActive = true;
                 MediaControl.ApplySpectrum(_spectrumBands.AsSpan(0, bandCount));
@@ -577,7 +584,6 @@ public partial class TaskbarWindow : Window
         if (!SettingsManager.Current.TaskbarBarEnabled || _isClosing || _isEnvironmentSuspended)
             return;
 
-        var wasVisible = Visibility == Visibility.Visible;
         var wasConnected = _lastSnapshot.IsConnected;
         _lastSnapshot = snapshot;
         if (snapshot.IsConnected && !wasConnected)
@@ -600,12 +606,12 @@ public partial class TaskbarWindow : Window
         // 修改 Visibility 前在 UI 线程再次检查；Explorer 可能在媒体回调与显示步骤之间销毁子 HWND。
         // Recheck on the UI thread immediately before touching Window.Visibility. Explorer
         // can destroy the child HWND between a media callback and this presentation step.
-        if (!_isClosing && !_isEnvironmentSuspended)
-        {
-            Visibility = Visibility.Visible;
-            if (!wasVisible)
-                Dispatcher.BeginInvoke(_foregroundSamplingSession.RequestRefresh, DispatcherPriority.ContextIdle);
-        }
+        // "无媒体时完全隐藏"由控件判定（它知道静置层最后是否一个组件都没排），宿主只把结论落到窗口上：
+        // 隐藏整条媒体栏 MUST 隐藏窗口本身，控件里做可见性只会留下一个仍然吃掉点击的透明子窗口。
+        // "Hide completely without media" is decided by the control (it knows whether the rest layer ended up with no component at all)
+        // and the host merely applies that verdict to the window: hiding the whole bar MUST hide the window itself, because a
+        // control-level visibility change would leave a transparent child window that still swallows clicks.
+        ApplyMediaBarVisibility();
     }
 
     #endregion
@@ -806,7 +812,38 @@ public partial class TaskbarWindow : Window
         ApplyLayoutSettings(SettingsManager.Current.WindowMode, SettingsManager.Current.LayoutOrientationMode);
         ApplyExtraFeaturesSettings();
         MediaControl.UpdateSongInfo(_lastSnapshot);
+        // 改设置就可能改变静置层还剩几个组件，因此"完全隐藏"的结论必须跟着重算一次：
+        // 只在快照变化时同步会让"把无媒体保留组件全部取消"这一步要等下一首歌才生效。
+        // A settings change can change how many components the rest layer keeps, so the "hide completely" verdict has to be recomputed
+        // here: synchronizing it on snapshot changes alone would delay "keep nothing while idle" until the next track.
+        ApplyMediaBarVisibility();
         Dispatcher.BeginInvoke(UpdatePosition, DispatcherPriority.Background);
+    }
+
+    /// <summary>
+    /// 把控件算出的"整条媒体栏是否应当隐藏"落到窗口上，并只在真正从隐藏变回可见时补一次背景采样。
+    /// Applies the control's verdict on whether the whole bar should hide to the window, refreshing background sampling only when it
+    /// actually goes from hidden back to visible.
+    /// </summary>
+    private void ApplyMediaBarVisibility()
+    {
+        if (_isClosing || _isEnvironmentSuspended)
+        {
+            return;
+        }
+
+        var wasHidden = Visibility != Visibility.Visible;
+        var target = MediaControl.ShouldHideTaskbarWindow ? Visibility.Collapsed : Visibility.Visible;
+        if (Visibility == target)
+        {
+            return;
+        }
+
+        Visibility = target;
+        if (wasHidden && target == Visibility.Visible)
+        {
+            Dispatcher.BeginInvoke(_foregroundSamplingSession.RequestRefresh, DispatcherPriority.ContextIdle);
+        }
     }
 
     /// <summary>安全停止任务栏宿主并解除 Explorer 停靠。/ Safely stops the taskbar host and detaches it from Explorer.</summary>
@@ -1228,8 +1265,13 @@ public partial class TaskbarWindow : Window
         MediaControl.ApplyQuickLaunchEntries(SettingsManager.Current.QuickLaunch.Entries ?? []);
         MediaControl.ApplyTaskbarExperienceSettings();
         _metricsSubscription?.Dispose();
+        // 是否订阅指标采样按控件算出的性能组件显隐决定：静置层显隐的唯一判据在 TaskbarRestLayoutPolicy 里，
+        // 宿主自行读一遍 PerformanceVisible 会在"无媒体时不保留性能组件"的状态下继续空转采样。
+        // Whether to subscribe for metric sampling follows the performance component's visibility as the control computed it: the only authority on
+        // rest-layer visibility is TaskbarRestLayoutPolicy, and reading PerformanceVisible here instead would keep sampling for nothing while the
+        // performance component is not kept without media.
         _metricsSubscription = !_isClosing && !_isEnvironmentSuspended && !IsBackgroundPruned &&
-                               SettingsManager.Current.TaskbarExperience.PerformanceVisible
+                               MediaControl.IsPerformanceComponentVisible
             ? _metricsMonitor.Subscribe(
                 performance.Metrics!,
                 TimeSpan.FromMilliseconds(performance.RefreshIntervalMilliseconds),

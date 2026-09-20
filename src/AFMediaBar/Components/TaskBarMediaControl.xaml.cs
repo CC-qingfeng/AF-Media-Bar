@@ -131,6 +131,8 @@ namespace AFMediaBar.Components
             // only a fixed instance lets the content change without closing the bubble (see SetQuickLaunchPreview).
             _quickLaunchTooltip = new ToolTip { Placement = System.Windows.Controls.Primitives.PlacementMode.Top };
             SongImageBorder.ToolTip = _quickLaunchTooltip;
+            _outputDeviceSurface = TaskbarDeviceButton;
+            _volumeSurface = TaskbarVolumeButton;
             // 进度条计时器按"当前是否处于剪枝档位"启动：窗口可能在档位已经生效时才加载出来（任务栏在屏幕关闭期间重建），
             // 那时直接 Start 会让剪枝白做。
             // The progress timer starts according to whether a prune level is in effect: the window can be loaded while the level already holds —
@@ -189,6 +191,24 @@ namespace AFMediaBar.Components
 
         /// <summary>音符上的快速启动提示；与滚轮提示一样只改内容、不换实例。/ The quick-launch tooltip on the note; like the wheel tooltip its content changes while the instance stays put.</summary>
         private readonly ToolTip _quickLaunchTooltip;
+
+        /// <summary>
+        /// 输出设备交互最近落在哪个入口上：悬停层的按钮，或静置层的同名小组件。
+        ///
+        /// 提示与菜单锚点都跟着它走。设备按钮现在有两个入口，而锚点只报一个矩形：写死悬停层那个按钮时，从静置层
+        /// 小组件点开的菜单会锚在一个可能已经收起的元素上——`PointToScreen` 对不可见元素给出的位置会让菜单跑到
+        /// 屏幕角落里。指针进入、滚轮与点击三条路径都会先更新它，因此取到的总是刚刚交互的那一个。
+        /// Which entry the output-device interaction last landed on: the hover layer's button or the rest layer's widget of the same name.
+        ///
+        /// Both the tooltip and the menu anchor follow it. The device button now has two entries while an anchor reports a single rectangle:
+        /// naming the hover layer's button outright would anchor a menu opened from the rest-layer widget on an element that may already be
+        /// collapsed, and `PointToScreen` on an invisible element puts the menu in a corner of the screen. Pointer entry, the wheel, and the
+        /// click all update it first, so what it holds is always the one just interacted with.
+        /// </summary>
+        private FrameworkElement _outputDeviceSurface;
+
+        /// <summary>音量交互最近落在哪个入口上；语义与 <see cref="_outputDeviceSurface"/> 相同。/ Which entry the volume interaction last landed on; the same reasoning as <see cref="_outputDeviceSurface"/>.</summary>
+        private FrameworkElement _volumeSurface;
         private WheelGestureSlot? _appliedWheelSlot;
         private bool _wheelResultShown;
 
@@ -202,8 +222,59 @@ namespace AFMediaBar.Components
         private DateTime _suppressSurfaceClickUntilUtc;
         private const double TaskbarPerformanceWidth = 74;
         private const double TaskbarTrailingMargin = 4;
+
+        /// <summary>
+        /// 静置层小组件的外层悬停表面在内容四周留出的空白（DIP）。与频谱表面同一个值：四个小组件因此一样大，
+        /// hover 高亮也是一排。
+        /// Padding the rest-layer widgets' outer hover surface keeps around its content, in DIP. It is the same value the spectrum
+        /// surface uses, so all four widgets are the same size and their hover highlights line up.
+        /// </summary>
+        private const double TaskbarWidgetPadding = SpectrumPresentationPolicy.SurfacePaddingDip;
+
         private const double TaskbarCoveredBlurRadius = 4;
         private const double TaskbarCoveredOpacity = 0.32;
+
+        /// <summary>
+        /// 最近一次几何算出的"静置层一个组件都不显示"。宿主据此把整条媒体栏隐藏：没有媒体又没有保留任何组件时，
+        /// 这条媒体栏没有内容可显示，隐藏整条比留一段空白更合适。
+        /// The most recent geometry verdict that the rest layer shows no component at all. The host hides the whole bar from it: with no media and
+        /// nothing kept the bar has nothing to show, and hiding it beats leaving a blank strip.
+        /// </summary>
+        private bool _isRestLayerEmpty;
+
+        /// <summary>
+        /// 媒体栏现在是否应当整个隐藏：当前没有媒体，且静置层的组件一个都不显示。
+        ///
+        /// 这里没有开关：没有媒体时媒体栏本来就没有内容可显示，要不要留、留哪几个由"没有媒体时保留的组件"那一份列表回答
+        /// （它的默认值是快速启动小音符）。宿主只在任务栏横向模式下读它；灵动岛与竖向任务栏不参与这条规则。
+        /// Whether the media bar should be hidden entirely: there is no media right now and the rest layer shows no component at all.
+        ///
+        /// There is no switch for this: without media the bar has nothing to show anyway, and whether anything stays — and which components —
+        /// is answered by the "components kept without media" list (whose default is the quick-launch note). The host reads it in the horizontal
+        /// taskbar mode only; the dynamic island and a vertical taskbar are outside this rule.
+        /// </summary>
+        public bool ShouldHideTaskbarWindow =>
+            SettingsManager.Current.TaskbarBarEnabled &&
+            !_isConnected &&
+            _isRestLayerEmpty;
+
+        /// <summary>
+        /// 最近一次应用设置时频谱是否可见。宿主的频谱采样按它决定是否继续采集：静置层显隐的唯一判据在
+        /// <see cref="TaskbarRestLayoutPolicy"/> 里（它还要看"没有媒体时保留哪些组件"），宿主 MUST NOT 自己再判一次。
+        /// Whether the spectrum is visible as of the last settings application. The host decides whether to keep capturing from it: the only
+        /// authority on rest-layer visibility is <see cref="TaskbarRestLayoutPolicy"/> (which also consults the "components kept without media"
+        /// list), and the host MUST NOT judge that a second time.
+        /// </summary>
+        public bool IsSpectrumComponentVisible { get; private set; }
+
+        /// <summary>
+        /// 最近一次应用设置时性能组件是否可见。宿主的指标采样租约按它决定是否继续订阅：静置层显隐的唯一判据在
+        /// <see cref="TaskbarRestLayoutPolicy"/> 里（它还要看"无媒体时保留哪些组件"），宿主 MUST NOT 自己再判一次。
+        /// Whether the performance component is visible as of the last settings application. The host decides whether to keep its metric-sampling
+        /// lease from it: the only authority on rest-layer visibility is <see cref="TaskbarRestLayoutPolicy"/> (which also consults the
+        /// "components kept without media" list), and the host MUST NOT judge that a second time.
+        /// </summary>
+        public bool IsPerformanceComponentVisible { get; private set; }
 
         public event EventHandler? TogglePlayPauseRequested;
         public event EventHandler? SkipPreviousRequested;
@@ -513,15 +584,17 @@ namespace AFMediaBar.Components
 
         /// <summary>
         /// 刷新输出设备按钮提示；文本与托盘图标提示来自同一策略，指针悬停与滚轮预览都经过这里。
-        /// Refreshes the output-device button tooltip; the text comes from the same policy as the tray icon tooltip, and
-        /// both hover and wheel previews go through it.
+        /// 提示写在最近交互的那个入口上（悬停层按钮或静置层小组件），因此从静置层滚轮预览时提示就出现在指针下面。
+        /// Refreshes the output-device button tooltip; the text comes from the same policy as the tray icon tooltip, and both hover and wheel
+        /// previews go through it. The tooltip lands on the entry last interacted with (the hover-layer button or the rest-layer widget), so a
+        /// preview from a rest-layer wheel appears under the pointer.
         /// </summary>
         public void SetOutputDevicePreview(AudioDeviceOption device) =>
-            TaskbarDeviceButton.ToolTip = AudioTooltipPolicy.BuildOutputDevice(device);
+            _outputDeviceSurface.ToolTip = AudioTooltipPolicy.BuildOutputDevice(device);
 
         /// <summary>提示当前没有可用输出设备。 / Indicates that no output device is available.</summary>
         public void SetOutputDeviceUnavailable() =>
-            TaskbarDeviceButton.ToolTip = AudioTooltipPolicy.BuildOutputDevice(null);
+            _outputDeviceSurface.ToolTip = AudioTooltipPolicy.BuildOutputDevice(null);
 
         /// <summary>
         /// 刷新音量按钮提示；滚轮预览的候选值也走这里，因此提示总是先于延迟应用更新。
@@ -536,21 +609,21 @@ namespace AFMediaBar.Components
             var sourceName = string.IsNullOrWhiteSpace(_snapshot.SourceName)
                 ? Translations.Get("Panel.Volume.CurrentMedia")
                 : _snapshot.SourceName;
-            TaskbarVolumeButton.ToolTip = AudioTooltipPolicy.BuildMediaVolume(sourceName, volume);
+            _volumeSurface.ToolTip = AudioTooltipPolicy.BuildMediaVolume(sourceName, volume);
         }
 
         /// <summary>提示当前媒体没有可匹配音频会话。 / Indicates that the current media has no matching audio session.</summary>
         public void SetVolumeUnavailable() =>
-            TaskbarVolumeButton.ToolTip = AudioTooltipPolicy.BuildMediaVolume(null, null);
+            _volumeSurface.ToolTip = AudioTooltipPolicy.BuildMediaVolume(null, null);
 
         /// <summary>返回快速启动菜单的物理屏幕锚点。 / Returns the physical screen anchor for the quick-launch menu.</summary>
         public TrayIconBounds GetQuickLaunchAnchor() => GetScreenBounds(SongImageBorder);
 
-        /// <summary>返回输出设备菜单的物理屏幕锚点。 / Returns the physical screen anchor for the output-device menu.</summary>
-        public TrayIconBounds GetOutputDeviceAnchor() => GetScreenBounds(TaskbarDeviceButton);
+        /// <summary>返回输出设备菜单的物理屏幕锚点，取自最近交互的那个设备入口。 / Returns the physical screen anchor for the output-device menu, taken from the device entry last interacted with.</summary>
+        public TrayIconBounds GetOutputDeviceAnchor() => GetScreenBounds(_outputDeviceSurface);
 
-        /// <summary>返回音量菜单的物理屏幕锚点。 / Returns the physical screen anchor for the volume menu.</summary>
-        public TrayIconBounds GetVolumeAnchor() => GetScreenBounds(TaskbarVolumeButton);
+        /// <summary>返回音量菜单的物理屏幕锚点，取自最近交互的那个音量入口。 / Returns the physical screen anchor for the volume menu, taken from the volume entry last interacted with.</summary>
+        public TrayIconBounds GetVolumeAnchor() => GetScreenBounds(_volumeSurface);
 
         private static TrayIconBounds GetScreenBounds(FrameworkElement element)
         {
@@ -709,7 +782,25 @@ namespace AFMediaBar.Components
         /// </summary>
         public LayoutSchema? CurrentLayout => _layoutEngine?.CurrentLayout;
 
-        /// <summary>应用自动计算的主轴长度。/ Applies an auto-calculated primary-axis length.</summary>
+        /// <summary>
+        /// 应用自动计算的主轴长度。
+        ///
+        /// 布局引擎在这里也会写一遍封面与文字区的 `Visibility`（`LayoutRenderEngine.ApplyArtworkLayout` / `ApplySongInfoLayout`
+        /// 按预设的 `IsVisible` 写，而预设里它恒为 true——预设不知道用户在"没有媒体时显示"里怎么选），并且宿主每次尺寸动画的
+        /// 每一帧、位置计时器的每次重放都会走到这里。因此显隐 MUST 由紧随其后的 `ApplyTaskbarSectionGeometry` 重新断言：
+        /// 漏掉它时，用户关掉小音符之后它会被下一帧尺寸动画显示回来，而断开时的快照是一个常量
+        /// （`MediaSnapshot.Disconnected`）不会重新发布，那次撤销要等到下一次设置变化才被纠正——表现正是"关掉小音符、
+        /// 保持其它组件时音符还在"。
+        /// Applies an auto-calculated primary length.
+        ///
+        /// The layout engine writes the artwork's and the text region's `Visibility` here as well (`LayoutRenderEngine.ApplyArtworkLayout` /
+        /// `ApplySongInfoLayout` write the preset's `IsVisible`, which is always true — the preset knows nothing about the user's "shown without
+        /// media" choices), and the host reaches this method on every frame of a size animation and on every replay by the position timer. The
+        /// visibility therefore MUST be asserted again by the `ApplyTaskbarSectionGeometry` that follows: without it, turning the note off is
+        /// undone by the next size-animation frame, and since the disconnected snapshot is a constant (`MediaSnapshot.Disconnected`) that is never
+        /// republished, the undo survives until the next settings change — which is exactly "the note stays after turning it off while other
+        /// components are kept".
+        /// </summary>
         public void ApplyPrimaryLength(double primaryLength)
         {
             _layoutEngine?.ApplyPrimaryLength(primaryLength);
@@ -742,25 +833,17 @@ namespace AFMediaBar.Components
             ConfigureSpectrum();
             var progressVisible = _snapshot.Duration > 0;
             var controls = experience.HoverControls;
-            var spectrumVisible = isHorizontalTaskbar && experience.SpectrumVisible && TaskbarExperiencePolicy.ShouldShowSpectrum(_snapshot);
-            // 性能组件与频谱同样由"外层悬停表面 + 内层外观"组成：显隐、命中测试与 hover 都落在外层，
-            // 否则悬停表面的 1 DIP 留白点不到，hover 也会在光标移到边缘时闪断。
-            // The performance component is built like the spectrum, with an outer hover surface and an inner look: visibility, hit testing, and
-            // hover all belong to the outer one, otherwise the surface's one-DIP padding is not clickable and hover flickers at the edges.
-            var performanceVisible = isHorizontalTaskbar && experience.PerformanceVisible;
-            TaskbarPerformanceSurface.Visibility = performanceVisible ? Visibility.Visible : Visibility.Collapsed;
-            TaskbarPerformanceHoverSurface.Visibility = performanceVisible ? Visibility.Visible : Visibility.Collapsed;
-            TaskbarPerformanceHoverSurface.IsHitTestVisible = performanceVisible;
-            if (!performanceVisible)
-                AnimateComponentHover(TaskbarPerformanceHoverSurface, false);
-
-            TaskbarSpectrumHoverSurface.Visibility = spectrumVisible ? Visibility.Visible : Visibility.Collapsed;
-            TaskbarSpectrumHoverSurface.IsHitTestVisible = spectrumVisible;
-            if (!spectrumVisible)
-            {
-                AnimateComponentHover(TaskbarSpectrumHoverSurface, false);
-                ApplySpectrum(ReadOnlySpan<float>.Empty);
-            }
+            // 静置层组件的显隐由本方法末尾的 ApplyTaskbarSectionGeometry 按算出的布局落地（那条路径同时覆盖尺寸动画的每一帧）。
+            // The rest layer's visibility is applied by the ApplyTaskbarSectionGeometry at the end of this method from the layout it computed (that
+            // path also covers every frame of a size animation).
+            //
+            // 静置层的设备与音量按钮是可选小组件：内层芯片的尺寸随信息密度走，外层悬停表面的宽度与内层一致（各留 1 DIP）。
+            // The rest layer's device and volume buttons are optional widgets: the inner chip follows the information density and the outer
+            // hover surface matches it with one DIP of padding on each side.
+            TaskbarOutputDeviceSurface.Width = metrics.ButtonSize;
+            TaskbarOutputDeviceSurface.Height = metrics.ButtonSize;
+            TaskbarVolumeSurface.Width = metrics.ButtonSize;
+            TaskbarVolumeSurface.Height = metrics.ButtonSize;
             // 静置层进度条只在媒体报告了时长、且开关打开时显示；开关是用户对"静置层要不要这条进度"的回答。
             // The rest-layer progress bar appears only while the session reports a duration and the switch is on; the switch is the
             // user's answer to "should the rest layer carry this progress line at all".
@@ -808,6 +891,11 @@ namespace AFMediaBar.Components
             TaskbarHoverProgress.Width = metrics.ProgressWidth;
             TaskbarHoverLayer.Height = metrics.HoverLayerHeight;
             ApplyTaskbarSectionGeometry(MainBorder.Width);
+            // 频谱被收起时把柱清空一次，免得下次显示时先闪出上一帧的高度；清空的时机放在几何之后，因为它决定频谱这次可不可见。
+            // Clearing the bars once while the spectrum is collapsed keeps the next reveal from flashing the previous frame's heights; it happens
+            // after the geometry because that pass decides whether the spectrum is visible this time.
+            if (!IsSpectrumComponentVisible)
+                ApplySpectrum(ReadOnlySpan<float>.Empty);
 
             var lyricsAlignment = SettingsManager.Current.LyricsTextAlignment switch
             {
@@ -875,8 +963,9 @@ namespace AFMediaBar.Components
         }
 
         /// <summary>
-        /// 将统一密度间隔应用到封面、文字和频谱，并让悬停控件只占据文字区域。
-        /// Applies one density-controlled gap to artwork, text, and spectrum while constraining hover controls to the text region.
+        /// 按用户在静置层顺序里排的位置，把封面、媒体文字与四个小组件从左到右摆好，并把媒体文字宽度写进文本元素。
+        /// Arranges the artwork, the media text, and the four widgets from left to right at the positions the user gave them in the
+        /// rest-layer order, and writes the media text width into the text elements.
         /// </summary>
         private void ApplyTaskbarSectionGeometry(double primaryLength)
         {
@@ -891,29 +980,34 @@ namespace AFMediaBar.Components
                 // Even without a usable length the marquee is re-applied from the text width currently in place: one invalid length
                 // must not drop a scrolling text back to a cut-off state, because this method and the geometry are the only writers of
                 // that width, and skipping it leaves the previous result on screen.
+                _isRestLayerEmpty = false;
                 if (_currentMode == WindowMode.Taskbar && !_isVertical)
                     ApplyMarqueeLayout(Math.Max(0, SongInfoStackPanel.Width));
                 return;
             }
 
-            var metrics = TaskbarDensityMetrics.From(SettingsManager.Current.TaskbarExperience.Density);
-            var artworkRight = GetTaskbarArtworkRight();
             var experience = SettingsManager.Current.TaskbarExperience.Normalize();
-            var spectrumVisible = experience.SpectrumVisible && TaskbarExperiencePolicy.ShouldShowSpectrum(_snapshot);
-            var sectionGap = Math.Clamp(SettingsManager.Current.TaskbarExperience.ComponentSpacingDip,
-                TaskbarExperienceSettings.MinimumComponentSpacingDip,
-                TaskbarExperienceSettings.MaximumComponentSpacingDip);
-            var textLeft = artworkRight + (_isConnected ? sectionGap : 0);
-            var spectrumWidth = SpectrumSurfaceWidth;
-            var reservedRight = (spectrumVisible ? sectionGap + spectrumWidth : 0) +
-                                (experience.PerformanceVisible ? sectionGap + TaskbarPerformanceWidth : 0) +
-                                TaskbarTrailingMargin;
-            var textWidth = _isConnected
-                ? Math.Max(0, primaryLength - textLeft - reservedRight)
-                : 0;
-            var textTop = Canvas.GetTop(SongInfoStackPanel);
-            if (!double.IsFinite(textTop))
-                textTop = 0;
+            var layout = ResolveRestLayout(experience, primaryLength);
+            _isRestLayerEmpty = layout.IsEmpty;
+            // 显隐必须在这里落地，而不是只在 ApplyTaskbarExperienceSettings 里：布局引擎会在每次 ApplyPrimaryLength
+            // （尺寸动画的每一帧、位置计时器的每次重放）把封面的 Visibility 按预设写回 Visible，而几何是那些路径上唯一
+            // 紧随其后的调用。布局本身已经表达了"谁可见"（不可见的组件不在 placements 里），因此这里不再判一次显隐。
+            // Visibility has to land here rather than only inside ApplyTaskbarExperienceSettings: the layout engine writes the artwork's
+            // Visibility back to Visible (from the preset) on every ApplyPrimaryLength — each frame of a size animation and each replay by the
+            // position timer — and the geometry is the only call that follows it on those paths. The layout already expresses who is visible
+            // (an invisible component is absent from the placements), so the decision is not made a second time here.
+            ApplyRestComponentVisibility(layout);
+
+            var textLeft = layout.TextLeft;
+            var textWidth = layout.TextWidth;
+
+            if (layout.Find(TaskbarRestComponent.Artwork) is { } artworkPlacement)
+            {
+                // 只有第一个组件之前的留白来自布局预设；其余组件的位置全部由顺序算出，因此封面也会被按顺序挪动。
+                // Only the padding before the first component comes from the layout preset; every other position is derived from the
+                // order, which is why the artwork moves with it too.
+                Canvas.SetLeft(SongImageBorder, artworkPlacement.Left);
+            }
 
             Canvas.SetLeft(SongInfoStackPanel, textLeft);
             SongInfoStackPanel.Width = textWidth;
@@ -927,37 +1021,41 @@ namespace AFMediaBar.Components
             // 频谱与性能组件占用的区间，比真实文字区更宽，会让标题按错误宽度裁剪、在容器边缘被硬切；
             // 悬停路径会通过跑马灯配置重新写回正确宽度，所以这个错误只在设置变更后显现。
             // This section owns the taskbar media-text width: the layout engine writes TextBlock widths from the layout
-            // schema, which still covers the spectrum and performance reserve and is wider than the real text area, so the
-            // title trims against the wrong width and is hard-cut at the container edge. The hover path rewrites the correct
-            // width through the marquee configuration, which is why the defect only shows up after a settings change.
+            // schema, which still covers the widget reserve and is wider than the real text area, so the title trims against
+            // the wrong width and is hard-cut at the container edge. The hover path rewrites the correct width through the
+            // marquee configuration, which is why the defect only shows up after a settings change.
             SongTitle.Width = textWidth;
             SongArtist.Width = textWidth;
             SongLyrics.Width = textWidth;
             SongLyricsSecondary.Width = textWidth;
+
+            var textTop = Canvas.GetTop(SongInfoStackPanel);
+            if (!double.IsFinite(textTop))
+                textTop = 0;
 
             Canvas.SetLeft(SongInfoHoverOverlay, textLeft);
             Canvas.SetTop(SongInfoHoverOverlay, textTop);
             SongInfoHoverOverlay.Width = textWidth;
             SongInfoHoverOverlay.Height = SongInfoStackPanel.Height;
 
-            // 性能组件与频谱的悬停表面取文字区悬停块的横轴尺寸，三个组件的 hover 因此是同一高度，
-            // 而不是各自一个固定值（频谱原来是 32、性能块没有 hover）。频谱内容区比文字区还高时以内容为准，保证画布装得下。
-            // The performance and spectrum hover surfaces take the text hover block's cross-axis size, so the three components share one
-            // hover height instead of each carrying its own fixed value (the spectrum was 32 and the performance block had no hover at all).
-            // A spectrum content area taller than the text block wins, so the canvas always fits.
+            // 四个小组件的悬停表面取文字区悬停块的横轴尺寸，三个以上的组件因此共享一条 hover 高度而不是各自一个固定值；
+            // 频谱内容区比文字区还高时以内容为准，保证画布装得下。
+            // The four widgets' hover surfaces take the text hover block's cross-axis size, so they share one hover height instead of each
+            // carrying its own fixed value; a spectrum content area taller than the text block wins, so the canvas always fits.
             var hoverHeight = Math.Max(
                 ResolveRestHoverHeight(),
                 SpectrumPresentationPolicy.ResolveContentHeightDip(SettingsManager.Current.SpectrumComponent) +
                 SpectrumPresentationPolicy.SurfacePaddingDip * 2);
-            TaskbarSpectrumHoverSurface.Height = hoverHeight;
-            TaskbarSpectrumHoverSurface.Width = spectrumWidth;
-            TaskbarSpectrumHoverSurface.Margin = new Thickness(0, 0,
-                TaskbarTrailingMargin + (experience.PerformanceVisible ? TaskbarPerformanceWidth + sectionGap : 0), 0);
-            TaskbarPerformanceHoverSurface.Height = hoverHeight;
-            TaskbarPerformanceHoverSurface.Width = TaskbarPerformanceWidth + SpectrumPresentationPolicy.SurfacePaddingDip * 2;
-            TaskbarPerformanceHoverSurface.Margin = new Thickness(0, 0, TaskbarTrailingMargin, 0);
+            PlaceRestWidget(TaskbarSpectrumHoverSurface, layout.Find(TaskbarRestComponent.Spectrum), hoverHeight);
+            PlaceRestWidget(TaskbarPerformanceHoverSurface, layout.Find(TaskbarRestComponent.Performance), hoverHeight);
+            PlaceRestWidget(TaskbarOutputDeviceHoverSurface, layout.Find(TaskbarRestComponent.OutputDevice), hoverHeight);
+            PlaceRestWidget(TaskbarVolumeHoverSurface, layout.Find(TaskbarRestComponent.Volume), hoverHeight);
 
-            TaskbarRestProgress.Margin = new Thickness(textLeft, 0, reservedRight, 1);
+            TaskbarRestProgress.Margin = new Thickness(
+                textLeft,
+                0,
+                Math.Max(0, primaryLength - textLeft - textWidth),
+                1);
 
             HoverRevealHost.Margin = new Thickness(textLeft, 1, 0, 1);
             HoverRevealHost.Height = Math.Max(0, MainBorder.Height - 2);
@@ -974,12 +1072,165 @@ namespace AFMediaBar.Components
             ApplyMarqueeLayout(textWidth);
         }
 
-        private double GetTaskbarArtworkRight()
+        /// <summary>
+        /// 按这次算出的布局把静置层各组件与封面的显隐写到视觉树上。
+        ///
+        /// 判据就是布局本身：某个组件不在 <paramref name="layout"/> 的 placements 里，说明这次它不可见（判据只有
+        /// <see cref="TaskbarRestLayoutPolicy.IsVisible"/> 一处，这里 MUST NOT 再判一次，否则两处会漂）。
+        ///
+        /// 单独一个方法是因为布局引擎也会写这些元素的 `Visibility`（`LayoutRenderEngine.ApplyArtworkLayout` 按预设的
+        /// `IsVisible` 写，而预设里它恒为 true），因此每次几何计算都必须重新断言一次，否则一次尺寸动画就会把用户的选择撤销。
+        /// Writes the visibility of the rest-layer components and the artwork into the visual tree from the layout just computed.
+        ///
+        /// The layout is the decision: a component absent from <paramref name="layout"/>'s placements is not visible this time (the only rule is
+        /// <see cref="TaskbarRestLayoutPolicy.IsVisible"/>, and it MUST NOT be judged a second time here or the two would drift).
+        ///
+        /// It is a method of its own because the layout engine writes these elements' `Visibility` as well (`LayoutRenderEngine.ApplyArtworkLayout`
+        /// writes the preset's `IsVisible`, which is always true), so every geometry pass has to assert it again, otherwise one size animation
+        /// undoes the user's choice.
+        /// </summary>
+        /// <param name="layout">这次算出的静置层布局。/ The rest-layer layout computed this time.</param>
+        private void ApplyRestComponentVisibility(TaskbarRestLayout layout)
         {
-            var artworkLeft = Canvas.GetLeft(SongImageBorder);
-            if (!double.IsFinite(artworkLeft))
-                artworkLeft = 0;
-            return artworkLeft + Math.Max(0, SongImageBorder.Width);
+            bool Visible(TaskbarRestComponent component) => layout.Find(component) is not null;
+
+            var spectrumVisible = Visible(TaskbarRestComponent.Spectrum);
+            IsSpectrumComponentVisible = spectrumVisible;
+            // 性能组件与频谱同样由"外层悬停表面 + 内层外观"组成：显隐、命中测试与 hover 都落在外层，
+            // 否则悬停表面的 1 DIP 留白点不到，hover 也会在光标移到边缘时闪断。
+            // The performance component is built like the spectrum, with an outer hover surface and an inner look: visibility, hit testing, and
+            // hover all belong to the outer one, otherwise the surface's one-DIP padding is not clickable and hover flickers at the edges.
+            var performanceVisible = Visible(TaskbarRestComponent.Performance);
+            IsPerformanceComponentVisible = performanceVisible;
+            var outputDeviceVisible = Visible(TaskbarRestComponent.OutputDevice);
+            var volumeVisible = Visible(TaskbarRestComponent.Volume);
+
+            SetRestComponentVisible(TaskbarSpectrumHoverSurface, spectrumVisible);
+            SetRestComponentVisible(TaskbarPerformanceHoverSurface, performanceVisible);
+            SetRestComponentVisible(TaskbarPerformanceSurface, performanceVisible);
+            SetRestComponentVisible(TaskbarOutputDeviceHoverSurface, outputDeviceVisible);
+            SetRestComponentVisible(TaskbarOutputDeviceSurface, outputDeviceVisible);
+            SetRestComponentVisible(TaskbarVolumeHoverSurface, volumeVisible);
+            SetRestComponentVisible(TaskbarVolumeSurface, volumeVisible);
+
+            // hover 高亮只收外层悬停表面：内层外观（性能块与两个圆形芯片）自己就带底色，对它跑一次 hover 动画会把底色
+            // 淡成透明，再次显示时那一块就空了。
+            // Only the outer hover surfaces get the hover wind-down: the inner looks (the performance chip and the two round buttons)
+            // carry a background of their own, and running the hover animation on them fades that background to transparent, leaving a
+            // blank spot the next time they are shown.
+            if (!spectrumVisible)
+                AnimateComponentHover(TaskbarSpectrumHoverSurface, false);
+            if (!performanceVisible)
+                AnimateComponentHover(TaskbarPerformanceHoverSurface, false);
+            if (!outputDeviceVisible)
+                AnimateComponentHover(TaskbarOutputDeviceHoverSurface, false);
+            if (!volumeVisible)
+                AnimateComponentHover(TaskbarVolumeHoverSurface, false);
+
+            // 封面与媒体文字按布局里的那一项决定；"没有媒体时显示"列表里没有勾音符时，封面框整块收起（不留空白框）。
+            // The artwork and the media text follow their entry in the layout; with the note unchecked in the "shown without media" list the whole
+            // box is collapsed rather than left blank.
+            var artworkVisible = Visible(TaskbarRestComponent.Artwork);
+            SetRestComponentVisible(SongImageBorder, artworkVisible);
+            SetRestComponentVisible(SongInfoStackPanel, Visible(TaskbarRestComponent.MediaText));
+            if (!artworkVisible)
+                AnimateComponentHover(SongImageHoverOverlay, false);
+        }
+
+        /// <summary>
+        /// 设置一个静置层组件元素的显隐与命中测试。视觉树里的元素成对出现（外层悬停表面 + 内层外观），因此两者一起写，
+        /// 避免出现"外观点不到但还在吃点击"之类的半状态。
+        /// Sets one rest-layer component element's visibility and hit testing. Elements come as a pair (an outer hover surface and an inner look),
+        /// so both are written together, which rules out half-states such as an invisible look that still swallows clicks.
+        /// </summary>
+        /// <param name="element">组件元素。/ The component element.</param>
+        /// <param name="visible">这次是否可见。/ Whether it is visible this time.</param>
+        private static void SetRestComponentVisible(FrameworkElement element, bool visible)
+        {
+            element.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+            element.IsHitTestVisible = visible;
+        }
+
+        /// <summary>
+        /// 解析这一次的静置层布局：顺序、显隐与每个组件的固定宽度都由设置与快照决定。
+        /// Resolves this round's rest-layer layout: the order, the visibility, and each component's fixed width all come from the settings
+        /// and the snapshot.
+        /// </summary>
+        /// <param name="experience">已归一化的静置层设置。/ Normalized rest-layer settings.</param>
+        /// <param name="primaryLength">媒体栏当前长度（DIP）。/ Current bar length in DIP.</param>
+        private TaskbarRestLayout ResolveRestLayout(in TaskbarExperienceSettings experience, double primaryLength)
+        {
+            var visibility = ResolveRestVisibility(experience);
+            var metrics = TaskbarDensityMetrics.From(experience.Density);
+            return TaskbarRestLayoutPolicy.Arrange(
+                TaskbarRestLayoutPolicy.ResolveOrder(experience.RestComponentOrder),
+                component => ResolveRestComponentWidth(component, metrics),
+                component => TaskbarRestLayoutPolicy.IsVisible(component, visibility),
+                GetTaskbarLeadingInset(),
+                Math.Max(0, primaryLength),
+                TaskbarExperiencePolicy.ResolveSectionGap(experience.Density, experience.ComponentSpacingDip),
+                TaskbarTrailingMargin);
+        }
+
+        /// <summary>把当前设置与快照解析成静置层显隐判定所需的输入。/ Resolves the current settings and snapshot into the rest-layer visibility inputs.</summary>
+        private TaskbarRestLayoutPolicy.Visibility ResolveRestVisibility(in TaskbarExperienceSettings experience) =>
+            new(
+                _isConnected,
+                experience.IdleComponents,
+                // 频谱只看它自己的开关：它采的是"当前输出设备的全部声音"（WASAPI 回环），与前台 SMTC 会话是否在播无关，
+                // 因此断开连接时它照样可以按保留列表显示出来。
+                // The spectrum follows its own switch alone: it samples everything the current output device plays (WASAPI loopback), independent of
+                // whether the foreground SMTC session is playing, so it can just as well be shown while disconnected when the kept list says so.
+                experience.SpectrumVisible,
+                experience.PerformanceVisible,
+                experience.OutputDeviceVisible,
+                experience.VolumeVisible);
+
+        /// <summary>
+        /// 一个静置层组件占用的固定宽度；媒体文字不吃固定宽度，它取剩余长度。
+        /// The fixed width one rest-layer component occupies; the media text takes no fixed width because it absorbs what is left.
+        /// </summary>
+        private double ResolveRestComponentWidth(TaskbarRestComponent component, in TaskbarDensityMetrics metrics) => component switch
+        {
+            TaskbarRestComponent.Artwork => Math.Max(0, SongImageBorder.Width),
+            TaskbarRestComponent.Spectrum => SpectrumSurfaceWidth,
+            TaskbarRestComponent.Performance => TaskbarPerformanceWidth + TaskbarWidgetPadding * 2,
+            TaskbarRestComponent.OutputDevice => metrics.ButtonSize + TaskbarWidgetPadding * 2,
+            TaskbarRestComponent.Volume => metrics.ButtonSize + TaskbarWidgetPadding * 2,
+            _ => 0
+        };
+
+        private static void PlaceRestWidget(FrameworkElement surface, TaskbarRestPlacement? placement, double hoverHeight)
+        {
+            if (placement is not { } value)
+            {
+                return;
+            }
+
+            surface.Width = value.Width;
+            surface.Height = hoverHeight;
+            surface.Margin = new Thickness(value.Left, 0, 0, 0);
+        }
+
+        /// <summary>
+        /// 第一个组件之前的留白：取自布局预设给封面写的左偏移（`LayoutComponentIds.Artwork` 的 `Bounds.X`）。
+        ///
+        /// MUST NOT 改读封面当前的 `Canvas.Left`：几何自己会把封面写到排出来的位置上，于是"读当前位置、再按它排版"
+        /// 会让整条媒体栏每次重排都整体右移一段——这正是把封面排到文字之后时界面错乱的原因。预设是不变的权威。
+        /// Padding before the first component, taken from the left offset the layout preset writes for the artwork (the `Bounds.X` of
+        /// `LayoutComponentIds.Artwork`).
+        ///
+        /// It MUST NOT read the artwork's current `Canvas.Left` instead: the geometry itself writes the artwork at the position it arranged, so
+        /// "read the current position, then lay out from it" shifts the whole bar further right on every pass — which is exactly what broke the
+        /// layout once the artwork was ordered after the text. The preset is the stable authority.
+        /// </summary>
+        private double GetTaskbarLeadingInset()
+        {
+            var layout = LayoutPresets.GetLayout(_currentMode, LayoutOrientation.Horizontal);
+            var artwork = layout.Components.FirstOrDefault(component =>
+                string.Equals(component.Id, LayoutComponentIds.Artwork, StringComparison.Ordinal));
+            var inset = artwork?.Bounds.X ?? 0;
+            return double.IsFinite(inset) && inset > 0 ? inset : 0;
         }
 
         /// <summary>
@@ -1195,6 +1446,11 @@ namespace AFMediaBar.Components
             SongLyricsSecondary.Opacity = SystemParameters.HighContrast ? 1 : 0.68;
             SongArtist.Foreground = foreground;
             TaskbarPerformanceText.Foreground = foreground;
+            // 静置层的设备与音量图标和媒体文字取同一支自动前景：它们铺在同一块任务栏表面上。
+            // The rest layer's device and volume glyphs take the same automatic foreground as the media text: they sit on the same
+            // taskbar surface.
+            TaskbarOutputDeviceGlyph.Foreground = foreground;
+            TaskbarVolumeGlyph.Foreground = foreground;
             // 频谱与文字取同一支自动前景：两者铺在同一块任务栏表面上，分开判断只会在同一背景上给出两种颜色。
             // The spectrum takes the same automatic foreground as the text: both sit on the same taskbar surface, and judging
             // them separately would only produce two colours over one background.
@@ -1498,7 +1754,13 @@ namespace AFMediaBar.Components
             // 频谱柱数是唯一的例外：它决定频谱组件宽度，因此必须参与指纹，否则改柱数后宿主不会重新发布尺寸。
             // The spectrum bar count is the one exception: it decides the spectrum width, so it belongs in the
             // fingerprint; leaving it out would stop the host from republishing the size after a bar-count change.
-            var fingerprint = $"{orientation}|{visibleText}|{secondaryText}|{artist}|{SongTitle.FontSize:0.##}|{SongArtist.FontSize:0.##}|{SettingsManager.Current.LayoutLengthScalePercent:0.##}|{SettingsManager.Current.LayoutThicknessScalePercent:0.##}|{SettingsManager.Current.LyricsEnabled}|{SettingsManager.Current.TwoLineLyricsEnabled}|{SettingsManager.Current.LyricsSecondaryLine}|{string.Join(',', LyricsSecondaryLinePolicy.ResolveOrder(SettingsManager.Current.LyricsSecondaryLine))}|{SettingsManager.Current.TaskbarExperience}|{SpectrumSurfaceWidth:0.##}|{SettingsManager.Current.SpectrumComponent.ContentHeightDip:0.##}|{_snapshot.IsConnected}|{_snapshot.Duration > 0}";
+            //
+            // 「无媒体时保留哪些组件」也必须显式拼进来：它是列表字段，记录生成的 ToString 只会打印列表的**类型名**，
+            // 因此在没有媒体时改这份列表（媒体栏长度随之改变）会被指纹去重挡掉，整条媒体栏停在旧长度上。
+            // The "components kept without media" list has to be spelled out as well: it is a list field, and the record's generated
+            // ToString prints only the list's **type name**, so changing that list while there is no media (which changes the bar length)
+            // would be deduplicated away and the bar would keep its old length.
+            var fingerprint = $"{orientation}|{visibleText}|{secondaryText}|{artist}|{SongTitle.FontSize:0.##}|{SongArtist.FontSize:0.##}|{SettingsManager.Current.LayoutLengthScalePercent:0.##}|{SettingsManager.Current.LayoutThicknessScalePercent:0.##}|{SettingsManager.Current.LyricsEnabled}|{SettingsManager.Current.TwoLineLyricsEnabled}|{SettingsManager.Current.LyricsSecondaryLine}|{string.Join(',', LyricsSecondaryLinePolicy.ResolveOrder(SettingsManager.Current.LyricsSecondaryLine))}|{SettingsManager.Current.TaskbarExperience}|{SpectrumSurfaceWidth:0.##}|{SettingsManager.Current.SpectrumComponent.ContentHeightDip:0.##}|{_snapshot.IsConnected}|{_snapshot.Duration > 0}|{_isRestLayerEmpty}|{string.Join(',', SettingsManager.Current.TaskbarExperience.IdleComponents ?? [])}";
 
             // 没有订阅者的请求不会被任何宿主消费，因此不能记入指纹；否则订阅后的首次请求会被去重丢弃，
             // 媒体栏在上一次媒体连接之前一直停留在预设长度。
@@ -1528,41 +1790,35 @@ namespace AFMediaBar.Components
             if (_currentMode == WindowMode.Taskbar && orientation == LayoutOrientation.Horizontal)
             {
                 var experience = SettingsManager.Current.TaskbarExperience.Normalize();
-                var spectrumVisible = experience.SpectrumVisible && TaskbarExperiencePolicy.ShouldShowSpectrum(_snapshot);
-                var spectrumWidth = SpectrumSurfaceWidth;
                 var progressVisible = _snapshot.Duration > 0;
-                var contentWidth = TaskbarExperiencePolicy.CalculateWidth(
-                    textWidth,
-                    GetTaskbarArtworkRight(),
-                    spectrumWidth,
+                var restVisibility = ResolveRestVisibility(experience);
+                var visibleComponents = TaskbarRestLayoutPolicy
+                    .ResolveOrder(experience.RestComponentOrder)
+                    .Where(component => TaskbarRestLayoutPolicy.IsVisible(component, restVisibility))
+                    .ToArray();
+                var metrics = TaskbarDensityMetrics.From(experience.Density);
+                var sectionGap = TaskbarExperiencePolicy.ResolveSectionGap(experience.Density, experience.ComponentSpacingDip);
+                // 悬停层下限属于媒体文字组件：它只把文字区撑到"悬停控件放得下"，不再另算一段宽度。
+                // The hover-layer minimum belongs to the media text component: it only widens the text region enough for the hover controls
+                // instead of adding a separate span of width.
+                var hoverMinimum = experience.HoverLayerEnabled
+                    ? TaskbarExperiencePolicy.CalculateHoverLayerWidth(
+                        experience.HoverControls,
+                        progressVisible,
+                        experience.Density,
+                        experience.ComponentSpacingDip)
+                    : 0;
+                double ContentWidth(double availableTextWidth) => TaskbarExperiencePolicy.CalculateRestWidth(
+                    visibleComponents,
+                    GetTaskbarLeadingInset(),
+                    Math.Max(availableTextWidth, hoverMinimum),
                     TaskbarTrailingMargin,
-                    _snapshot.IsConnected,
-                    spectrumVisible,
-                    experience.HoverControls.PlayPauseVisible || experience.HoverControls.PreviousNextVisible,
-                    experience.HoverLayerEnabled,
-                    progressVisible,
-                    experience.Density,
-                    double.PositiveInfinity,
-                    experience.ComponentSpacingDip,
-                    performanceVisible: experience.PerformanceVisible,
-                    performanceWidth: TaskbarPerformanceWidth,
-                    hoverControls: experience.HoverControls);
-                _minimumPrimaryLength = TaskbarExperiencePolicy.CalculateWidth(
-                    0,
-                    GetTaskbarArtworkRight(),
-                    spectrumWidth,
-                    TaskbarTrailingMargin,
-                    _snapshot.IsConnected,
-                    spectrumVisible,
-                    experience.HoverControls.PlayPauseVisible || experience.HoverControls.PreviousNextVisible,
-                    experience.HoverLayerEnabled,
-                    progressVisible,
-                    experience.Density,
-                    double.PositiveInfinity,
-                    experience.ComponentSpacingDip,
-                    performanceVisible: experience.PerformanceVisible,
-                    performanceWidth: TaskbarPerformanceWidth,
-                    hoverControls: experience.HoverControls);
+                    sectionGap,
+                    component => ResolveRestComponentWidth(component, metrics),
+                    double.PositiveInfinity);
+
+                var contentWidth = ContentWidth(textWidth);
+                _minimumPrimaryLength = ContentWidth(0);
                 request = request with
                 {
                     Width = _snapshot.IsConnected
@@ -1634,7 +1890,11 @@ namespace AFMediaBar.Components
         {
             // Preview events tunnel through this parent before the button handlers.
             // Leave both audio buttons in control so their wheel input never becomes a media gesture.
-            if (TaskbarDeviceButton.IsMouseOver || TaskbarVolumeButton.IsMouseOver)
+            // 静置层的同名小组件也要放行：它们与悬停层按钮是同一件事的两个入口，滚轮语义必须一致。
+            // The rest-layer widgets of the same name are released for the same reason: they are one of two entries for the same thing as
+            // the hover-layer buttons, so the wheel semantics have to match.
+            if (TaskbarDeviceButton.IsMouseOver || TaskbarVolumeButton.IsMouseOver ||
+                TaskbarOutputDeviceSurface.IsMouseOver || TaskbarVolumeSurface.IsMouseOver)
                 return;
 
             if (!_isConnected)
@@ -1688,18 +1948,82 @@ namespace AFMediaBar.Components
 
         private void TaskbarDeviceButton_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
         {
+            _outputDeviceSurface = TaskbarDeviceButton;
             OutputDeviceWheelRequested?.Invoke(this, new PlayerSurfaceWheelEventArgs(e.Delta, false, false, false));
             e.Handled = true;
         }
 
-        private void TaskbarDeviceButton_MouseEnter(object sender, MouseEventArgs e) =>
+        private void TaskbarDeviceButton_MouseEnter(object sender, MouseEventArgs e)
+        {
+            _outputDeviceSurface = TaskbarDeviceButton;
             OutputDeviceInfoRequested?.Invoke(this, EventArgs.Empty);
+        }
 
-        private void TaskbarVolumeButton_MouseEnter(object sender, MouseEventArgs e) =>
+        private void TaskbarVolumeButton_MouseEnter(object sender, MouseEventArgs e)
+        {
+            _volumeSurface = TaskbarVolumeButton;
             VolumeInfoRequested?.Invoke(this, EventArgs.Empty);
+        }
 
         private void TaskbarVolumeButton_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
         {
+            _volumeSurface = TaskbarVolumeButton;
+            VolumeWheelRequested?.Invoke(this, new PlayerSurfaceWheelEventArgs(e.Delta, false, false, false));
+            e.Handled = true;
+        }
+
+        /// <summary>
+        /// 静置层设备钮被点击：与悬停层的同名按钮走同一条请求，因此菜单只有一处实现；锚点换成这个小组件自己。
+        /// The rest-layer device button was clicked: it raises the same request as the hover layer's button of the same name, so the menu has
+        /// exactly one implementation, and the anchor becomes this widget itself.
+        /// </summary>
+        private void TaskbarOutputDeviceSurface_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            if (e.ChangedButton != MouseButton.Left || ShouldSuppressSurfaceClick())
+            {
+                return;
+            }
+
+            _outputDeviceSurface = TaskbarOutputDeviceSurface;
+            OutputDeviceMenuRequested?.Invoke(this, EventArgs.Empty);
+            e.Handled = true;
+        }
+
+        /// <summary>静置层音量钮被点击：与悬停层的同名按钮走同一条请求，锚点换成这个小组件自己。/ The rest-layer volume button was clicked; it raises the same request as the hover layer's button of the same name, with this widget as the anchor.</summary>
+        private void TaskbarVolumeSurface_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            if (e.ChangedButton != MouseButton.Left || ShouldSuppressSurfaceClick())
+            {
+                return;
+            }
+
+            _volumeSurface = TaskbarVolumeSurface;
+            VolumeMenuRequested?.Invoke(this, EventArgs.Empty);
+            e.Handled = true;
+        }
+
+        private void TaskbarOutputDeviceSurface_MouseEnter(object sender, MouseEventArgs e)
+        {
+            _outputDeviceSurface = TaskbarOutputDeviceSurface;
+            OutputDeviceInfoRequested?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void TaskbarVolumeSurface_MouseEnter(object sender, MouseEventArgs e)
+        {
+            _volumeSurface = TaskbarVolumeSurface;
+            VolumeInfoRequested?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void TaskbarOutputDeviceSurface_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+        {
+            _outputDeviceSurface = TaskbarOutputDeviceSurface;
+            OutputDeviceWheelRequested?.Invoke(this, new PlayerSurfaceWheelEventArgs(e.Delta, false, false, false));
+            e.Handled = true;
+        }
+
+        private void TaskbarVolumeSurface_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+        {
+            _volumeSurface = TaskbarVolumeSurface;
             VolumeWheelRequested?.Invoke(this, new PlayerSurfaceWheelEventArgs(e.Delta, false, false, false));
             e.Handled = true;
         }

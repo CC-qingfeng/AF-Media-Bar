@@ -70,7 +70,19 @@ public sealed class SettingsPersistenceServiceTests
                 MediaTextAlignment = TaskbarMediaTextAlignment.Right,
                 SpectrumVisible = false,
                 PerformanceVisible = false,
-                HoverControls = new TaskbarHoverControlsSettings(true, true, false, false, false)
+                HoverControls = new TaskbarHoverControlsSettings(true, true, false, false, false),
+                // 静置层组件顺序与"无媒体时保留"是列表字段：列表在记录生成的 ToString 里只打印类型名，
+                // 因此只有真正写进文件再读回来才能证明它们被序列化了。
+                // The rest-layer component order and the "kept without media" list are list fields, and a record's generated ToString prints
+                // only their type name, so only a real write-then-read proves they are serialized at all.
+                OutputDeviceVisible = true,
+                VolumeVisible = true,
+                RestComponentOrder =
+                [
+                    TaskbarRestComponent.Volume,
+                    TaskbarRestComponent.Spectrum
+                ],
+                IdleComponents = [TaskbarRestComponent.Performance, TaskbarRestComponent.Volume]
             },
             Interaction = new GlobalInteractionSettings(
                 PlayerClickAction.ActivateSource,
@@ -128,6 +140,22 @@ public sealed class SettingsPersistenceServiceTests
         Assert.AreEqual(TaskbarMediaTextAlignment.Right, SettingsManager.Current.TaskbarExperience.MediaTextAlignment);
         Assert.IsFalse(SettingsManager.Current.TaskbarExperience.SpectrumVisible);
         Assert.IsFalse(SettingsManager.Current.TaskbarExperience.PerformanceVisible);
+        Assert.IsTrue(SettingsManager.Current.TaskbarExperience.OutputDeviceVisible);
+        Assert.IsTrue(SettingsManager.Current.TaskbarExperience.VolumeVisible);
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                TaskbarRestComponent.Volume,
+                TaskbarRestComponent.Spectrum
+            },
+            SettingsManager.Current.TaskbarExperience.RestComponentOrder!.ToArray());
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                TaskbarRestComponent.Performance,
+                TaskbarRestComponent.Volume
+            },
+            SettingsManager.Current.TaskbarExperience.IdleComponents!.ToArray());
         Assert.AreEqual(72, SettingsManager.Current.TaskbarSurface.BackgroundOpacityPercent);
         Assert.AreEqual(LyricsTextAlignment.Right, SettingsManager.Current.LyricsTextAlignment);
         Assert.AreEqual(@"\\.\DISPLAY2", SettingsManager.Current.TaskbarTargetMonitorDeviceId);
