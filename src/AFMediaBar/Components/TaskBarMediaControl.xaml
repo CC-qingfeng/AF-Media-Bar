@@ -86,20 +86,18 @@
     <Border Name="MainBorder" CornerRadius="6"
             ClipToBounds="True">
         <!--
-            整条媒体栏挂滚轮提示：悬停立刻显示（InitialShowDelay=0），内容说明当前绑定的普通/组合滚轮动作，
-            滚动后换成刚刚发生的结果；提示向上弹出，因为媒体栏位于任务栏、下方没有空间。
-            The whole bar carries the wheel tooltip: it opens immediately (InitialShowDelay=0), states the currently bound plain and
-            chord wheel actions, and switches to the result that just happened after a scroll. It pops upwards because the bar sits
-            in the taskbar with no room below.
+            程序内的全局滚轮手势与滚轮提示只属于两个"面"：封面与文字区（提示挂在这两个元素上，不挂在整条媒体栏的根上）。
+            频谱、性能块、输出设备/音量按钮与无媒体时的快速启动音符各自有自己的交互（或将来会有），
+            所以根上 MUST NOT 再挂一个共用的提示：那会让悬停任何一处都弹出滚轮提示，也会让滚轮落进本该由组件自己处理的区域。
+            The in-app global wheel gesture and its tooltip belong to two surfaces only: the artwork and the text region (the tooltip sits
+            on those two elements, not on the bar's root). The spectrum, the performance chip, the output-device/volume buttons, and the
+            quick-launch note without media each own their interactions (or will), so a tooltip shared by the whole bar MUST NOT sit on
+            the root: it would pop up wherever the pointer lands and let the wheel into regions a component is meant to handle itself.
         -->
         <Grid Name="InteractionSurface" Background="#01000000"
               PreviewMouseWheel="InteractionSurface_PreviewMouseWheel"
               MouseMove="InteractionSurface_MouseMove"
-              MouseLeave="InteractionSurface_MouseLeave"
-              ToolTipService.BetweenShowDelay="0"
-              ToolTipService.InitialShowDelay="0"
-              ToolTipService.Placement="Top"
-              ToolTipService.ShowDuration="20000">
+              MouseLeave="InteractionSurface_MouseLeave">
             <Image x:Name="BackgroundImage" Stretch="UniformToFill" HorizontalAlignment="Center"
                    VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5" Opacity="0.4">
                 <Image.Effect>
@@ -112,8 +110,21 @@
                 <Canvas Name="MainCanvas">
 
                     <!-- 封面组件 Artwork component -->
+                    <!--
+                        封面是全局滚轮面之一（另一个是文字区）：提示因此挂在这里，悬停立刻显示（InitialShowDelay=0）、向上弹出
+                        （媒体栏在任务栏里，下方没有空间）。无媒体时这个元素画的是快速启动小音符，那时挂的是它自己的预览提示，
+                        由 ApplyArtworkTooltipOwner 换过去——音符的滚轮是"挑播放器"，不是播放器的上一首/下一首。
+                        The artwork is one of the two global wheel surfaces (the other is the text region), so the tooltip sits here: it opens
+                        immediately (InitialShowDelay=0) and pops upwards (the bar sits in the taskbar with no room below). Without media this
+                        element draws the quick-launch note and carries that note's own preview tooltip instead, swapped in by
+                        ApplyArtworkTooltipOwner — the note's wheel picks a player rather than skipping tracks.
+                    -->
                     <Border Name="SongImageBorder" CornerRadius="5" ClipToBounds="True" Width="36" Height="36"
                             Panel.ZIndex="2" Cursor="Hand" Tag="MediaAction"
+                            ToolTipService.BetweenShowDelay="0"
+                            ToolTipService.InitialShowDelay="0"
+                            ToolTipService.Placement="Top"
+                            ToolTipService.ShowDuration="20000"
                             MouseEnter="SongImageBorder_MouseEnter"
                             MouseLeave="SongImageBorder_MouseLeave"
                             MouseLeftButtonUp="SongImageBorder_MouseLeftButtonUp">
@@ -134,15 +145,24 @@
                     </Border>
 
                     <!-- 歌曲信息组件 Song info component -->
+                    <!--
+                        文字区是另一个全局滚轮面，提示参数与封面完全一致（立刻显示、向上弹出）。
+                        这里原先写的 800 ms + RelativePoint + VerticalOffset=-16 是"文字区自持一个标题提示"时代的遗留：
+                        那个提示已经不在了，留着只会让滚轮提示慢半拍、位置也不对。
+                        The text region is the other global wheel surface, with the same tooltip settings as the artwork (immediate, upwards).
+                        The previous 800 ms + RelativePoint + VerticalOffset=-16 belonged to the era when this region carried a title tooltip
+                        of its own; that tooltip is gone, and keeping those values would only delay the wheel hint and place it wrongly.
+                    -->
                     <StackPanel Name="SongInfoStackPanel" Orientation="Vertical"
                                 Width="Auto"
                                 Panel.ZIndex="3"
                                 Background="Transparent"
                                 MouseEnter="SongInfoStackPanel_MouseEnter"
                                 MouseLeave="SongInfoStackPanel_MouseLeave"
-                                ToolTipService.InitialShowDelay="800"
-                                ToolTipService.Placement="RelativePoint"
-                                ToolTipService.VerticalOffset="-16">
+                                ToolTipService.BetweenShowDelay="0"
+                                ToolTipService.InitialShowDelay="0"
+                                ToolTipService.Placement="Top"
+                                ToolTipService.ShowDuration="20000">
                         <Grid x:Name="SongInfoSurface"
                               Width="{Binding ElementName=SongInfoStackPanel, Path=Width}"
                               Height="{Binding ElementName=SongInfoStackPanel, Path=Height}">

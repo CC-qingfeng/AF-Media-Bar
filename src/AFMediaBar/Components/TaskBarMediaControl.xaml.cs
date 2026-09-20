@@ -121,16 +121,20 @@ namespace AFMediaBar.Components
                 Interval = TimeSpan.FromMilliseconds(LyricHighlightFrameIntervalMilliseconds)
             };
             _lyricHighlightTimer.Tick += (_, _) => AdvanceLyricHighlight();
-            // 提示用同一个实例承载，内容随手势与结果实时改写。
-            // One tooltip instance carries the text, which is rewritten live as the gesture and its result change.
+            // 程序内的全局滚轮提示各挂在一个全局滚轮面上：文字区与封面。两个 ToolTip 实例不能共用（一个实例只属于一个元素），
+            // 因此实例各自独立、**内容**由同一处写入，随手势与结果实时改写。
+            // The in-app global wheel tooltip has one instance per global wheel surface: the text region and the artwork. Two elements
+            // cannot share one ToolTip instance, so the instances stay separate while their **content** is written from a single place
+            // and rewritten live as the gesture and its result change.
             _wheelTooltip = new ToolTip { Placement = System.Windows.Controls.Primitives.PlacementMode.Top };
-            InteractionSurface.ToolTip = _wheelTooltip;
-            // 无媒体时的高频动作是"在音符上滚轮挑播放器"，因此音符也持一个自己的提示实例：只有实例固定，
+            _artworkWheelTooltip = new ToolTip { Placement = System.Windows.Controls.Primitives.PlacementMode.Top };
+            SongInfoStackPanel.ToolTip = _wheelTooltip;
+            // 无媒体时的高频动作是"在音符上滚轮挑播放器"，因此音符另持一个自己的提示实例：只有实例固定，
             // 内容才能在不关闭气泡的情况下改写（见 SetQuickLaunchPreview）。
             // With no media the frequent action is "pick a player by wheeling over the note", so the note carries a tooltip instance of its own:
             // only a fixed instance lets the content change without closing the bubble (see SetQuickLaunchPreview).
             _quickLaunchTooltip = new ToolTip { Placement = System.Windows.Controls.Primitives.PlacementMode.Top };
-            SongImageBorder.ToolTip = _quickLaunchTooltip;
+            ApplyArtworkTooltipOwner();
             _outputDeviceSurface = TaskbarDeviceButton;
             _volumeSurface = TaskbarVolumeButton;
             // 进度条计时器按"当前是否处于剪枝档位"启动：窗口可能在档位已经生效时才加载出来（任务栏在屏幕关闭期间重建），
@@ -145,6 +149,7 @@ namespace AFMediaBar.Components
                 _hoverCloseTimer.Stop();
                 _hoverHideFallbackTimer.Stop();
                 _wheelTooltipTimer.Stop();
+                CloseWheelTooltips();
                 _marqueeTimer.Stop();
                 _lyricHighlightTimer.Stop();
                 StopMarqueeAnimations();
@@ -188,7 +193,12 @@ namespace AFMediaBar.Components
         /// <summary>兜底收起比退出动画多等的余量，确保正常动画回调先跑。/ Extra margin the fallback waits beyond the exit animation, so the normal animation callback runs first.</summary>
         private static readonly TimeSpan HoverHideFallbackMargin = TimeSpan.FromMilliseconds(150);
         private readonly DispatcherTimer _wheelTooltipTimer;
+
+        /// <summary>文字区（全局滚轮面之一）的滚轮提示；内容与封面那份由同一处写入。/ The wheel tooltip of the text region, one of the global wheel surfaces; its content is written from the same place as the artwork's.</summary>
         private readonly ToolTip _wheelTooltip;
+
+        /// <summary>封面（另一个全局滚轮面）的滚轮提示；与文字区那份是两个实例、同一段内容，原因见构造函数。/ The wheel tooltip of the artwork, the other global wheel surface; a separate instance carrying the same text as the text region's, for the reason given in the constructor.</summary>
+        private readonly ToolTip _artworkWheelTooltip;
 
         /// <summary>音符上的快速启动提示；与滚轮提示一样只改内容、不换实例。/ The quick-launch tooltip on the note; like the wheel tooltip its content changes while the instance stays put.</summary>
         private readonly ToolTip _quickLaunchTooltip;
@@ -215,7 +225,6 @@ namespace AFMediaBar.Components
 
         /// <summary>最近一次写入提示的滚轮结果；曲名随媒体变化的结果靠它重新读一次。/ The last wheel result written into the tooltip, used to re-read a title that follows the media.</summary>
         private WheelTooltipResult? _wheelResult;
-        private string _songInfoTooltip = string.Empty;
         private MediaSnapshot _snapshot = MediaSnapshot.Disconnected;
         private bool _isTaskbarHoverVisible;
         private PlayerForegroundDecision? _adaptiveForegroundDecision;
@@ -492,21 +501,28 @@ namespace AFMediaBar.Components
             Mouse.LeftButton == MouseButtonState.Pressed,
             Mouse.RightButton == MouseButtonState.Pressed);
 
+        /// <summary>
+        /// 把滚轮提示写进两个全局滚轮面（文字区与封面）。
+        ///
+        /// 提示里只有手势本身：悬停时说明"滚轮现在会做什么"，滚动后换成刚刚发生的结果。曲名与歌手 MUST NOT 再跟着挂在这里——
+        /// 它们会随指针落在媒体栏任何一处而出现，而"把整首歌的信息看全"是完整层的职责（那里的标题不再被省略）。
+        /// Writes the wheel hint into both global wheel surfaces (the text region and the artwork).
+        ///
+        /// The hint carries the gesture alone: what the wheel does while hovering, and the result that just happened after a scroll.
+        /// The title and the artist MUST NOT ride along any more — they used to appear wherever the pointer landed on the bar, while
+        /// showing the whole track is the full panel's job (its title is no longer trimmed there).
+        /// </summary>
         private void SetWheelTooltipText(string text)
         {
-            // 媒体信息作为第二段跟在滚轮提示后面：截断的标题与"滚轮会做什么"是悬停同一处时想知道的全部。
-            // The media info follows the wheel line as a second paragraph: a truncated title and "what the wheel does" are everything the
-            // user wants while hovering that one spot.
-            var content = string.IsNullOrWhiteSpace(_songInfoTooltip) ? text : $"{text}\n\n{_songInfoTooltip}";
-            if (_wheelTooltip.Content as string != content)
-            {
-                // 只改同一个 ToolTip 实例的内容：更改 ToolTip 属性本身会先关掉已打开的气泡，而这里恰恰要求
-                // "滚一下就看到结果"——内容变化会立刻反映在已经显示出来的气泡上。
-                // Only the content of one ToolTip instance changes: reassigning the ToolTip property would first close the open bubble,
-                // while what is wanted here is exactly "scroll once and see the result" — a content change shows up in the bubble that is
-                // already on screen.
-                _wheelTooltip.Content = content;
-            }
+            // 只改 ToolTip 实例的内容：更改 ToolTip 属性本身会先关掉已打开的气泡，而这里恰恰要求
+            // "滚一下就看到结果"——内容变化会立刻反映在已经显示出来的气泡上。
+            // Only the content of the ToolTip instances changes: reassigning the ToolTip property would first close the open bubble,
+            // while what is wanted here is exactly "scroll once and see the result" — a content change shows up in the bubble that is
+            // already on screen.
+            if (_wheelTooltip.Content as string != text)
+                _wheelTooltip.Content = text;
+            if (_artworkWheelTooltip.Content as string != text)
+                _artworkWheelTooltip.Content = text;
 
             ReassertChordWheelTooltip();
         }
@@ -522,39 +538,104 @@ namespace AFMediaBar.Components
         /// </summary>
         private void ReassertChordWheelTooltip()
         {
-            if (!ChordWheelHeld || !InteractionSurface.IsMouseOver)
+            if (!ChordWheelHeld || ResolveGlobalWheelSurface() is not { } surface)
                 return;
 
-            _wheelTooltip.PlacementTarget = InteractionSurface;
-            if (!_wheelTooltip.IsOpen)
-                _wheelTooltip.IsOpen = true;
+            surface.Tooltip.PlacementTarget = surface.Surface;
+            if (!surface.Tooltip.IsOpen)
+                surface.Tooltip.IsOpen = true;
         }
 
-        /// <summary>记录当前曲目的完整信息，并把它并入媒体栏提示。/ Records the current track's full info and folds it into the bar tooltip.</summary>
-        private void UpdateSongInfoTooltip(string? title, string? artist)
+        /// <summary>收起两个全局滚轮提示的气泡；手动重申过的气泡不会自己关。/ Closes both global wheel bubbles, since one re-asserted by hand does not close itself.</summary>
+        private void CloseWheelTooltips()
         {
-            var parts = new List<string>(2);
-            if (!string.IsNullOrWhiteSpace(title))
-                parts.Add(title.Trim());
-            if (!string.IsNullOrWhiteSpace(artist))
-                parts.Add(artist.Trim());
-            var info = parts.Count == 0 ? string.Empty : string.Join("\n", parts);
-            if (info == _songInfoTooltip)
+            _wheelTooltip.IsOpen = false;
+            _artworkWheelTooltip.IsOpen = false;
+        }
+
+        /// <summary>
+        /// 指针是否占据文字区。悬停层与"完整层细杠"都盖在文字区上（它们只覆盖这一块，也只为这一块服务），
+        /// 因此悬停它们时指针算在同一处，滚轮手势与提示照旧成立。
+        /// Whether the pointer occupies the text region. The hover layer and the thin full-panel handle both sit on top of that region
+        /// (they cover it and serve nothing else), so hovering them counts as the same place and the wheel gesture and its hint still hold.
+        /// </summary>
+        private bool IsTextSurfaceHovered =>
+            SongInfoStackPanel.IsMouseOver || HoverRevealHost.IsMouseOver || TaskbarDirectFullPanelHandle.IsMouseOver;
+
+        /// <summary>
+        /// 指针当前所在的全局滚轮面，以及这个面自己的提示实例；指针不在任何一个面上时为 null。
+        ///
+        /// 全局滚轮手势只落在封面与文字区：频谱、性能块、输出设备/音量按钮与无媒体时的音符各自有自己的交互（或将来会有），
+        /// 而目前还没有专属交互的组件也 MUST NOT 落回全局手势——落在频谱上滚一下却切歌，是"组件没有自己的语义"这件事
+        /// 唯一会伤到用户的表现。以后哪个组件有了自己的滚轮，就在这里为它加一条，而不是把根上的老行为改回来。
+        /// The global wheel surface the pointer is on, together with that surface's own tooltip instance, or null when the pointer is on
+        /// none of them.
+        ///
+        /// The global wheel gesture lands on the artwork and the text region only: the spectrum, the performance chip, the
+        /// output-device/volume buttons, and the note without media each have interactions of their own (or will), and a component
+        /// without one MUST NOT fall back to the global gesture either — scrolling over the spectrum and skipping a track is the one
+        /// way "this component has no semantics of its own" hurts the user. A component that later gains a wheel of its own gets an
+        /// entry here rather than an old behaviour restored on the root.
+        /// </summary>
+        private (FrameworkElement Surface, ToolTip Tooltip)? ResolveGlobalWheelSurface()
+        {
+            if (_isConnected && SongImageBorder.IsMouseOver)
+                return (SongImageBorder, _artworkWheelTooltip);
+            return IsTextSurfaceHovered ? (SongInfoStackPanel, _wheelTooltip) : null;
+        }
+
+        /// <summary>
+        /// 封面当前挂哪一个提示：有媒体时是全局滚轮提示，没有媒体时是快速启动预览。
+        ///
+        /// 无媒体时这个元素画的是快速启动小音符，它的滚轮是"挑播放器"而不是播放器的上一首/下一首，因此 MUST NOT 留着全局滚轮提示：
+        /// 一句话说"上一首/下一首"、滚起来却在挑播放器，是这类提示最容易骗人的地方。换实例会先关掉已经打开的气泡
+        /// （见 SetQuickLaunchPreview），所以两个实例都显式收起一次，并且只在归属真的变化时才写 ToolTip。
+        /// Which tooltip the artwork carries: the global wheel hint while there is media, and the quick-launch preview while there is none.
+        ///
+        /// Without media this element draws the quick-launch note, whose wheel picks a player rather than skipping tracks, so it MUST NOT
+        /// keep the global hint: saying "previous/next" while the wheel picks a player is exactly how such a hint misleads. Reassigning the
+        /// property closes the bubble that is open (see SetQuickLaunchPreview), so both instances are closed explicitly and the property is
+        /// written only when the owner really changes.
+        /// </summary>
+        private void ApplyArtworkTooltipOwner()
+        {
+            var owner = _isConnected ? _artworkWheelTooltip : _quickLaunchTooltip;
+            if (ReferenceEquals(SongImageBorder.ToolTip, owner))
                 return;
 
-            _songInfoTooltip = info;
+            CloseWheelTooltips();
+            _quickLaunchTooltip.IsOpen = false;
+            SongImageBorder.ToolTip = owner;
+            // 换过来的实例可能还没有内容（从来没有人滚动过），而提示是按悬停自动打开的：先写一次当前提示，
+            // 否则悬停封面会先弹出一个空气泡。
+            // The instance just swapped in may still be empty when nobody has scrolled yet, and the tooltip opens by itself on hover:
+            // writing the current hint once keeps hovering the artwork from popping an empty bubble.
             RefreshWheelTooltip();
         }
 
         /// <summary>
-        /// 指针进入媒体栏时启动滚轮提示的轮询。轮询只做一件事：按键状态变了就把提示换到那个槽位，
-        /// 因为"按住 Shift 不动鼠标"不会产生任何鼠标事件。指针离开后第一个 tick 就会自停。
-        /// Starts the wheel tooltip's poll when the pointer enters the bar. The poll does one thing: switch the hint to the slot whose
-        /// modifier just changed, because "hold Shift without moving the mouse" produces no mouse event at all. It stops itself on
-        /// the first tick after the pointer leaves.
+        /// 指针移动时维护滚轮提示的轮询：只在指针位于全局滚轮面上时运行，一离开那两个面就立刻停表并收起气泡。
+        ///
+        /// 轮询只做一件事：按键状态变了就把提示换到那个槽位，因为"按住 Shift 不动鼠标"不会产生任何鼠标事件。指针离开后
+        /// 第一个 tick 就会自停。
+        /// Maintains the wheel-tooltip poll as the pointer moves: it runs only while the pointer is on a global wheel surface, and stops the
+        /// timer and closes the bubble the moment the pointer leaves those two surfaces.
+        ///
+        /// The poll does one thing: switch the hint to the slot whose modifier just changed, because "hold Shift without moving the mouse"
+        /// produces no mouse event at all. It also stops itself on the first tick after the pointer leaves.
         /// </summary>
         private void InteractionSurface_MouseMove(object sender, MouseEventArgs e)
         {
+            if (ResolveGlobalWheelSurface() is null)
+            {
+                // 频谱、性能块、快速启动音符与媒体栏的空白处都不参与全局滚轮：立刻收干净，不等到下一个 tick。
+                // The spectrum, the performance chip, the quick-launch note, and the bar's blank areas take no part in the global wheel:
+                // everything is cleaned up right away instead of on the next tick.
+                _wheelTooltipTimer.Stop();
+                CloseWheelTooltips();
+                return;
+            }
+
             if (!_wheelTooltipTimer.IsEnabled)
             {
                 // 重新进入时先忘掉上一次的结果，否则会带着旧结果显示给用户。
@@ -568,10 +649,10 @@ namespace AFMediaBar.Components
 
         private void AdvanceWheelTooltip()
         {
-            if (!InteractionSurface.IsMouseOver)
+            if (ResolveGlobalWheelSurface() is null)
             {
                 _wheelTooltipTimer.Stop();
-                _wheelTooltip.IsOpen = false;
+                CloseWheelTooltips();
                 return;
             }
 
@@ -1608,7 +1689,9 @@ namespace AFMediaBar.Components
                     SongArtist.Text = _actualArtist;
                     SongInfoStackPanel.Visibility = Visibility.Collapsed;
                     SongInfoStackPanel.IsHitTestVisible = false;
-                    UpdateSongInfoTooltip(null, null);
+                    // 封面这一格此刻画的是快速启动小音符，它有自己的滚轮语义与提示。
+                    // The artwork slot now draws the quick-launch note, which has wheel semantics and a tooltip of its own.
+                    ApplyArtworkTooltipOwner();
                     SongImagePlaceholder.Symbol = SymbolRegular.MusicNote220;
                     SongImagePlaceholder.Visibility = Visibility.Visible;
                     SongImage.ImageSource = null;
@@ -1667,11 +1750,12 @@ namespace AFMediaBar.Components
                 // Show current lyric line in title slot when lyrics are available (advances with snapshot position)
                 UpdateLyricLine(snapshot);
 
-                // 完整歌曲信息并入整条媒体栏共用的那个提示：媒体文字区不再自持一个提示，
-                // 否则悬停文字时会盖住滚轮提示，而两者恰恰是同一处需要的两条信息。
-                // The full song info joins the single tooltip shared by the whole bar: the text area no longer carries one of its own,
-                // because that would cover the wheel hint while both are exactly the two things needed in that one place.
-                UpdateSongInfoTooltip(snapshot.Title, snapshot.Artist);
+                // 有媒体时封面与文字区一起构成"程序内的全局滚轮面"：曲名与歌手不再需要跟着提示走（它们已经在文字区里，
+                // 完整层则负责把整个标题显示完），因此这里只把封面的提示换回滚轮提示。
+                // With media the artwork joins the text region as the in-app global wheel surface: the title and the artist no longer have
+                // to ride along on the tooltip (they are already in the text region, and the full panel shows the whole title), so this only
+                // swaps the artwork's tooltip back to the wheel hint.
+                ApplyArtworkTooltipOwner();
 
                 // 根据主色调改变图标颜色（从封面提取）；没有封面主色时回退到应用统一强调色，再退回系统高亮色。
                 // 旧实现回退到 MicaWPF 的强调色键，而该键在本项目中不解析，会得到一个空画刷。
@@ -1960,6 +2044,14 @@ namespace AFMediaBar.Components
 
             if (_currentMode == WindowMode.Taskbar)
             {
+                // 全局滚轮手势只属于封面与文字区（见 ResolveGlobalWheelSurface）：在频谱、性能块或媒体栏的空白处滚动
+                // 什么都不做，那些组件将来会有自己的滚轮语义。
+                // The global wheel gesture belongs to the artwork and the text region only (see ResolveGlobalWheelSurface): scrolling over
+                // the spectrum, the performance chip, or a blank part of the bar does nothing, since those components will get wheel
+                // semantics of their own.
+                if (ResolveGlobalWheelSurface() is null)
+                    return;
+
                 var leftDown = Mouse.LeftButton == MouseButtonState.Pressed;
                 var rightDown = Mouse.RightButton == MouseButtonState.Pressed;
                 var shiftDown = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift);

@@ -1036,10 +1036,13 @@ public partial class TaskBarMediaControl
         AnimateComponentHover(SongImageHoverOverlay, false);
 
         // 快速启动提示是手动打开的（滚轮预览需要它在指针不动时也出现），因此离开音符时要显式收起，
-        // 否则它会留在屏幕上直到下一次交互。
+        // 否则它会留在屏幕上直到下一次交互。封面的滚轮提示同理：组合键按住期间它会一直被重申，
+        // 指针离开封面后没有新的鼠标事件能让它自己关掉。
         // The quick-launch tooltip is opened by hand, because a wheel preview has to appear while the pointer is stationary, so it is closed
-        // explicitly when the pointer leaves; otherwise it would stay on screen until the next interaction.
+        // explicitly when the pointer leaves; otherwise it would stay on screen until the next interaction. The artwork's wheel tooltip is
+        // the same: the chord keeps re-asserting it, and once the pointer leaves the artwork no mouse event would close it.
         _quickLaunchTooltip.IsOpen = false;
+        _artworkWheelTooltip.IsOpen = false;
     }
 
     // 静置层的四个小组件（频谱、性能、输出设备、音量）共用这两个处理器，因此高亮必须落在事件源上：
