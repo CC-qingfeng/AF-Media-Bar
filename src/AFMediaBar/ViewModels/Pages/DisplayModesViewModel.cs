@@ -28,11 +28,11 @@ public partial class DisplayModesViewModel : ObservableObject
     private bool _isRefreshing;
     private DisplayModeSelection _selectedMode = DisplayModeSelection.Taskbar;
     private IReadOnlyList<DisplayMonitorOption> _monitorOptions = Array.Empty<DisplayMonitorOption>();
-    private IReadOnlyList<DisplayMonitorOption> _taskbarMonitorOptions = Array.Empty<DisplayMonitorOption>();
+    private IReadOnlyList<TaskbarMonitorSelectionItem> _taskbarMonitorOptions = Array.Empty<TaskbarMonitorSelectionItem>();
 
     public IReadOnlyList<DisplayMonitorOption> MonitorOptions => _monitorOptions;
-    /// <summary>任务栏目标列表，额外包含“所有任务栏”；通知目标仍只使用单个显示器列表。/ Taskbar target list with an extra “all taskbars” entry; notification targets keep the single-monitor list.</summary>
-    public IReadOnlyList<DisplayMonitorOption> TaskbarMonitorOptions => _taskbarMonitorOptions;
+    /// <summary>可逐项勾选的任务栏目标列表；至少保留一项，既支持单选也支持多选。/ Individually selectable taskbar targets; at least one remains selected, supporting one or many.</summary>
+    public IReadOnlyList<TaskbarMonitorSelectionItem> TaskbarMonitorOptions => _taskbarMonitorOptions;
     public WindowMode CurrentWindowMode => SettingsManager.Current.WindowMode;
     public DisplayModeSelection SelectedMode => _selectedMode;
     public bool IsTaskbarMode => SelectedMode == DisplayModeSelection.Taskbar;
@@ -127,30 +127,6 @@ public partial class DisplayModesViewModel : ObservableObject
 
     public bool CanSelectTrackChangeNotificationMonitor =>
         TrackChangeNotificationEnabled && TrackChangeNotificationTargetMode == NotificationTargetMode.Fixed;
-
-    public string? TaskbarTargetMonitorDeviceId
-    {
-        get
-        {
-            var configured = SettingsManager.Current.TaskbarTargetMonitorDeviceId;
-            return TaskbarTargetPolicy.IsAllTaskbars(configured)
-                ? TaskbarTargetPolicy.AllTaskbarsDeviceId
-                : configured ?? _displayMonitorService.ResolveFixedMonitor(null)?.DeviceId;
-        }
-        set
-        {
-            if (_isRefreshing || string.Equals(
-                    SettingsManager.Current.TaskbarTargetMonitorDeviceId,
-                    value,
-                    StringComparison.OrdinalIgnoreCase))
-            {
-                return;
-            }
-
-            SettingsManager.Current.TaskbarTargetMonitorDeviceId = value;
-            OnPropertyChanged();
-        }
-    }
 
     public bool HoverLayerEnabled
     {
@@ -786,6 +762,8 @@ public partial class DisplayModesViewModel : ObservableObject
     {
         if (e.ResetScope is SettingsResetScope.DisplayModes or SettingsResetScope.Layout or SettingsResetScope.All)
             RaiseAll();
+        else if (!_isRefreshing && e.PropertyName is nameof(AppSettings.TaskbarTargetMonitorDeviceIds) or nameof(AppSettings.TaskbarTargetMonitorDeviceId))
+            RefreshMonitorOptions();
     }
 
     private void OnMonitorsChanged(object? sender, EventArgs e) => RefreshMonitorOptions();
@@ -818,14 +796,15 @@ public partial class DisplayModesViewModel : ObservableObject
 
         var options = availableOptions.ToList();
 
-        var taskbarOptions = new List<DisplayMonitorOption>
-        {
-            new(
-                TaskbarTargetPolicy.AllTaskbarsDeviceId,
-                Translations.Get("DisplayModes.Monitor.AllTaskbars"),
-                false)
-        };
-        taskbarOptions.AddRange(availableOptions);
+        var selectedTaskbarIds = ResolveConfiguredTaskbarSelection(monitors);
+        var taskbarOptions = availableOptions
+            .Select(option => new TaskbarMonitorSelectionItem(
+                option.DeviceId,
+                option.DisplayName,
+                option.IsPrimary,
+                option.IsAvailable,
+                selectedTaskbarIds.Contains(option.DeviceId)))
+            .ToList();
 
         static void AddDisconnected(
             List<DisplayMonitorOption> target,
@@ -834,7 +813,7 @@ public partial class DisplayModesViewModel : ObservableObject
             string suffix,
             int index)
         {
-            if (string.IsNullOrWhiteSpace(preferredId) || TaskbarTargetPolicy.IsAllTaskbars(preferredId) ||
+            if (string.IsNullOrWhiteSpace(preferredId) ||
                 available.Any(option => string.Equals(option.DeviceId, preferredId, StringComparison.OrdinalIgnoreCase)))
                 return;
 
@@ -846,14 +825,79 @@ public partial class DisplayModesViewModel : ObservableObject
         }
 
         AddDisconnected(options, availableOptions, NotificationSettings.FixedMonitorDeviceId, disconnectedSuffix, 0);
-        AddDisconnected(taskbarOptions, availableOptions, SettingsManager.Current.TaskbarTargetMonitorDeviceId, disconnectedSuffix, 1);
+        foreach (var deviceId in selectedTaskbarIds.Where(deviceId =>
+                     availableOptions.All(option => !string.Equals(option.DeviceId, deviceId, StringComparison.OrdinalIgnoreCase))))
+        {
+            taskbarOptions.Add(new TaskbarMonitorSelectionItem(
+                deviceId,
+                $"{deviceId}{disconnectedSuffix}",
+                false,
+                false,
+                true));
+        }
+
+        foreach (var option in taskbarOptions)
+            option.SelectionChanged += OnTaskbarMonitorSelectionChanged;
 
         _monitorOptions = options;
         _taskbarMonitorOptions = taskbarOptions;
+        UpdateTaskbarMonitorToggleState();
         OnPropertyChanged(nameof(MonitorOptions));
         OnPropertyChanged(nameof(TaskbarMonitorOptions));
-        OnPropertyChanged(nameof(TaskbarTargetMonitorDeviceId));
         OnPropertyChanged(nameof(TrackChangeNotificationFixedMonitorDeviceId));
+    }
+
+    private HashSet<string> ResolveConfiguredTaskbarSelection(IReadOnlyList<DisplayMonitorInfo> monitors)
+    {
+        var selected = (SettingsManager.Current.TaskbarTargetMonitorDeviceIds ?? [])
+            .Where(deviceId => !string.IsNullOrWhiteSpace(deviceId))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (selected.Count > 0)
+            return selected;
+
+        var legacy = SettingsManager.Current.TaskbarTargetMonitorDeviceId;
+        if (TaskbarTargetPolicy.IsLegacyAllTaskbars(legacy))
+            selected.UnionWith(monitors.Select(monitor => monitor.DeviceId));
+        else if (!string.IsNullOrWhiteSpace(legacy))
+            selected.Add(legacy);
+        else if (_displayMonitorService.ResolveFixedMonitor(null) is { } primary)
+            selected.Add(primary.DeviceId);
+        return selected;
+    }
+
+    private void OnTaskbarMonitorSelectionChanged(TaskbarMonitorSelectionItem changed)
+    {
+        if (_isRefreshing)
+            return;
+
+        var selected = _taskbarMonitorOptions.Where(option => option.IsSelected).ToArray();
+        if (selected.Length == 0)
+        {
+            changed.IsSelected = true;
+            return;
+        }
+
+        var deviceIds = selected.Select(option => option.DeviceId).ToArray();
+        var current = SettingsManager.Current.TaskbarTargetMonitorDeviceIds ?? [];
+        _isRefreshing = true;
+        try
+        {
+            if (!current.SequenceEqual(deviceIds, StringComparer.OrdinalIgnoreCase))
+                SettingsManager.Current.TaskbarTargetMonitorDeviceIds = deviceIds;
+            SettingsManager.Current.TaskbarTargetMonitorDeviceId = null;
+        }
+        finally
+        {
+            _isRefreshing = false;
+        }
+        UpdateTaskbarMonitorToggleState();
+    }
+
+    private void UpdateTaskbarMonitorToggleState()
+    {
+        var selectedCount = _taskbarMonitorOptions.Count(option => option.IsSelected);
+        foreach (var option in _taskbarMonitorOptions)
+            option.CanToggle = !option.IsSelected || selectedCount > 1;
     }
 
     private void RaiseAll()
@@ -869,7 +913,7 @@ public partial class DisplayModesViewModel : ObservableObject
             OnPropertyChanged(nameof(IslandSurfaceCornerRadiusDip));
             RaiseExperience(); OnPropertyChanged(nameof(Orientation)); OnPropertyChanged(nameof(IsTaskbarPositionLocked));
             OnPropertyChanged(nameof(IsTaskbarAvoidingIcons)); OnPropertyChanged(nameof(TaskbarCrossAxisOffsetDip));
-            OnPropertyChanged(nameof(TaskbarTargetMonitorDeviceId));
+            RefreshMonitorOptions();
             RaiseNotification();
         }
         finally { _isRefreshing = false; }

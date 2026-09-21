@@ -315,7 +315,6 @@ internal static class StringsZhHans
         table.Add("DisplayModes.Mode.Taskbar", "任务栏");
         table.Add("DisplayModes.Mode.Taskbar.Caption", "置于 Windows 任务栏，含静置层、悬停层与完整层");
         table.Add("DisplayModes.Monitor.DisconnectedSuffix", "（当前未连接）");
-        table.Add("DisplayModes.Monitor.AllTaskbars", "所有任务栏");
         table.Add("DisplayModes.Placement.Group.Description", "媒体栏所在的显示器与任务栏位置");
         table.Add("DisplayModes.Placement.Orientation.Auto", "自动（跟随任务栏）");
         table.Add("DisplayModes.Placement.Orientation.Horizontal", "强制横向");
@@ -325,7 +324,7 @@ internal static class StringsZhHans
         table.Add("DisplayModes.Placement.Row.AvoidIcons.Title", "避开任务栏图标");
         table.Add("DisplayModes.Placement.Row.Lock.Description", "锁定后阻止拖动");
         table.Add("DisplayModes.Placement.Row.Lock.Title", "锁定位置");
-        table.Add("DisplayModes.Placement.Row.Monitor.Description", "选择一个显示器，或让媒体栏同时显示在所有已启用的任务栏上");
+        table.Add("DisplayModes.Placement.Row.Monitor.Description", "勾选一个或多个显示器；至少保留一个目标");
         table.Add("DisplayModes.Placement.Row.Offset.Description", "沿跨轴微调媒体栏与图标区之间的间距");
         table.Add("DisplayModes.Placement.Row.Offset.Title", "边缘偏移");
         table.Add("DisplayModes.Placement.Row.Orientation.Description", "自动跟随任务栏方向，也可强制横向或纵向");

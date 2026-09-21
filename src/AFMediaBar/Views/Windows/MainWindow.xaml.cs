@@ -61,10 +61,10 @@ namespace AFMediaBar.Views.Windows
         private readonly List<TaskbarWindow> _taskbarWindows = [];
         private DynamicIslandWindow? _dynamicIslandWindow;
         private SettingsWindow? _settingsWindow;
-        private TaskbarFullPanelWindow? _fullPanelWindow;
+        private readonly Dictionary<string, TaskbarFullPanelWindow> _fullPanelWindows = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, DateTime> _fullPanelClosedAtUtc = new(StringComparer.OrdinalIgnoreCase);
         private TrackChangeNotificationWindow? _trackChangeNotificationWindow;
         private string? _effectiveTaskbarTargetSignature;
-        private DateTime _fullPanelClosedAtUtc;
         private int _taskbarCreatedMessage;
         private bool _isSystemThemeWatcherActive;
         private bool _isClosing;
@@ -268,8 +268,7 @@ namespace AFMediaBar.Views.Windows
             _dynamicIslandWindow = null;
             dynamicIslandWindow?.Close();
             _audioControlFlyout.Close();
-            _fullPanelWindow?.RequestClose();
-            _fullPanelWindow = null;
+            CloseFullPanelWindows();
             var notificationWindow = _trackChangeNotificationWindow;
             _trackChangeNotificationWindow = null;
             notificationWindow?.HideImmediately();
@@ -479,6 +478,9 @@ namespace AFMediaBar.Views.Windows
 
         private void CloseTaskbarWindows()
         {
+            // 完整层的坐标与任务栏宿主一一对应；重建宿主时先收起旧面板，避免它继续挂在已失效的屏幕/DPI 上。
+            // Full-panel coordinates belong to their taskbar hosts; dismiss old panels before rebuilding hosts so none remains on stale monitor/DPI state.
+            CloseFullPanelWindows();
             // 先清除共享引用，避免重入的媒体回调访问已被 Explorer 或 Close() 销毁 HWND 的窗口。
             // Clear the published reference first so reentrant media callbacks cannot target
             // a Window whose HWND has already been destroyed by Explorer or Close().
@@ -734,7 +736,7 @@ namespace AFMediaBar.Views.Windows
             if (!hadPreviousTarget || SettingsManager.Current.WindowMode != WindowMode.Taskbar)
                 return;
 
-            _fullPanelWindow?.RequestClose();
+            CloseFullPanelWindows();
             RequestTaskbarEnvironmentRecovery();
         }
 
@@ -751,6 +753,7 @@ namespace AFMediaBar.Views.Windows
         private IReadOnlyList<string> ResolveTaskbarTargetDeviceIds() =>
             TaskbarTargetPolicy.ResolveDeviceIds(
                 _displayMonitorService.GetMonitors(),
+                SettingsManager.Current.TaskbarTargetMonitorDeviceIds,
                 SettingsManager.Current.TaskbarTargetMonitorDeviceId);
 
         private async void AudioControl_OnFlyoutToggleRequested(TrayIconBounds? bounds)
@@ -835,13 +838,23 @@ namespace AFMediaBar.Views.Windows
             if (_isClosing || sender is not TaskbarWindow taskbarWindow)
                 return;
 
-            if (_fullPanelWindow is null && DateTime.UtcNow - _fullPanelClosedAtUtc < TimeSpan.FromMilliseconds(350))
+            var targetDeviceId = taskbarWindow.TargetMonitorDeviceId;
+            if (!_fullPanelWindows.TryGetValue(targetDeviceId, out var panel) &&
+                _fullPanelClosedAtUtc.TryGetValue(targetDeviceId, out var closedAtUtc) &&
+                DateTime.UtcNow - closedAtUtc < TimeSpan.FromMilliseconds(350))
+            {
                 return;
+            }
 
-            _fullPanelWindow ??= _fullPanelFactory();
-            _fullPanelWindow.Closed -= FullPanelWindow_Closed;
-            _fullPanelWindow.Closed += FullPanelWindow_Closed;
-            _fullPanelWindow.ToggleNear(taskbarWindow.GetMediaBarScreenBounds());
+            if (panel is null)
+            {
+                panel = _fullPanelFactory();
+                _fullPanelWindows[targetDeviceId] = panel;
+            }
+
+            panel.Closed -= FullPanelWindow_Closed;
+            panel.Closed += FullPanelWindow_Closed;
+            panel.ToggleNear(taskbarWindow.GetMediaBarScreenBounds(), targetDeviceId);
         }
 
         private void FullPanelWindow_Closed(object? sender, EventArgs e)
@@ -849,14 +862,23 @@ namespace AFMediaBar.Views.Windows
             if (sender is TaskbarFullPanelWindow window)
             {
                 window.Closed -= FullPanelWindow_Closed;
-                if (ReferenceEquals(window, _fullPanelWindow))
-                    _fullPanelWindow = null;
-                _fullPanelClosedAtUtc = DateTime.UtcNow;
+                var target = _fullPanelWindows.FirstOrDefault(entry => ReferenceEquals(entry.Value, window)).Key;
+                if (!string.IsNullOrWhiteSpace(target))
+                {
+                    _fullPanelWindows.Remove(target);
+                    _fullPanelClosedAtUtc[target] = DateTime.UtcNow;
+                }
 
                 // 完整层是歌词与封面的另一个消费者，关闭后做一遍温和回收。
                 // The full panel is another consumer of lyrics and artwork, so a gentle reclaim follows its close.
                 _memoryPruneCoordinator.RequestTrim(MemoryTrimTrigger.PanelClosed);
             }
+        }
+
+        private void CloseFullPanelWindows()
+        {
+            foreach (var window in _fullPanelWindows.Values.Distinct().ToArray())
+                window.RequestClose();
         }
 
         private void ViewModel_OpenSettingsRequested(object? sender, EventArgs e)

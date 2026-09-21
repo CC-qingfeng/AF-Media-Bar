@@ -24,7 +24,7 @@ public sealed class DisplayTargetPolicyTests
     }
 
     [TestMethod]
-    public void AllTaskbarsTargetsEveryMonitorWithPrimaryFirst()
+    public void ExplicitTaskbarTargetsSupportOneOrManyWithPrimaryFirst()
     {
         var primary = Monitor("DISPLAY1", true, new Rect(0, 0, 1920, 1040), 96);
         var left = Monitor("DISPLAY3", false, new Rect(-1920, 0, 1920, 1040), 96);
@@ -34,10 +34,19 @@ public sealed class DisplayTargetPolicyTests
             new[] { "DISPLAY1", "DISPLAY2", "DISPLAY3" },
             TaskbarTargetPolicy.ResolveDeviceIds(
                 [right, left, primary],
-                TaskbarTargetPolicy.AllTaskbarsDeviceId).ToArray());
+                ["DISPLAY3", "DISPLAY1", "DISPLAY2"]).ToArray());
         CollectionAssert.AreEqual(
             new[] { "DISPLAY2" },
-            TaskbarTargetPolicy.ResolveDeviceIds([primary, right], "DISPLAY2").ToArray());
+            TaskbarTargetPolicy.ResolveDeviceIds([primary, right], ["DISPLAY2"]).ToArray());
+        CollectionAssert.AreEqual(
+            new[] { "DISPLAY1" },
+            TaskbarTargetPolicy.ResolveDeviceIds([primary, right], ["DISCONNECTED"]).ToArray());
+        CollectionAssert.AreEqual(
+            new[] { "DISPLAY1", "DISPLAY2" },
+            TaskbarTargetPolicy.ResolveDeviceIds(
+                [right, primary],
+                null,
+                TaskbarTargetPolicy.LegacyAllTaskbarsDeviceId).ToArray());
     }
 
     [TestMethod]

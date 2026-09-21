@@ -315,7 +315,6 @@ internal static class StringsEn
         table.Add("DisplayModes.Mode.Taskbar", "Taskbar");
         table.Add("DisplayModes.Mode.Taskbar.Caption", "Runs in the Windows taskbar and provides the rest layer, the hover layer, and the full panel");
         table.Add("DisplayModes.Monitor.DisconnectedSuffix", " (not connected)");
-        table.Add("DisplayModes.Monitor.AllTaskbars", "All taskbars");
         table.Add("DisplayModes.Placement.Group.Description", "The monitor holding the media bar, and its position on the taskbar");
         table.Add("DisplayModes.Placement.Orientation.Auto", "Automatic (follow the taskbar)");
         table.Add("DisplayModes.Placement.Orientation.Horizontal", "Force horizontal");
@@ -325,7 +324,7 @@ internal static class StringsEn
         table.Add("DisplayModes.Placement.Row.AvoidIcons.Title", "Avoid taskbar icons");
         table.Add("DisplayModes.Placement.Row.Lock.Description", "Prevents dragging while locked");
         table.Add("DisplayModes.Placement.Row.Lock.Title", "Lock position");
-        table.Add("DisplayModes.Placement.Row.Monitor.Description", "Selects one monitor, or shows the media bar on every enabled taskbar at the same time");
+        table.Add("DisplayModes.Placement.Row.Monitor.Description", "Select one or more monitors; at least one target stays selected");
         table.Add("DisplayModes.Placement.Row.Offset.Description", "Fine-tunes the gap between the media bar and the icon area along the cross axis");
         table.Add("DisplayModes.Placement.Row.Offset.Title", "Edge offset");
         table.Add("DisplayModes.Placement.Row.Orientation.Description", "Follows the taskbar orientation automatically, or forces horizontal or vertical");

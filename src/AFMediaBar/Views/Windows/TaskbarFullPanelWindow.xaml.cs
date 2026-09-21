@@ -39,6 +39,7 @@ public partial class TaskbarFullPanelWindow : FluentWindow
     private int _volumeApplyVersion;
     private int _sectionAnimationVersion;
     private Rect? _anchor;
+    private string? _targetMonitorDeviceId;
 
     public TaskbarFullPanelWindow(
         MediaSessionService mediaSessionService,
@@ -65,7 +66,7 @@ public partial class TaskbarFullPanelWindow : FluentWindow
         ApplyFullPanelSettings(animate: false);
     }
 
-    public void ToggleNear(Rect anchor)
+    public void ToggleNear(Rect anchor, string targetMonitorDeviceId)
     {
         if (_isClosing)
             return;
@@ -78,10 +79,11 @@ public partial class TaskbarFullPanelWindow : FluentWindow
 
         _isClosing = false;
         _anchor = anchor;
+        _targetMonitorDeviceId = targetMonitorDeviceId;
         ApplyMotionEffects();
         Show();
         UpdateLayout();
-        PositionNear(anchor);
+        PositionNear(anchor, targetMonitorDeviceId);
         BeginOpenAnimation(anchor);
         Activate();
     }
@@ -152,9 +154,9 @@ public partial class TaskbarFullPanelWindow : FluentWindow
             PanelRoot.Effect = null;
     }
 
-    private void PositionNear(Rect anchor)
+    private void PositionNear(Rect anchor, string targetMonitorDeviceId)
     {
-        var monitor = _displayMonitorService.ResolveFixedMonitor(SettingsManager.Current.TaskbarTargetMonitorDeviceId);
+        var monitor = _displayMonitorService.ResolveFixedMonitor(targetMonitorDeviceId);
         var scaleX = Math.Max(1d / 96d, (monitor?.DpiX ?? 96) / 96d);
         var scaleY = Math.Max(1d / 96d, (monitor?.DpiY ?? 96) / 96d);
         var work = monitor is null || monitor.WorkArea.IsEmpty
@@ -332,8 +334,8 @@ public partial class TaskbarFullPanelWindow : FluentWindow
         Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
         {
             UpdateLayout();
-            if (IsVisible && _anchor is Rect anchor)
-                PositionNear(anchor);
+            if (IsVisible && _anchor is Rect anchor && _targetMonitorDeviceId is { } targetMonitorDeviceId)
+                PositionNear(anchor, targetMonitorDeviceId);
             if (animate)
                 AnimateVisibleSections();
         }));

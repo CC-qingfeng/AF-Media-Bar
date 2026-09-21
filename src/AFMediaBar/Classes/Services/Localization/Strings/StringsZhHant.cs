@@ -315,7 +315,6 @@ internal static class StringsZhHant
         table.Add("DisplayModes.Mode.Taskbar", "工作列");
         table.Add("DisplayModes.Mode.Taskbar.Caption", "置於 Windows 工作列，含靜置層、懸停層與完整層");
         table.Add("DisplayModes.Monitor.DisconnectedSuffix", "（目前未連接）");
-        table.Add("DisplayModes.Monitor.AllTaskbars", "所有工作列");
         table.Add("DisplayModes.Placement.Group.Description", "媒體列所在的顯示器與工作列位置");
         table.Add("DisplayModes.Placement.Orientation.Auto", "自動（跟隨工作列）");
         table.Add("DisplayModes.Placement.Orientation.Horizontal", "強制橫向");
@@ -325,7 +324,7 @@ internal static class StringsZhHant
         table.Add("DisplayModes.Placement.Row.AvoidIcons.Title", "避開工作列圖示");
         table.Add("DisplayModes.Placement.Row.Lock.Description", "鎖定後阻止拖曳");
         table.Add("DisplayModes.Placement.Row.Lock.Title", "鎖定位置");
-        table.Add("DisplayModes.Placement.Row.Monitor.Description", "選擇一個顯示器，或讓媒體列同時顯示在所有已啟用的工作列上");
+        table.Add("DisplayModes.Placement.Row.Monitor.Description", "勾選一個或多個顯示器；至少保留一個目標");
         table.Add("DisplayModes.Placement.Row.Offset.Description", "沿跨軸微調媒體列與圖示區之間的間距");
         table.Add("DisplayModes.Placement.Row.Offset.Title", "邊緣位移");
         table.Add("DisplayModes.Placement.Row.Orientation.Description", "自動跟隨工作列方向，也可強制橫向或縱向");

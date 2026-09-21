@@ -991,6 +991,9 @@ public partial class TaskbarWindow : Window
     /// <summary>关闭任务栏媒体菜单。/ Closes the taskbar media menu.</summary>
     internal void ClosePlayerMenu() => PlayerMenu.IsOpen = false;
 
+    /// <summary>此宿主所绑定的显示器稳定标识。/ Stable monitor identifier bound to this host.</summary>
+    internal string TargetMonitorDeviceId => _targetMonitorDeviceId;
+
     /// <summary>返回当前媒体栏的屏幕 DIP 边界，供完整面板定位。 / Returns the current media-bar screen DIP bounds for full-panel placement.</summary>
     public Rect GetMediaBarScreenBounds()
     {
