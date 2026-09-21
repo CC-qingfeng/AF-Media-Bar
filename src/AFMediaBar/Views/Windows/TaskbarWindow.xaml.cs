@@ -61,6 +61,7 @@ public partial class TaskbarWindow : Window
     private readonly TaskbarCompactFlyoutWindow _compactFlyout;
     private readonly MemoryPruneCoordinator _memoryPruneCoordinator;
     private IDisposable? _metricsSubscription;
+    private int _metricsSubscriptionGeneration;
 
     /// <summary>当前生效的后台剪枝档位；只在恢复计时器时用来判断该不该真正启动它们。
     /// The background prune level currently in effect, only consulted while restoring timers to decide whether they should really start.</summary>
@@ -110,6 +111,8 @@ public partial class TaskbarWindow : Window
     private int? _pendingVolume;
     private int _metricCycleIndex;
     private int _metricSampleCount;
+    private IReadOnlyList<MetricKind> _subscribedMetricKinds = [];
+    private TimeSpan? _subscribedMetricInterval;
 
     public event EventHandler? OpenFullPanelRequested;
 
@@ -401,8 +404,7 @@ public partial class TaskbarWindow : Window
         {
             _sizeAnimationTimer.Stop();
             _spectrumTimer.Stop();
-            _metricsSubscription?.Dispose();
-            _metricsSubscription = null;
+            DisposeMetricsSubscription();
             _foregroundSamplingSession.Invalidate(clearDecision: false);
             _compactFlyout.Dismiss();
             PlayerMenu.IsOpen = false;
@@ -471,8 +473,7 @@ public partial class TaskbarWindow : Window
             _taskbarMotionSettleTimer.Stop();
             _taskbarHiddenTrimTimer.Stop();
             UnregisterTaskbarLocationHook();
-            _metricsSubscription?.Dispose();
-            _metricsSubscription = null;
+            DisposeMetricsSubscription();
             _outputDeviceApplyTimer.Stop();
             _quickLaunchApplyTimer.Stop();
             _volumeApplyTimer.Stop();
@@ -802,6 +803,13 @@ public partial class TaskbarWindow : Window
         // Delegate UI update to the original media control and its taskbar-only overlay.
         MediaControl.UpdateSongInfo(snapshot);
         MediaControl.ApplyAppearanceSettings();
+        // 新宿主构造时仍是断开快照；若性能组件没有配置为“无媒体时保留”，构造阶段不会取得指标租约。
+        // 重放当前媒体快照会改变控件算出的组件显隐，因此必须在显隐落地后同步一次租约。这里不强制续租，
+        // 否则约 240 ms 一次的媒体快照会不断重置性能指标轮换与刷新间隔。
+        // A new host is still disconnected while constructed; unless performance is kept without media, it acquires no metric lease then.
+        // Replaying the current media snapshot changes the control-owned visibility decision, so synchronize the lease after that decision lands.
+        // This path must not force renewal, or media snapshots arriving about every 240 ms would continually reset metric rotation and cadence.
+        SynchronizeMetricsSubscription(SettingsManager.Current.PerformanceComponent.Normalize());
 
         // Update position after UI change
         Dispatcher.BeginInvoke(() => UpdatePosition(), DispatcherPriority.Background);
@@ -889,6 +897,9 @@ public partial class TaskbarWindow : Window
             _appliedThicknessScalePercent = thicknessScalePercent;
             _appliedMediaFontSizePercent = mediaFontSizePercent;
             MediaControl.RefreshDesiredSize();
+            // 横/竖布局会改变静置层性能组件是否存在；没有新媒体快照时也必须同步租约。
+            // Horizontal/vertical layout changes can add or remove the rest-layer performance component, even when no new media snapshot follows.
+            SynchronizeMetricsSubscription(SettingsManager.Current.PerformanceComponent.Normalize());
         }
 
         if (orientationChanged && IsLoaded)
@@ -1083,8 +1094,7 @@ public partial class TaskbarWindow : Window
         _spectrumTimer.Stop();
         _taskbarMotionSettleTimer.Stop();
         _taskbarHiddenTrimTimer.Stop();
-        _metricsSubscription?.Dispose();
-        _metricsSubscription = null;
+        DisposeMetricsSubscription();
         _outputDeviceApplyTimer.Stop();
         _quickLaunchApplyTimer.Stop();
         _volumeApplyTimer.Stop();
@@ -1160,8 +1170,7 @@ public partial class TaskbarWindow : Window
 
         _timer.Stop();
         _spectrumTimer.Stop();
-        _metricsSubscription?.Dispose();
-        _metricsSubscription = null;
+        DisposeMetricsSubscription();
         _pendingSizeRequest = null;
     }
 
@@ -1482,34 +1491,72 @@ public partial class TaskbarWindow : Window
         var spectrum = SettingsManager.Current.SpectrumComponent.Normalize();
         _spectrumTimer.Interval = TimeSpan.FromMilliseconds(1000d / spectrum.RefreshRateHz);
         var performance = SettingsManager.Current.PerformanceComponent.Normalize();
-        _metricCycleIndex = 0;
-        _metricSampleCount = 0;
         MediaControl.ApplyQuickLaunchEntries(SettingsManager.Current.QuickLaunch.Entries ?? []);
         MediaControl.ApplyTaskbarExperienceSettings();
-        _metricsSubscription?.Dispose();
         // 是否订阅指标采样按控件算出的性能组件显隐决定：静置层显隐的唯一判据在 TaskbarRestLayoutPolicy 里，
         // 宿主自行读一遍 PerformanceVisible 会在"无媒体时不保留性能组件"的状态下继续空转采样。
         // Whether to subscribe for metric sampling follows the performance component's visibility as the control computed it: the only authority on
         // rest-layer visibility is TaskbarRestLayoutPolicy, and reading PerformanceVisible here instead would keep sampling for nothing while the
         // performance component is not kept without media.
-        _metricsSubscription = !_isClosing && !_isEnvironmentSuspended && !IsBackgroundPruned && !IsTaskbarPresentationSuspended &&
-                               MediaControl.IsPerformanceComponentVisible
-            ? _metricsMonitor.Subscribe(
-                performance.Metrics!,
-                TimeSpan.FromMilliseconds(performance.RefreshIntervalMilliseconds),
-                ApplyMetricsSnapshot)
-            : null;
+        SynchronizeMetricsSubscription(performance);
     }
 
-    private void ApplyMetricsSnapshot(SystemMetricsSnapshot snapshot)
+    private void SynchronizeMetricsSubscription(PerformanceComponentSettings performance)
     {
-        if (_isClosing || _isEnvironmentSuspended || IsTaskbarPresentationSuspended) return;
+        var metrics = (performance.Metrics ?? [MetricKind.SystemMemory]).Distinct().ToArray();
+        var interval = TimeSpan.FromMilliseconds(performance.RefreshIntervalMilliseconds);
+        var shouldSubscribe = !_isClosing && !_isEnvironmentSuspended && !IsBackgroundPruned &&
+                              !IsTaskbarPresentationSuspended && MediaControl.IsPerformanceComponentVisible;
+        var configurationChanged = _metricsSubscription is not null &&
+                                   (!_subscribedMetricKinds.SequenceEqual(metrics) || _subscribedMetricInterval != interval);
+        var transition = MetricPresentationPolicy.ResolveSubscriptionTransition(
+            shouldSubscribe,
+            _metricsSubscription is not null,
+            configurationChanged);
+        if (transition == MetricSubscriptionTransition.None)
+            return;
+
+        if (transition == MetricSubscriptionTransition.Unsubscribe)
+        {
+            DisposeMetricsSubscription();
+            return;
+        }
+
+        if (transition == MetricSubscriptionTransition.Renew)
+            DisposeMetricsSubscription();
+        _metricCycleIndex = 0;
+        _metricSampleCount = 0;
+        var generation = _metricsSubscriptionGeneration;
+        _metricsSubscription = _metricsMonitor.Subscribe(
+            metrics,
+            interval,
+            snapshot => ApplyMetricsSnapshot(generation, snapshot));
+        _subscribedMetricKinds = metrics;
+        _subscribedMetricInterval = interval;
+    }
+
+    private void ApplyMetricsSnapshot(int generation, SystemMetricsSnapshot snapshot)
+    {
+        if (generation != _metricsSubscriptionGeneration || _isClosing || _isEnvironmentSuspended || IsTaskbarPresentationSuspended)
+            return;
         var settings = SettingsManager.Current.PerformanceComponent.Normalize();
         var metrics = settings.Metrics ?? [MetricKind.SystemMemory];
+        if (metrics.Count == 0)
+            return;
+        _metricCycleIndex = Math.Clamp(_metricCycleIndex, 0, metrics.Count - 1);
         _metricSampleCount++;
         _metricCycleIndex = MetricPresentationPolicy.Advance(_metricCycleIndex, _metricSampleCount, metrics.Count);
         MediaControl.ApplyPerformanceText(MetricPresentationPolicy.Format(metrics[_metricCycleIndex], snapshot), settings.OpenTaskManagerOnClick);
         _foregroundSamplingSession.RequestRefresh();
+    }
+
+    private void DisposeMetricsSubscription()
+    {
+        _metricsSubscriptionGeneration++;
+        _metricsSubscription?.Dispose();
+        _metricsSubscription = null;
+        _subscribedMetricKinds = [];
+        _subscribedMetricInterval = null;
     }
 
     private static void ExecuteWithParameter(System.Windows.Input.ICommand command, object parameter)
@@ -1919,8 +1966,7 @@ public partial class TaskbarWindow : Window
         _taskbarHiddenTrimTimer.Stop();
         UnregisterTaskbarLocationHook();
         _lengthConstraints.Remove(this);
-        _metricsSubscription?.Dispose();
-        _metricsSubscription = null;
+        DisposeMetricsSubscription();
         _outputDeviceApplyTimer.Stop();
         _quickLaunchApplyTimer.Stop();
         _volumeApplyTimer.Stop();

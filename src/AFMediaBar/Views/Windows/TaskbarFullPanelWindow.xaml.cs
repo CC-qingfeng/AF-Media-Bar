@@ -25,6 +25,7 @@ public partial class TaskbarFullPanelWindow : FluentWindow
     private readonly AudioInteractionService _audioInteractionService;
     private readonly SystemMetricsMonitorService _metricsMonitor;
     private IDisposable? _metricsSubscription;
+    private int _metricsSubscriptionGeneration;
     private readonly IDisplayMonitorService _displayMonitorService;
     private readonly DispatcherTimer _timer;
     private MediaSnapshot _snapshot = MediaSnapshot.Disconnected;
@@ -303,13 +304,15 @@ public partial class TaskbarFullPanelWindow : FluentWindow
         MediaControlsSection.Visibility = settings.MediaControlsVisible ? Visibility.Visible : Visibility.Collapsed;
         AudioControlsSection.Visibility = settings.AudioControlsVisible ? Visibility.Visible : Visibility.Collapsed;
         PerformanceSection.Visibility = settings.PerformanceVisible ? Visibility.Visible : Visibility.Collapsed;
-        _metricsSubscription?.Dispose();
-        _metricsSubscription = settings.PerformanceVisible
-            ? _metricsMonitor.Subscribe(
+        DisposeMetricsSubscription();
+        if (settings.PerformanceVisible)
+        {
+            var generation = _metricsSubscriptionGeneration;
+            _metricsSubscription = _metricsMonitor.Subscribe(
                 Enum.GetValues<MetricKind>(),
                 TimeSpan.FromMilliseconds(500),
-                ApplyMetricsSnapshot)
-            : null;
+                metrics => ApplyMetricsSnapshot(generation, metrics));
+        }
 
         if (animate)
         {
@@ -392,13 +395,21 @@ public partial class TaskbarFullPanelWindow : FluentWindow
             UpdateProgress();
     }
 
-    private void ApplyMetricsSnapshot(SystemMetricsSnapshot metrics)
+    private void ApplyMetricsSnapshot(int generation, SystemMetricsSnapshot metrics)
     {
-        if (_isClosing || !_performanceVisible) return;
+        if (generation != _metricsSubscriptionGeneration || _isClosing || !_performanceVisible)
+            return;
         RamMetric.Text = $"{metrics.SystemMemoryPercent}%";
         CpuMetric.Text = metrics.SystemCpuPercent is int cpu ? $"{cpu}%" : "—";
         GpuMetric.Text = metrics.SystemGpuPercent is int gpu ? $"{gpu}%" : "—";
         ProcessMetric.Text = $"{metrics.ProcessMemoryMegabytes} MB";
+    }
+
+    private void DisposeMetricsSubscription()
+    {
+        _metricsSubscriptionGeneration++;
+        _metricsSubscription?.Dispose();
+        _metricsSubscription = null;
     }
 
     private void UpdateProgress()
@@ -569,8 +580,7 @@ public partial class TaskbarFullPanelWindow : FluentWindow
         _deviceApplyVersion++;
         _volumeApplyVersion++;
         _timer.Stop();
-        _metricsSubscription?.Dispose();
-        _metricsSubscription = null;
+        DisposeMetricsSubscription();
         _mediaSessionService.SnapshotChanged -= OnSnapshotChanged;
         SettingsManager.TaskbarExperienceSettingsChanged -= OnTaskbarExperienceSettingsChanged;
         Translations.LanguageChanged -= OnLanguageChanged;
