@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
-  "version": "1.2.1",
+  "version": "1.2.0",
   "releaseDate": "2026-09-21",
   "minimumSupportedVersion": "1.2.0",
   "mandatory": false,
-  "title": "AF Media Bar 1.2.1",
+  "title": "AF Media Bar 1.2.0",
   "changelog": [
     "任务栏自动隐藏动画：触边收起时的卡顿与跳位",
     "截图或录屏时媒体栏不再错位、不再折叠",
