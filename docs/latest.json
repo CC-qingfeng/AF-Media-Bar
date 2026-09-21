@@ -1,34 +1,32 @@
 {
   "schemaVersion": 1,
-  "version": "1.2.0",
-  "releaseDate": "2026-09-19",
+  "version": "1.2.1",
+  "releaseDate": "2026-09-21",
   "minimumSupportedVersion": "1.2.0",
   "mandatory": false,
-  "title": "AF Media Bar 1.2.0",
+  "title": "AF Media Bar 1.2.1",
   "changelog": [
-    "全新外观、全新交互",
-    "任务栏歌词显示，歌词来源匹配（网易云、LRCLIB、QQ、酷狗、汽水）",
-    "安装程序，程序内后台下载/静默安装",
-    "目标显示器选择",
-    "主题、材质、强调色更换",
-    "当前播放曲目通知",
-    "SMTC 应用允许列表（过滤）",
-    "快速启动（无媒体播放时点击/滚动音符快速打开应用）",
-    "托盘图标便捷滚轮交互，音频控制面板",
-    "新增频谱样式（波形图、像素柱状图）",
-    "后台内存占用自动压缩（分档回收、启动后剪枝）",
-    "蓝奏云密码：zzzz",
-    "注意：新版本安装后，竖向任务栏、悬浮模式暂不支持"
+    "任务栏自动隐藏动画：触边收起时的卡顿与跳位",
+    "截图或录屏时媒体栏不再错位、不再折叠",
+    "可在所有已启用的任务栏上同时显示",
+    "新增逐字高亮开关（关闭后歌词仍按时间轴滚动）",
+    "修复切换显示器后性能监测组件失效",
+    "修复设置页资源缺失与若干窗口稳定性问题",
+    "滚轮手势与提示范围修改"
   ],
-  "releaseNotesUrl": "https://github.com/Fervent-Tempo/AF-Media-Bar/releases/tag/v1.2.0",
+  "releaseNotesUrl": "https://github.com/Fervent-Tempo/AF-Media-Bar/releases/tag/v1.2.1",
   "releasePageUrl": "https://github.com/Fervent-Tempo/AF-Media-Bar/releases/latest",
   "downloads": {
-    "github": "https://github.com/Fervent-Tempo/AF-Media-Bar/releases/download/v1.2.0/AFMediaBar-Setup-v1.2.0-win-x64.exe",
-    "quark": "https://pan.quark.cn/s/6987e4945b16",
-    "baidu": "https://pan.baidu.com/s/1zUQtZ_N1tnRTjJKd9kKREA?pwd=6ddc",
-    "lanzou": "https://amorfate.lanzoue.com/b01eupanbg"
+    "github": "https://github.com/Fervent-Tempo/AF-Media-Bar/releases/download/v1.2.1/AFMediaBar-Setup-v1.2.1-win-x64.exe",
   },
+  "packages": [
+    {
+      "url": "https://github.com/Fervent-Tempo/AF-Media-Bar/releases/download/v1.2.1/AFMediaBar-Setup-v1.2.1-win-x64.exe",
+      "size": 0,
+      "sha256": "REPLACE_WITH_SHA256_FROM_CI_JOB_SUMMARY"
+    }
+  ],
   "sha256": {
-    "github": "47efbabf896d45ea0221d075fa0f96c7c4f356ba13998fb86f7f052a7027864b"
+    "github": ""
   }
 }
