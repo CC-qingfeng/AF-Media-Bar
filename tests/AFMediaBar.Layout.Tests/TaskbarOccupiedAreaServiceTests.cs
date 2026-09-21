@@ -94,7 +94,30 @@ public sealed class TaskbarOccupiedAreaServiceTests
     }
 
     [TestMethod]
-    public void InProgressProbePreventsConcurrentPlatformProbe()
+    public void InProgressProbePreventsDuplicatePlatformProbeForTheSameTaskbar()
+    {
+        var probe = new FakeTaskbarOccupiedAreaProbe();
+        var service = new TaskbarOccupiedAreaService(probe);
+        var rect = CreateRect(0, 0, 1000, 48);
+
+        service.GetSafePrimaryRanges(
+            (IntPtr)1,
+            rect,
+            LayoutOrientation.Horizontal,
+            1,
+            20);
+        service.GetSafePrimaryRanges(
+            (IntPtr)1,
+            rect,
+            LayoutOrientation.Horizontal,
+            1,
+            20);
+
+        Assert.AreEqual(1, probe.StartCount);
+    }
+
+    [TestMethod]
+    public void DifferentTaskbarsProbeIndependently()
     {
         var probe = new FakeTaskbarOccupiedAreaProbe();
         var service = new TaskbarOccupiedAreaService(probe);
@@ -107,12 +130,12 @@ public sealed class TaskbarOccupiedAreaServiceTests
             20);
         service.GetSafePrimaryRanges(
             (IntPtr)2,
-            CreateRect(0, 0, 48, 1000),
+            CreateRect(1000, 0, 1048, 1200),
             LayoutOrientation.Vertical,
             1.5,
             30);
 
-        Assert.AreEqual(1, probe.StartCount);
+        Assert.AreEqual(2, probe.StartCount);
     }
 
     [TestMethod]
@@ -127,6 +150,24 @@ public sealed class TaskbarOccupiedAreaServiceTests
         service.GetSafePrimaryRanges((IntPtr)1, rect, LayoutOrientation.Horizontal, 1, 20);
 
         Assert.AreEqual(2, probe.StartCount);
+    }
+
+    [TestMethod]
+    public void PublishedRangesRaiseAnImmediateTaskbarSpecificUpdate()
+    {
+        var probe = new FakeTaskbarOccupiedAreaProbe();
+        var service = new TaskbarOccupiedAreaService(probe);
+        TaskbarSafeRangesUpdatedEventArgs? updated = null;
+        service.SafeRangesUpdated += (_, args) => updated = args;
+        var rect = CreateRect(0, 0, 1000, 48);
+
+        service.GetSafePrimaryRanges((IntPtr)7, rect, LayoutOrientation.Horizontal, 1.25, 20);
+        probe.SucceedNext([new TaskbarPrimaryRange(320, 900)]);
+
+        Assert.IsNotNull(updated);
+        Assert.AreEqual((IntPtr)7, updated.TaskbarHandle);
+        Assert.AreEqual(LayoutOrientation.Horizontal, updated.Orientation);
+        Assert.AreEqual(new TaskbarPrimaryRange(320, 900), updated.Ranges.Single());
     }
 
     private static NativeMethods.RECT CreateRect(int left, int top, int right, int bottom)
@@ -249,6 +290,42 @@ public sealed class TaskbarOccupiedAreaServiceTests
         Assert.AreEqual(
             new TaskbarPrimaryRange(1000, 1800),
             TaskbarFreeRangeCalculator.Select(ranges, TaskbarBarPosition.Center, requiredPrimaryPixels: 0));
+    }
+
+    [TestMethod]
+    public void StableSelectionIsKeptWhileTheLatestSafeRangeStillContainsIt()
+    {
+        IReadOnlyList<TaskbarPrimaryRange> expandedRanges =
+        [
+            new TaskbarPrimaryRange(20, 1000),
+            new TaskbarPrimaryRange(1200, 1900)
+        ];
+        var previous = new TaskbarPrimaryRange(360, 1000);
+
+        Assert.IsTrue(TaskbarFreeRangeCalculator.TryKeepSelection(
+            expandedRanges,
+            previous,
+            requiredPrimaryPixels: 500,
+            out var kept));
+        Assert.AreEqual(previous, kept);
+    }
+
+    [TestMethod]
+    public void StableSelectionIsRejectedWhenItIsNoLongerSafeOrNoLongerFits()
+    {
+        IReadOnlyList<TaskbarPrimaryRange> movedRanges = [new TaskbarPrimaryRange(20, 700)];
+        var previous = new TaskbarPrimaryRange(360, 1000);
+
+        Assert.IsFalse(TaskbarFreeRangeCalculator.TryKeepSelection(
+            movedRanges,
+            previous,
+            requiredPrimaryPixels: 500,
+            out _));
+        Assert.IsFalse(TaskbarFreeRangeCalculator.TryKeepSelection(
+            [new TaskbarPrimaryRange(20, 1200)],
+            previous,
+            requiredPrimaryPixels: 800,
+            out _));
     }
 
     /// <summary>

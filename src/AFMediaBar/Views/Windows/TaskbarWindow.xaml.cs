@@ -86,6 +86,7 @@ public partial class TaskbarWindow : Window
     private DateTime _suppressContextMenuUntilUtc;
     private DateTime _skipOccupiedAreaProbeUntilUtc;
     private TaskbarSafeRangeSnapshot? _lastStableSafeRange;
+    private bool _hasSafePlacement;
     private WindowMode? _appliedWindowMode;
     private LayoutOrientation? _appliedOrientation;
     private double _appliedLengthScalePercent = double.NaN;
@@ -174,6 +175,7 @@ public partial class TaskbarWindow : Window
 
         _taskBarService = taskBarService;
         _occupiedAreaService = occupiedAreaService;
+        _occupiedAreaService.SafeRangesUpdated += OccupiedAreaService_SafeRangesUpdated;
         _lengthConstraints = lengthConstraints;
         _viewModel = viewModel;
         _hostActions = hostActions;
@@ -402,6 +404,9 @@ public partial class TaskbarWindow : Window
 
         if (suspended)
         {
+            // 运动开始后旧几何不再有资格恢复可见；必须等稳定矩形重新完成一次 PositionBar 才能显示。
+            // Once motion starts the old geometry is no longer eligible for presentation; a stable rectangle must complete PositionBar once before reveal.
+            _hasSafePlacement = false;
             _sizeAnimationTimer.Stop();
             _spectrumTimer.Stop();
             DisposeMetricsSubscription();
@@ -546,6 +551,18 @@ public partial class TaskbarWindow : Window
         _foregroundSamplingSession.RequestRefresh();
     }
 
+    private void OccupiedAreaService_SafeRangesUpdated(object? sender, TaskbarSafeRangesUpdatedEventArgs e)
+    {
+        if (_isClosing || e.TaskbarHandle != _lastTaskbarHandle)
+            return;
+
+        Dispatcher.BeginInvoke(() =>
+        {
+            if (!_isClosing && !_isEnvironmentSuspended && e.TaskbarHandle == _lastTaskbarHandle)
+                UpdatePosition();
+        }, DispatcherPriority.Input);
+    }
+
     private void Window_Loaded(object sender, RoutedEventArgs e)
     {
         SetupWindow();
@@ -602,6 +619,7 @@ public partial class TaskbarWindow : Window
             if (taskbarHandle != _lastTaskbarHandle)
             {
                 _taskbarMotionState = default;
+                _hasSafePlacement = false;
                 RegisterTaskbarLocationHook(taskbarHandle);
             }
             _lastTaskbarHandle = taskbarHandle;
@@ -678,6 +696,9 @@ public partial class TaskbarWindow : Window
             // Place the bar on the canvas and clip the window to it
             RECT barRect = PositionBar(taskbarRect, dpiScale);
             _taskBarService.ApplyInputRegion(taskbarWindowHandle, [barRect]);
+            // 首次占用区探测完成前宿主保持隐藏；发布事件会立即重跑定位并在安全几何落地后显示。
+            // Keep the host hidden until its first occupancy probe completes; publication immediately repositions and reveals it after safe geometry lands.
+            ApplyMediaBarVisibility();
         }
         finally
         {
@@ -698,7 +719,8 @@ public partial class TaskbarWindow : Window
             taskbarRect,
             orientation,
             dpiScale,
-            (int)Math.Round((orientation == LayoutOrientation.Horizontal ? barWidth : barHeight) * dpiScale));
+            (int)Math.Round((orientation == LayoutOrientation.Horizontal ? barWidth : barHeight) * dpiScale),
+            out var safePlacementResolved);
         var maximumPrimary = preferredRange.Length / dpiScale;
         if (orientation == LayoutOrientation.Horizontal)
             _lengthConstraints.Update(this, MediaControl.MinimumPrimaryLength, maximumPrimary);
@@ -758,6 +780,9 @@ public partial class TaskbarWindow : Window
         Canvas.SetTop(MediaControl, (isVertical ? primaryPos : crossPos) / dpiScale);
         MediaControl.Width = physicalWidth / dpiScale;
         MediaControl.Height = physicalHeight / dpiScale;
+        // 只有实际画布坐标与尺寸都写入后，安全区间才算真正落地；单纯查询最大长度不能提前放行窗口显示。
+        // A safe range counts as applied only after the actual canvas coordinates and size have landed; a maximum-length query must not reveal the window early.
+        _hasSafePlacement = !SettingsManager.Current.TaskbarBarAvoidIcons || safePlacementResolved;
 
         return new RECT
         {
@@ -1051,7 +1076,10 @@ public partial class TaskbarWindow : Window
             return;
         }
 
-        var resolved = TaskbarHostVisibilityPolicy.Resolve(_taskbarMotionState, MediaControl.ShouldHideTaskbarWindow);
+        var hasSafePlacement = !SettingsManager.Current.TaskbarBarAvoidIcons || _hasSafePlacement;
+        var resolved = hasSafePlacement
+            ? TaskbarHostVisibilityPolicy.Resolve(_taskbarMotionState, MediaControl.ShouldHideTaskbarWindow)
+            : TaskbarHostVisibility.Collapsed;
         var target = resolved == TaskbarHostVisibility.Collapsed ? Visibility.Collapsed : Visibility.Visible;
         if (Visibility == target)
         {
@@ -1671,7 +1699,8 @@ public partial class TaskbarWindow : Window
             dragTaskbarRect,
             _appliedOrientation ?? LayoutOrientation.Horizontal,
             dragDpiScale,
-            dragPrimarySize);
+            dragPrimarySize,
+            out _);
         SettingsManager.Current.TaskbarBarManualPadding = TaskbarBarPlacementCalculator.ResolveManualPadding(
             targetPrimary,
             dragRange.Start,
@@ -1778,7 +1807,7 @@ public partial class TaskbarWindow : Window
 
         // 这里问的是"这个方向最多能有多长"，因此不做"放得下"判断（0 表示按位置偏好取区间）。
         // This asks how long the bar may become in this orientation, so no fitting test is applied (0 keeps the plain preference).
-        var range = GetPreferredSafeRange(rect, orientation, dpi, requiredPrimaryPixels: 0);
+        var range = GetPreferredSafeRange(rect, orientation, dpi, requiredPrimaryPixels: 0, out _);
         return Math.Max(1, range.Length / dpi);
     }
 
@@ -1786,8 +1815,10 @@ public partial class TaskbarWindow : Window
         RECT taskbarRect,
         LayoutOrientation orientation,
         double dpiScale,
-        int requiredPrimaryPixels)
+        int requiredPrimaryPixels,
+        out bool isSafePlacement)
     {
+        isSafePlacement = false;
         var primaryLength = orientation == LayoutOrientation.Horizontal
             ? taskbarRect.Right - taskbarRect.Left
             : taskbarRect.Bottom - taskbarRect.Top;
@@ -1799,6 +1830,7 @@ public partial class TaskbarWindow : Window
         if (!SettingsManager.Current.TaskbarBarAvoidIcons)
         {
             _lastStableSafeRange = null;
+            isSafePlacement = true;
             return fallback;
         }
 
@@ -1814,15 +1846,19 @@ public partial class TaskbarWindow : Window
             IsTaskbarPresentationSuspended ||
             DateTime.UtcNow < _skipOccupiedAreaProbeUntilUtc)
         {
-            return TryReuseStableSafeRange(
-                primaryLength,
-                orientation,
-                dpiScale,
-                position,
-                requiredPrimaryPixels,
-                out var stableRange)
-                ? stableRange
-                : fallback;
+            if (TryReuseStableSafeRange(
+                    primaryLength,
+                    orientation,
+                    dpiScale,
+                    position,
+                    requiredPrimaryPixels,
+                    out var stableRange))
+            {
+                isSafePlacement = true;
+                return stableRange;
+            }
+
+            return fallback;
         }
 
         var ranges = _occupiedAreaService.GetSafePrimaryRanges(
@@ -1833,15 +1869,40 @@ public partial class TaskbarWindow : Window
             EdgePadding);
         if (ranges.Count == 0)
         {
-            return TryReuseStableSafeRange(
+            if (TryReuseStableSafeRange(
+                    primaryLength,
+                    orientation,
+                    dpiScale,
+                    position,
+                    requiredPrimaryPixels,
+                    out var stableRange))
+            {
+                isSafePlacement = true;
+                return stableRange;
+            }
+
+            return fallback;
+        }
+
+        // UIA 偶尔会漏掉一组图标，表现为安全区间突然扩大。旧区间仍被新结果完整包含时保持原位；
+        // 真正有新图标侵入旧区间时包含关系会失效，下面会立即选择新位置。
+        // UIA can transiently omit an icon group, making a safe range suddenly expand. Keep the old placement while the new result still
+        // fully contains it; when icons genuinely invade that range containment fails and a new position is selected immediately below.
+        if (TryReuseStableSafeRange(
                 primaryLength,
                 orientation,
                 dpiScale,
                 position,
                 requiredPrimaryPixels,
-                out var stableRange)
-                ? stableRange
-                : fallback;
+                out var previousRange) &&
+            TaskbarFreeRangeCalculator.TryKeepSelection(
+                ranges,
+                previousRange,
+                requiredPrimaryPixels,
+                out var keptRange))
+        {
+            isSafePlacement = true;
+            return keptRange;
         }
 
         // 选区间 MUST 用纯策略：空闲区间里可能有比媒体栏还窄的缝隙，"最左边那条"会把媒体栏压细并钉在缝里。
@@ -1855,6 +1916,7 @@ public partial class TaskbarWindow : Window
             dpiScale,
             position,
             selected);
+        isSafePlacement = selected.Length > 0;
         return selected;
     }
 
@@ -1974,6 +2036,7 @@ public partial class TaskbarWindow : Window
         _quickLaunchApplyTimer.Stop();
         _volumeApplyTimer.Stop();
         SettingsManager.ExtraFeaturesSettingsChanged -= SettingsManager_ExtraFeaturesSettingsChanged;
+        _occupiedAreaService.SafeRangesUpdated -= OccupiedAreaService_SafeRangesUpdated;
         _foregroundSamplingSession.Dispose();
         MediaControl.TogglePlayPauseRequested -= MediaControl_TogglePlayPauseRequested;
         MediaControl.SkipPreviousRequested -= MediaControl_SkipPreviousRequested;

@@ -10,7 +10,6 @@ using System.Windows.Threading;
 using AFMediaBar.Classes.Models.Layout;
 using AFMediaBar.Classes.Services;
 using AFMediaBar.Classes.Settings;
-using Wpf.Ui.Appearance;
 
 namespace AFMediaBar.Components;
 
@@ -967,13 +966,12 @@ public partial class TaskBarMediaControl
         if (isHovered && !CanUseTaskbarComponentHover())
             return;
 
-        var isDark = ApplicationThemeManager.GetSystemTheme() == SystemTheme.Dark;
         var backgroundColor = isHovered
-            ? isDark ? Color.FromArgb(197, 255, 255, 255) : Colors.White
+            ? _taskbarHoverPalette.Surface
             : Colors.Transparent;
-        var backgroundOpacity = isHovered ? isDark ? 0.075 : 0.6 : 0;
-        var borderColor = isHovered ? Color.FromArgb(93, 255, 255, 255) : Colors.Transparent;
-        var borderOpacity = isHovered ? isDark ? 0.25 : 1 : 0;
+        var backgroundOpacity = isHovered ? _taskbarHoverPalette.SurfaceOpacity : 0;
+        var borderColor = isHovered ? _taskbarHoverPalette.Border : Colors.Transparent;
+        var borderOpacity = isHovered ? _taskbarHoverPalette.BorderOpacity : 0;
         var easingMode = isHovered ? EasingMode.EaseOut : EasingMode.EaseInOut;
 
         if (surface.Background is not SolidColorBrush background || background.IsFrozen)
@@ -1026,6 +1024,16 @@ public partial class TaskBarMediaControl
             Duration = duration,
             EasingFunction = easingMode == EasingMode.EaseOut ? CreateEaseOut() : CreateEaseInOut()
         });
+    }
+
+    private void RefreshTaskbarHoverAppearance()
+    {
+        AnimateComponentHover(SongImageHoverOverlay, SongImageBorder.IsMouseOver, immediate: true);
+        AnimateComponentHover(SongInfoHoverOverlay, IsTextSurfaceHovered, immediate: true);
+        AnimateComponentHover(TaskbarSpectrumHoverSurface, TaskbarSpectrumHoverSurface.IsMouseOver, immediate: true);
+        AnimateComponentHover(TaskbarPerformanceHoverSurface, TaskbarPerformanceHoverSurface.IsMouseOver, immediate: true);
+        AnimateComponentHover(TaskbarOutputDeviceHoverSurface, TaskbarOutputDeviceHoverSurface.IsMouseOver, immediate: true);
+        AnimateComponentHover(TaskbarVolumeHoverSurface, TaskbarVolumeHoverSurface.IsMouseOver, immediate: true);
     }
 
     private void SongImageBorder_MouseEnter(object sender, MouseEventArgs e) =>

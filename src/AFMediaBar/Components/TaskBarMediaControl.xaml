@@ -11,12 +11,16 @@
              TextOptions.TextRenderingMode="ClearType" TextOptions.TextFormattingMode="Display">
 
     <UserControl.Resources>
+        <SolidColorBrush x:Key="TaskbarHoverForegroundBrush" Color="White" />
+        <SolidColorBrush x:Key="TaskbarHoverButtonOverBrush" Color="#20FFFFFF" />
+        <SolidColorBrush x:Key="TaskbarHoverButtonPressedBrush" Color="#38FFFFFF" />
+        <SolidColorBrush x:Key="TaskbarHoverHandleBrush" Color="#B8FFFFFF" />
         <Style x:Key="TaskbarHoverButton" TargetType="Button">
             <Setter Property="Width" Value="24" />
             <Setter Property="Height" Value="24" />
             <Setter Property="Padding" Value="0" />
             <Setter Property="Margin" Value="1,0" />
-            <Setter Property="Foreground" Value="White" />
+            <Setter Property="Foreground" Value="{DynamicResource TaskbarHoverForegroundBrush}" />
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="FontSize" Value="12" />
@@ -40,10 +44,10 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="ButtonSurface" Property="Background" Value="#20FFFFFF" />
+                                <Setter TargetName="ButtonSurface" Property="Background" Value="{DynamicResource TaskbarHoverButtonOverBrush}" />
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="ButtonSurface" Property="Background" Value="#38FFFFFF" />
+                                <Setter TargetName="ButtonSurface" Property="Background" Value="{DynamicResource TaskbarHoverButtonPressedBrush}" />
                                 <Setter TargetName="ButtonSurface" Property="RenderTransform">
                                     <Setter.Value>
                                         <ScaleTransform ScaleX="0.97" ScaleY="0.97" />
@@ -504,7 +508,7 @@
                                     Tag="MediaAction"
                                     ToolTip="{DynamicResource Loc.Common.OpenFullPanel}"
                                     Click="TaskbarFullPanelHandle_Click">
-                                <Border Width="28" Height="4" CornerRadius="2" Background="#B8FFFFFF" />
+                                <Border Width="28" Height="4" CornerRadius="2" Background="{DynamicResource TaskbarHoverHandleBrush}" />
                             </Button>
                         </Grid>
                     </Grid>
@@ -530,7 +534,7 @@
                     MouseEnter="TaskbarDirectFullPanelHandle_MouseEnter"
                     MouseLeave="TaskbarDirectFullPanelHandle_MouseLeave"
                     Click="TaskbarFullPanelHandle_Click">
-                <Border Width="28" Height="4" CornerRadius="2" Background="#B8FFFFFF" />
+                <Border Width="28" Height="4" CornerRadius="2" Background="{DynamicResource TaskbarHoverHandleBrush}" />
             </Button>
 
         </Grid>

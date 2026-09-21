@@ -21,13 +21,13 @@ public sealed class TaskbarOccupiedAreaProbe : ITaskbarOccupiedAreaProbe
     private const int MaximumElementPrimaryPixels = 260;
 
     /// <summary>
-    /// 上一次写进日志的外部窗口描述：探测每 250 毫秒重跑，内容不变时不重复写。
-    /// 静态是因为采集路径全是静态方法，而占用区服务保证同一时刻只跑一次探测（`_probeInProgress`），因此没有并发写入。
-    /// Last overlay description written to the log; the probe re-runs every 250 ms and unchanged content is not written again.
-    /// It is static because the whole collection path is static, and the occupancy service guarantees a single probe at a time
-    /// (`_probeInProgress`), so there is no concurrent writer.
+    /// 每个任务栏上一次写进日志的外部窗口描述：探测会重复运行，内容不变时不重复写。
+    /// 多显示器会并发探测不同任务栏，因此签名按 HWND 隔离并在锁内更新。
+    /// Last overlay description written to the log for each taskbar; repeated probes do not log unchanged content.
+    /// Different taskbars are probed concurrently on multi-monitor systems, so signatures are isolated by HWND and updated under a lock.
     /// </summary>
-    private static string? _lastOverlaySignature;
+    private static readonly object OverlaySignatureGate = new();
+    private static readonly Dictionary<IntPtr, string> LastOverlaySignatures = [];
 
     /// <inheritdoc />
     public void Start(
@@ -225,10 +225,16 @@ public sealed class TaskbarOccupiedAreaProbe : ITaskbarOccupiedAreaProbe
         // The probe re-runs every 250 ms, so the line is only written when its content changes. This is the only on-site evidence for
         // "why the bar ended up here", and a reporting user runs a Release build with no debug output, so it MUST go to the log
         // rather than to debug output only.
-        if (string.Equals(_lastOverlaySignature, description, StringComparison.Ordinal))
-            return;
+        lock (OverlaySignatureGate)
+        {
+            if (LastOverlaySignatures.TryGetValue(taskbarHandle, out var previous) &&
+                string.Equals(previous, description, StringComparison.Ordinal))
+            {
+                return;
+            }
 
-        _lastOverlaySignature = description;
+            LastOverlaySignatures[taskbarHandle] = description;
+        }
         AppLogService.Current?.Info("Taskbar", $"任务栏上的外部窗口 / foreign windows over the taskbar: {description}");
     }
 

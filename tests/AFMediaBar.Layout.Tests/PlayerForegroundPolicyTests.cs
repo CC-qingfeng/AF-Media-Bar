@@ -10,6 +10,23 @@ namespace AFMediaBar.Layout.Tests;
 public sealed class PlayerForegroundPolicyTests
 {
     [TestMethod]
+    public void TaskbarHoverPaletteFollowsTheResolvedForegroundForBothThemes()
+    {
+        var lightText = TaskbarHoverPalettePolicy.Resolve(Colors.White);
+        var darkText = TaskbarHoverPalettePolicy.Resolve(Color.FromRgb(0x1C, 0x1C, 0x1C));
+
+        Assert.AreEqual(Colors.White, lightText.Foreground);
+        Assert.AreEqual(Colors.White, lightText.Surface);
+        Assert.AreEqual(Color.FromRgb(0x1C, 0x1C, 0x1C), darkText.Foreground);
+        Assert.AreEqual(Color.FromRgb(0x1C, 0x1C, 0x1C), darkText.Surface);
+        Assert.AreEqual(darkText.Foreground.R, darkText.ButtonHover.R);
+        Assert.AreEqual(darkText.Foreground.G, darkText.ButtonHover.G);
+        Assert.AreEqual(darkText.Foreground.B, darkText.ButtonHover.B);
+        Assert.AreEqual((byte)0x20, darkText.ButtonHover.A);
+        Assert.AreEqual(lightText.SurfaceOpacity, darkText.SurfaceOpacity);
+    }
+
+    [TestMethod]
     public void Resolve_UniformBlack_UsesLightTextWithoutShadow()
     {
         var decision = PlayerForegroundPolicy.Resolve(Repeated(Colors.Black));

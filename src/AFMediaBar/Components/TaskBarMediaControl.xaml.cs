@@ -228,6 +228,8 @@ namespace AFMediaBar.Components
         private MediaSnapshot _snapshot = MediaSnapshot.Disconnected;
         private bool _isTaskbarHoverVisible;
         private PlayerForegroundDecision? _adaptiveForegroundDecision;
+        private TaskbarHoverPalette _taskbarHoverPalette = TaskbarHoverPalettePolicy.Resolve(Colors.White);
+        private Color? _appliedTaskbarHoverForeground;
         private IReadOnlyList<QuickLaunchEntry> _quickLaunchEntries = Array.Empty<QuickLaunchEntry>();
         private DateTime _suppressSurfaceClickUntilUtc;
         private const double TaskbarPerformanceWidth = 74;
@@ -1587,6 +1589,7 @@ namespace AFMediaBar.Components
             // The spectrum takes the same automatic foreground as the text: both sit on the same taskbar surface, and judging
             // them separately would only produce two colours over one background.
             ApplySpectrumForeground(foreground);
+            ApplyTaskbarHoverAppearance(foreground);
             SongInfoStackPanel.Background = Brushes.Transparent;
             ApplyContrastShadow(presentation.NeedsContrastShadow, presentation.UsesLightText);
 
@@ -1608,6 +1611,24 @@ namespace AFMediaBar.Components
                     : new SolidColorBrush(isDark
                         ? Color.FromArgb(0xFF, 0x20, 0x20, 0x20)
                         : Color.FromArgb(0xFF, 0xF3, 0xF3, 0xF3));
+        }
+
+        private void ApplyTaskbarHoverAppearance(Brush foreground)
+        {
+            var color = foreground is SolidColorBrush solid
+                ? solid.Color
+                : Colors.White;
+            var palette = TaskbarHoverPalettePolicy.Resolve(color);
+            if (_appliedTaskbarHoverForeground == palette.Foreground)
+                return;
+
+            _taskbarHoverPalette = palette;
+            _appliedTaskbarHoverForeground = palette.Foreground;
+            Resources["TaskbarHoverForegroundBrush"] = new SolidColorBrush(_taskbarHoverPalette.Foreground);
+            Resources["TaskbarHoverButtonOverBrush"] = new SolidColorBrush(_taskbarHoverPalette.ButtonHover);
+            Resources["TaskbarHoverButtonPressedBrush"] = new SolidColorBrush(_taskbarHoverPalette.ButtonPressed);
+            Resources["TaskbarHoverHandleBrush"] = new SolidColorBrush(_taskbarHoverPalette.Handle);
+            RefreshTaskbarHoverAppearance();
         }
 
         private void ApplyContrastShadow(bool enabled, bool usesLightText)
