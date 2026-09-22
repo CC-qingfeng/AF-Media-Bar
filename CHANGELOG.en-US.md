@@ -24,6 +24,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Compatibility and Limitations
 
+- The Dynamic Island is implemented for the **top of the screen** only: `WindowMode.DynamicIsland` is defined as an independent media window attached to the desktop top edge, and the bottom and left/right sides are not implemented yet.
 - The Dynamic Island is an initial implementation: trunk logic only, with no complete test or edge-case coverage.
 - Multi-monitor and mixed-DPI behaviour, and the taskbar geometry differences between Windows 10 and Windows 11, are not fully verified.
 
