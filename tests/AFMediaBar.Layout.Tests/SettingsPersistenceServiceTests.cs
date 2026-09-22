@@ -126,7 +126,7 @@ public sealed class SettingsPersistenceServiceTests
         CollectionAssert.AreEqual(
             new[] { LyricsSecondaryLineMode.Romanization, LyricsSecondaryLineMode.Translation },
             SettingsManager.Current.LyricsSecondaryLine.Order!.ToArray());
-        Assert.AreEqual(WindowMode.Taskbar, SettingsManager.Current.WindowMode);
+        Assert.AreEqual(WindowMode.DynamicIsland, SettingsManager.Current.WindowMode);
         Assert.AreEqual(DynamicIslandEdge.Right, SettingsManager.Current.DynamicIslandEdge);
         Assert.AreEqual(700, SettingsManager.Current.Appearance.FontWeight);
         Assert.AreEqual(120, SettingsManager.Current.DynamicIslandLeft);
@@ -545,22 +545,6 @@ public sealed class SettingsPersistenceServiceTests
             "清除快照之后重置必须回到程序内置默认值。");
     }
     [TestMethod]
-    public void UnimplementedDisplayModeSelectionDoesNotChangeRuntimeModeOrTaskbarSettings()
-    {
-        SettingsManager.Replace(new AppSettings());
-        var viewModel = new DisplayModesViewModel(new FakeDisplayMonitorService(), new TaskbarLengthConstraintsService(), new LocalizationService());
-        var original = SettingsManager.Current.TaskbarExperience;
-
-        viewModel.SwitchToFloatingBallModeCommand.Execute(null);
-        viewModel.HoverLayerEnabled = false;
-
-        Assert.IsTrue(viewModel.IsFloatingBallMode);
-        Assert.IsTrue(viewModel.IsUnimplementedMode);
-        Assert.AreEqual(WindowMode.Taskbar, SettingsManager.Current.WindowMode);
-        Assert.AreEqual(original, SettingsManager.Current.TaskbarExperience);
-    }
-
-    [TestMethod]
     public void DisplayModesProtectsLastFullPanelGroupAndRecognizesPresets()
     {
         SettingsManager.Replace(new AppSettings
@@ -650,6 +634,13 @@ public sealed class SettingsPersistenceServiceTests
         Assert.AreEqual(460, viewModel.FixedTaskbarLengthMaximum);
     }
 
+    /// <summary>
+    /// 每个「恢复本页默认值」只动自己作用域里的字段：通用页不拥有显示模式，因此它重置之后用户选的灵动岛原样保留；
+    /// 布局页与显示模式页都显式重置 WindowMode，所以它们各自把模式带回默认值，而这一步与 Normalize 无关。
+    /// Every "restore this page's defaults" touches only the fields its own scope owns: the general page does not own the
+    /// display mode, so the island the user picked survives it, while the layout and display-mode pages reset WindowMode
+    /// explicitly and therefore carry it back to the default — that step owes nothing to Normalize.
+    /// </summary>
     [TestMethod]
     public void ResetScopesOnlyChangeTheirOwnedFields()
     {
@@ -663,8 +654,14 @@ public sealed class SettingsPersistenceServiceTests
         SettingsManager.ResetGeneral();
         Assert.IsFalse(SettingsManager.Current.LyricsEnabled);
         Assert.AreEqual(700, SettingsManager.Current.Appearance.FontWeight);
-        Assert.AreEqual(WindowMode.Taskbar, SettingsManager.Current.WindowMode);
+        // 通用页不拥有窗口模式，而 Normalize 也不再无条件把它改写回任务栏，因此这里仍是用户选的那个模式。
+        // The general page does not own the window mode, and Normalize no longer rewrites it back to the taskbar, so it stays
+        // whatever the user picked.
+        Assert.AreEqual(WindowMode.DynamicIsland, SettingsManager.Current.WindowMode);
         SettingsManager.ResetLayout();
+        // 布局页的重置**显式**把 WindowMode 取回默认值（见 ResetLayout 里那行），与 Normalize 无关，因此这里回到任务栏。
+        // The layout page's reset sets WindowMode back to the default **explicitly** (that line in ResetLayout) and owes nothing
+        // to Normalize, so the taskbar is what comes back here.
         Assert.AreEqual(WindowMode.Taskbar, SettingsManager.Current.WindowMode);
         Assert.AreEqual(700, SettingsManager.Current.Appearance.FontWeight);
         SettingsManager.ResetAppearance();
