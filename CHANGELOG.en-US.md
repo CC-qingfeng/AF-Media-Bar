@@ -6,6 +6,27 @@ All notable changes to AF Media Bar are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Dynamic Island mode: previously a placeholder in Settings that only previewed this page, it is now a real display mode. Selecting it switches the running window immediately: the island floats at the screen edge and carries media state, offering the title, artist, artwork and playback controls, syllable-highlighted lyric following, and spectrum styles such as waveform and pixel bars, plus hover, drag, and context-menu interaction with a position that survives a restart.
+- Adaptive foreground inside the island: in automatic mode the text and icon colours are re-decided from the actual on-screen pixels of the island's text and artwork regions, so they stay readable over both light and dark wallpapers; a fully opaque surface falls back to the theme decision.
+
+### Changed
+
+- The Dynamic Island appearance group (surface style, opacity, corner radius) is editable instead of read-only and applies immediately; the group affects the island only and never the taskbar bar.
+- Reworded the display-mode notice: Desktop Card and Floating Orb are not implemented, so selecting them only previews this page, while choosing Taskbar or Dynamic Island switches the running window immediately.
+
+### Fixed
+
+- Fixed a tray left-click doing nothing at all in Dynamic Island mode: the audio menu used to return as soon as the taskbar media-bar list was empty; it now falls back through the taskbar host, the island host, and the tray audio flyout, so there is always a real destination.
+
+### Compatibility and Limitations
+
+- The Dynamic Island is an initial implementation: trunk logic only, with no complete test or edge-case coverage.
+- Multi-monitor and mixed-DPI behaviour, and the taskbar geometry differences between Windows 10 and Windows 11, are not fully verified.
+
 ## [1.2.1] - 2026-09-21
 
 A fix release: the taskbar auto-hide animation, misplacement while capturing the screen, and multi-monitor display.
@@ -141,6 +162,7 @@ The first release of the rebuilt interface and interaction model: taskbar lyrics
 - Restricted native library lookup to System32.
 - Removed generic execution of media-provided `.exe` source identifiers.
 
+[Unreleased]: https://github.com/Fervent-Tempo/AF-Media-Bar/compare/v1.2.1...HEAD
 [1.2.1]: https://github.com/Fervent-Tempo/AF-Media-Bar/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/Fervent-Tempo/AF-Media-Bar/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/Fervent-Tempo/AF-Media-Bar/compare/v1.1.0...v1.1.1
